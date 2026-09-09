@@ -13,7 +13,9 @@ import (
 
 	"bybit/internal/config"
 	"bybit/internal/deribit"
+	"bybit/internal/deribitreconcile"
 	"bybit/internal/intent"
+	"bybit/internal/orderstate"
 )
 
 func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string, output io.Writer) (bool, error) {
@@ -154,7 +156,15 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 		if err != nil {
 			return true, err
 		}
-		stream, err := deribit.NewWSClient(client, deribit.WSConfig{URL: cfg.Deribit.WSURL, Channels: channels, Private: private})
+		streamConfig := deribit.WSConfig{URL: cfg.Deribit.WSURL, Channels: channels, Private: private}
+		if private {
+			reconciler, err := newDeribitReconciler(ctx, cfg, client)
+			if err != nil {
+				return true, err
+			}
+			streamConfig.OnReady = func(readyCtx context.Context, _ uint64) error { _, err := reconciler.Run(readyCtx); return err }
+		}
+		stream, err := deribit.NewWSClient(client, streamConfig)
 		if err != nil {
 			return true, err
 		}
@@ -172,6 +182,13 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 	case "order":
 		if len(args) < 4 {
 			return true, errors.New("order requires plan or execute")
+		}
+		reconciler, err := newDeribitReconciler(ctx, cfg, client)
+		if err != nil {
+			return true, err
+		}
+		if _, err := reconciler.Run(ctx); err != nil {
+			return true, fmt.Errorf("pre-trade recovery failed: %w", err)
 		}
 		planner := &intent.Planner{Market: client, Store: intent.Store{Path: cfg.IntentFile}, Limits: intent.Limits{MaxOrderUSD: cfg.Deribit.Risk.MaxOrderUSD, MaxAggregateOpenUSD: cfg.Deribit.Risk.MaxAggregateOpenUSD, MaxPriceDeviationPct: cfg.Deribit.Risk.MaxPriceDeviationPct, MaxOpenOrders: cfg.Deribit.Risk.MaxOpenOrders, TTL: cfg.Deribit.PlanTTL}, AccountAlias: cfg.Deribit.AccountAlias, WSURL: cfg.Deribit.WSURL}
 		switch args[3] {
@@ -322,9 +339,30 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 		default:
 			return true, fmt.Errorf("unknown Deribit order command %q", args[3])
 		}
+	case "reconcile":
+		if len(args) != 3 {
+			return true, errors.New("reconcile takes no arguments")
+		}
+		reconciler, err := newDeribitReconciler(ctx, cfg, client)
+		if err != nil {
+			return true, err
+		}
+		report, err := reconciler.Run(ctx)
+		if err != nil {
+			return true, err
+		}
+		return true, encoder.Encode(report)
 	default:
 		return true, fmt.Errorf("unknown Deribit command %q", args[2])
 	}
+}
+
+func newDeribitReconciler(ctx context.Context, cfg config.Config, client *deribit.Client) (*deribitreconcile.Reconciler, error) {
+	state, err := orderstate.NewService(ctx, orderstate.FileStore{Path: cfg.StateFile})
+	if err != nil {
+		return nil, err
+	}
+	return &deribitreconcile.Reconciler{Queries: client, Intents: intent.Store{Path: cfg.IntentFile}, State: state, AccountAlias: cfg.Deribit.AccountAlias}, nil
 }
 
 func decimalEqual(left, right string) bool {

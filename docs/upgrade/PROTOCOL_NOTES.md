@@ -31,3 +31,9 @@ Subscription data is rejected before the subscribe acknowledgement. Every ready 
 Plans persist the venue/account, native collateral, explicit USD-notional amount unit, metadata mark/tick/minimum, open-order risk snapshot, transport, and 30-second expiry. Execution revalidates live metadata and risk, atomically claims the intent once, and requires `--confirm`. HTTP and WebSocket writes never fall back to each other. Any failure after a WS write or ambiguous HTTP transport is `OutcomeUnknown` and is not automatically resent.
 
 Create, amend, and cancel commands perform a separate `private/get_order_state` read. A create response must match both native order ID and connector intent label; missing or mismatched evidence becomes `NeedsReview`. Deribit Testnet returned `private/get_user_trades_by_order` as a direct array, so the decoder accepts both the direct and documented wrapped shapes.
+
+## Intent recovery and trade cursors
+
+The state file records `Planned`, `Executing`, `Submitted`, `Rejected`, `OutcomeUnknown`, `Expired`, and `NeedsReview`. Recovery searches open and historical orders by the connector label and deduplicates native order IDs: zero stays unresolved, one is adopted, and more than one requires review. This search is reconciliation evidence, never permission to send again.
+
+Trade pages sort by `(timestamp, trade_id)`, deliberately overlap the cursor timestamp, and rely on canonical trade-ID persistence for deduplication. This preserves late same-millisecond records. Cursors move only forward, pagination is capped, and `has_more` without progress fails visibly.

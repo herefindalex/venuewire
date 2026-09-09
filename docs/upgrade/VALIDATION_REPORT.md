@@ -56,3 +56,13 @@ NOT_RUN. A read result does not satisfy any order lifecycle, WebSocket, reconcil
 - Result: PASS
 
 Real execution/fee reconciliation remains NOT_RUN here. Zero trades and zero fee are correct for the post-only cancellation lifecycle but do not satisfy the required live-fill evidence.
+
+## D-R5-001 — Migration and reconciliation
+
+- UTC time: 2026-09-09T16:20Z–16:22Z
+- Expected: legacy state migrates only after dry-run; exact backup exists; reconciliation is idempotent; private-ready callback can recover
+- Actual: dry-run validated 8 Bybit orders and 2 executions; apply created `state/orders.json.v1.bak`; Deribit reconciliation independently found and applied 3 connector-owned terminal orders; two consecutive reports had zero unresolved/multiple matches and zero new trades; private stream reached ready while running reconciliation
+- Result: PASS
+- Recovery: `./bin/bybitctl state restore-v1` restores the retained backup; it was not invoked because v2 is the active schema
+
+Crash/ambiguity fixture evidence: local tests cover accepted-before-local-ACK recovery, no-match staying `OutcomeUnknown`, multiple label matches becoming `NeedsReview`, duplicate pages, same-millisecond cursor ordering, and pagination no-progress failure. No unresolved intent is automatically resubmitted.

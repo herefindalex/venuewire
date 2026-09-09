@@ -158,3 +158,74 @@ func (c *Client) TradesByOrder(ctx context.Context, orderID string) ([]Trade, er
 	}
 	return result.Trades, nil
 }
+
+func (c *Client) OrderHistory(ctx context.Context, instrument string) ([]Order, error) {
+	var raw json.RawMessage
+	if err := c.PrivateRead(ctx, "private/get_order_history_by_instrument", map[string]any{"instrument_name": instrument, "count": 100, "include_old": true, "include_unfilled": true}, &raw); err != nil {
+		return nil, err
+	}
+	var direct []Order
+	if err := json.Unmarshal(raw, &direct); err == nil {
+		return direct, nil
+	}
+	var wrapped struct {
+		Entries []Order `json:"entries"`
+		Orders  []Order `json:"orders"`
+	}
+	if err := json.Unmarshal(raw, &wrapped); err != nil {
+		return nil, err
+	}
+	if wrapped.Entries != nil {
+		return wrapped.Entries, nil
+	}
+	return wrapped.Orders, nil
+}
+
+func (c *Client) OrdersByLabel(ctx context.Context, instrument, label string) ([]Order, error) {
+	open, err := c.OpenOrders(ctx, instrument)
+	if err != nil {
+		return nil, err
+	}
+	history, err := c.OrderHistory(ctx, instrument)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	result := []Order{}
+	for _, orders := range [][]Order{open, history} {
+		for _, order := range orders {
+			if order.Label == label && !seen[order.OrderID] {
+				seen[order.OrderID] = true
+				result = append(result, order)
+			}
+		}
+	}
+	return result, nil
+}
+
+type TradePage struct {
+	Trades  []Trade
+	HasMore bool
+}
+
+func (c *Client) TradesByInstrument(ctx context.Context, instrument string, startTimestamp int64, count int) (TradePage, error) {
+	if count <= 0 || count > 1000 {
+		count = 100
+	}
+	var raw json.RawMessage
+	if err := c.PrivateRead(ctx, "private/get_user_trades_by_instrument", map[string]any{"instrument_name": instrument, "start_timestamp": startTimestamp, "count": count, "sorting": "asc"}, &raw); err != nil {
+		return TradePage{}, err
+	}
+	var direct []Trade
+	if err := json.Unmarshal(raw, &direct); err == nil {
+		return TradePage{Trades: direct}, nil
+	}
+	var wrapped struct {
+		Trades  []Trade `json:"trades"`
+		HasMore bool    `json:"has_more"`
+	}
+	if err := json.Unmarshal(raw, &wrapped); err != nil {
+		return TradePage{}, err
+	}
+	return TradePage{Trades: wrapped.Trades, HasMore: wrapped.HasMore}, nil
+}

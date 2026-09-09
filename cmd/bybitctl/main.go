@@ -37,6 +37,7 @@ Deribit Testnet JSON-RPC:
   bybitctl venue deribit order amend --order-id ID --amount AMOUNT --price PRICE --confirm
   bybitctl venue deribit order cancel --order-id ID --confirm
   bybitctl venue deribit order trades --order-id ID
+  bybitctl venue deribit reconcile
 
 Market WebSocket:
   bybitctl market trades [--symbol BTCUSDT]
@@ -198,5 +199,5 @@ func isDeribitCommand(args []string) bool {
 }
 
 func isDeribitAuthenticatedCommand(args []string) bool {
-	return len(args) >= 3 && isDeribitCommand(args) && (args[2] == "account" || args[2] == "positions" || args[2] == "private-stream" || args[2] == "order")
+	return len(args) >= 3 && isDeribitCommand(args) && (args[2] == "account" || args[2] == "positions" || args[2] == "private-stream" || args[2] == "order" || args[2] == "reconcile")
 }

@@ -53,9 +53,15 @@ type Plan struct {
 }
 
 type Snapshot struct {
-	Version   int             `json:"version"`
-	UpdatedAt time.Time       `json:"updatedAt"`
-	Plans     map[string]Plan `json:"plans"`
+	Version   int                    `json:"version"`
+	UpdatedAt time.Time              `json:"updatedAt"`
+	Plans     map[string]Plan        `json:"plans"`
+	Cursors   map[string]TradeCursor `json:"cursors,omitempty"`
+}
+
+type TradeCursor struct {
+	Timestamp int64  `json:"timestamp"`
+	TradeID   string `json:"tradeId"`
 }
 type Store struct{ Path string }
 
@@ -71,13 +77,25 @@ func (s Store) Get(ctx context.Context, id string) (Plan, error) {
 	return plan, nil
 }
 
+func (s Store) List(ctx context.Context) ([]Plan, error) {
+	snapshot, err := s.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]Plan, 0, len(snapshot.Plans))
+	for _, plan := range snapshot.Plans {
+		result = append(result, plan)
+	}
+	return result, nil
+}
+
 func (s Store) Load(ctx context.Context) (*Snapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	raw, err := os.ReadFile(s.Path)
 	if os.IsNotExist(err) {
-		return &Snapshot{Version: SnapshotVersion, Plans: map[string]Plan{}}, nil
+		return &Snapshot{Version: SnapshotVersion, Plans: map[string]Plan{}, Cursors: map[string]TradeCursor{}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -92,7 +110,28 @@ func (s Store) Load(ctx context.Context) (*Snapshot, error) {
 	if snapshot.Plans == nil {
 		snapshot.Plans = map[string]Plan{}
 	}
+	if snapshot.Cursors == nil {
+		snapshot.Cursors = map[string]TradeCursor{}
+	}
 	return &snapshot, nil
+}
+
+func (s Store) Cursor(ctx context.Context, key string) (TradeCursor, error) {
+	snapshot, err := s.Load(ctx)
+	if err != nil {
+		return TradeCursor{}, err
+	}
+	return snapshot.Cursors[key], nil
+}
+func (s Store) SetCursor(ctx context.Context, key string, cursor TradeCursor) error {
+	return s.update(ctx, func(snapshot *Snapshot) error {
+		current := snapshot.Cursors[key]
+		if cursor.Timestamp < current.Timestamp || (cursor.Timestamp == current.Timestamp && cursor.TradeID < current.TradeID) {
+			return errors.New("cursor cannot move backwards")
+		}
+		snapshot.Cursors[key] = cursor
+		return nil
+	})
 }
 
 func (s Store) SavePlan(ctx context.Context, plan Plan) error {
