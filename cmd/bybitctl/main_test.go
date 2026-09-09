@@ -89,6 +89,15 @@ func TestRunRefusesAuthenticatedCommandWithoutCredentials(t *testing.T) {
 	}
 }
 
+func TestRunAllowsDeribitFIXMockWhenVenueIsDisabled(t *testing.T) {
+	setCleanTestnetEnvironment(t)
+	t.Setenv("DERIBIT_ENABLED", "false")
+
+	if code := runContext(context.Background(), []string{"--venue", "deribit", "fix", "mock-demo"}); code != 0 {
+		t.Fatalf("runContext returned %d, want 0 for credential-free local mock", code)
+	}
+}
+
 func TestRunRejectsMainnetBeforeAuthenticatedCommand(t *testing.T) {
 	setCleanTestnetEnvironment(t)
 	t.Setenv("BYBIT_API_KEY", "fixture-key")

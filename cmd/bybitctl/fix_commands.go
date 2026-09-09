@@ -7,6 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
+	"path/filepath"
 	"time"
 
 	"bybit/internal/config"
@@ -39,11 +41,16 @@ type demoSigner struct{}
 
 func (demoSigner) Sign([]byte) (string, error) { return "local-mock-signature", nil }
 
-func runFIXMockDemo(ctx context.Context, cfg config.Config, logger *slog.Logger, output io.Writer) error {
+func runFIXMockDemo(ctx context.Context, _ config.Config, logger *slog.Logger, output io.Writer) error {
 	demoContext, cancel := context.WithCancel(ctx)
 	defer cancel()
 	dial, mockDone := fixmock.PairDialer(demoContext, fixmock.PartialThenFilled)
-	state, err := orderstate.NewService(demoContext, orderstate.FileStore{Path: cfg.StateFile})
+	tempDir, err := os.MkdirTemp("", "bybitctl-fix-mock-")
+	if err != nil {
+		return fmt.Errorf("create isolated FIX mock state: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+	state, err := orderstate.NewService(demoContext, orderstate.FileStore{Path: filepath.Join(tempDir, "orders.json")})
 	if err != nil {
 		return err
 	}

@@ -102,7 +102,7 @@ func runContext(ctx context.Context, args []string) int {
 		logger.Error("configuration rejected", slog.String("error", err.Error()))
 		return 2
 	}
-	if isDeribitCommand(args) {
+	if isDeribitCommand(args) && !isDeribitLocalMockCommand(args) {
 		if !cfg.Deribit.Enabled {
 			logger.Error("Deribit command refused", slog.String("error", "DERIBIT_ENABLED must be true"))
 			return 2
@@ -232,6 +232,10 @@ func isFIXAuthenticatedCommand(args []string) bool {
 
 func isDeribitCommand(args []string) bool {
 	return len(args) >= 2 && args[0] == "venue" && args[1] == "deribit"
+}
+
+func isDeribitLocalMockCommand(args []string) bool {
+	return len(args) == 4 && isDeribitCommand(args) && args[2] == "fix" && args[3] == "mock-demo"
 }
 
 func isDeribitAuthenticatedCommand(args []string) bool {
