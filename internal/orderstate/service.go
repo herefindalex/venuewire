@@ -87,7 +87,7 @@ func (s *Service) UpsertREST(ctx context.Context, update domain.Order) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.mutate(ctx, func(snapshot *Snapshot) error {
-		_, current, found := findOrder(snapshot, update.OrderID, update.OrderLinkID)
+		_, current, found := findOrder(snapshot, update.OrderID, update.OrderLinkID, orderAccount(update))
 		if found && current.Status != domain.OrderStatusUnknown && current.Status != domain.OrderStatusPendingSubmit {
 			advancedStatus, advancedRaw, advancedCum, advancedAvg, advancedUpdated := current.Status, current.RawStatus, current.CumFilledQty, current.AvgFillPrice, current.UpdatedAt
 			merged := mergeOrder(current, update)
@@ -99,12 +99,10 @@ func (s *Service) UpsertREST(ctx context.Context, update domain.Order) error {
 }
 
 func applyOrderToSnapshot(snapshot *Snapshot, update domain.Order) error {
-	key, current, found := findOrder(snapshot, update.OrderID, update.OrderLinkID)
+	account := orderAccount(update)
+	key, current, found := findOrder(snapshot, update.OrderID, update.OrderLinkID, account)
 	if !found {
-		key = update.OrderLinkID
-		if key == "" {
-			key = update.OrderID
-		}
+		key = orderStorageKey(update)
 		if key == "" {
 			return errors.New("order update has neither orderId nor orderLinkId")
 		}
@@ -120,9 +118,10 @@ func applyOrderToSnapshot(snapshot *Snapshot, update domain.Order) error {
 	if merged.UpdatedAt.IsZero() {
 		merged.UpdatedAt = time.Now().UTC()
 	}
-	if key != merged.OrderLinkID && merged.OrderLinkID != "" {
+	desiredKey := orderStorageKey(merged)
+	if key != desiredKey && desiredKey != "" {
 		delete(snapshot.Orders, key)
-		key = merged.OrderLinkID
+		key = desiredKey
 	}
 	snapshot.Orders[key] = merged
 	return nil
@@ -135,10 +134,11 @@ func (s *Service) ApplyExecution(ctx context.Context, execution domain.Execution
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.mutate(ctx, func(snapshot *Snapshot) error {
-		if _, duplicate := snapshot.Executions[execution.ExecutionID]; duplicate {
+		executionKey := executionStorageKey(execution)
+		if _, duplicate := snapshot.Executions[executionKey]; duplicate {
 			return nil
 		}
-		key, order, found := findOrder(snapshot, execution.OrderID, execution.OrderLinkID)
+		key, order, found := findOrder(snapshot, execution.OrderID, execution.OrderLinkID, executionAccount(execution))
 		if !found {
 			return fmt.Errorf("execution %q references unknown order", execution.ExecutionID)
 		}
@@ -162,7 +162,7 @@ func (s *Service) ApplyExecution(ctx context.Context, execution domain.Execution
 			}
 			order.Status = next
 		}
-		snapshot.Executions[execution.ExecutionID], snapshot.Orders[key] = execution, order
+		snapshot.Executions[executionKey], snapshot.Orders[key] = execution, order
 		return nil
 	})
 }
@@ -177,29 +177,79 @@ func (s *Service) RecordExecution(ctx context.Context, execution domain.Executio
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.mutate(ctx, func(snapshot *Snapshot) error {
-		if _, duplicate := snapshot.Executions[execution.ExecutionID]; duplicate {
+		executionKey := executionStorageKey(execution)
+		if _, duplicate := snapshot.Executions[executionKey]; duplicate {
 			return nil
 		}
-		if _, _, found := findOrder(snapshot, execution.OrderID, execution.OrderLinkID); !found {
+		if _, _, found := findOrder(snapshot, execution.OrderID, execution.OrderLinkID, executionAccount(execution)); !found {
 			return fmt.Errorf("execution %q references unknown order", execution.ExecutionID)
 		}
-		snapshot.Executions[execution.ExecutionID] = execution
+		snapshot.Executions[executionKey] = execution
 		return nil
 	})
 }
 
-func findOrder(snapshot *Snapshot, orderID, orderLinkID string) (string, domain.Order, bool) {
-	if orderLinkID != "" {
-		if order, ok := snapshot.Orders[orderLinkID]; ok {
-			return orderLinkID, order, true
-		}
-	}
+func findOrder(snapshot *Snapshot, orderID, orderLinkID string, accounts ...domain.AccountKey) (string, domain.Order, bool) {
 	for key, order := range snapshot.Orders {
+		if len(accounts) > 0 && !sameAccount(orderAccount(order), accounts[0]) {
+			continue
+		}
+		if orderLinkID != "" && order.OrderLinkID == orderLinkID {
+			return key, order, true
+		}
 		if orderID != "" && order.OrderID == orderID {
 			return key, order, true
 		}
 	}
 	return "", domain.Order{}, false
+}
+
+func orderAccount(order domain.Order) domain.AccountKey {
+	return normalizedAccount(order.Exchange, order.Environment, order.AccountAlias)
+}
+
+func executionAccount(execution domain.Execution) domain.AccountKey {
+	return normalizedAccount(execution.Exchange, execution.Environment, execution.AccountAlias)
+}
+
+func normalizedAccount(exchange, environment, alias string) domain.AccountKey {
+	if exchange == "" {
+		exchange = string(domain.VenueBybit)
+	}
+	if environment == "" {
+		environment = string(domain.EnvironmentTestnet)
+	}
+	if alias == "" {
+		alias = "bybit-test"
+	}
+	return domain.AccountKey{Venue: domain.Venue(exchange), Environment: domain.Environment(environment), Alias: alias}
+}
+
+func sameAccount(left, right domain.AccountKey) bool {
+	return left.Venue == right.Venue && left.Environment == right.Environment && left.Alias == right.Alias
+}
+
+func orderStorageKey(order domain.Order) string {
+	identifier, namespace := order.OrderLinkID, "client"
+	if identifier == "" {
+		identifier, namespace = order.OrderID, "native"
+	}
+	if identifier == "" {
+		return ""
+	}
+	account := orderAccount(order)
+	if account.Venue == domain.VenueBybit && account.Environment == domain.EnvironmentTestnet && account.Alias == "bybit-test" {
+		return identifier
+	}
+	return (domain.OrderKey{Account: account, Namespace: namespace, NativeID: identifier}).Canonical()
+}
+
+func executionStorageKey(execution domain.Execution) string {
+	account := executionAccount(execution)
+	if account.Venue == domain.VenueBybit && account.Environment == domain.EnvironmentTestnet && account.Alias == "bybit-test" {
+		return execution.ExecutionID
+	}
+	return (domain.ExecutionKey{Account: account, Namespace: "trade", NativeID: execution.ExecutionID}).Canonical()
 }
 
 func (s *Service) mutate(ctx context.Context, operation func(*Snapshot) error) error {
@@ -226,6 +276,12 @@ func (s *Service) mutate(ctx context.Context, operation func(*Snapshot) error) e
 func mergeOrder(current, update domain.Order) domain.Order {
 	if update.Exchange != "" {
 		current.Exchange = update.Exchange
+	}
+	if update.Environment != "" {
+		current.Environment = update.Environment
+	}
+	if update.AccountAlias != "" {
+		current.AccountAlias = update.AccountAlias
 	}
 	if update.Category != "" {
 		current.Category = update.Category
@@ -262,6 +318,9 @@ func mergeOrder(current, update domain.Order) domain.Order {
 	}
 	if update.RawStatus != "" {
 		current.RawStatus = update.RawStatus
+	}
+	if update.IntentID != "" {
+		current.IntentID = update.IntentID
 	}
 	if !update.CreatedAt.IsZero() && current.CreatedAt.IsZero() {
 		current.CreatedAt = update.CreatedAt

@@ -39,6 +39,8 @@ Authenticated REST:
 Private state and reconciliation:
   bybitctl private-stream [--symbol BTCUSDT]
   bybitctl reconcile [--category linear] [--symbol BTCUSDT]
+  bybitctl state migrate-v1 --bybit-account-alias ALIAS [--dry-run] [--backup PATH]
+  bybitctl state restore-v1 [--backup PATH]
 
 FIX:
   bybitctl fix mock-demo
@@ -92,6 +94,13 @@ func runContext(ctx context.Context, args []string) int {
 	if handled, err := executeRESTCommand(ctx, cfg, logger, args, os.Stdout); handled {
 		if err != nil {
 			logger.Error("command failed", slog.String("error", err.Error()))
+			return 1
+		}
+		return 0
+	}
+	if handled, err := executeStateCommand(ctx, cfg, args, os.Stdout); handled {
+		if err != nil {
+			logger.Error("state command failed", slog.String("error", err.Error()))
 			return 1
 		}
 		return 0

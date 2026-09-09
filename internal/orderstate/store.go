@@ -13,7 +13,7 @@ import (
 	"bybit/internal/domain"
 )
 
-const SnapshotVersion = 1
+const SnapshotVersion = 2
 
 type Snapshot struct {
 	Version    int                         `json:"version"`

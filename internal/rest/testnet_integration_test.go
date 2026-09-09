@@ -10,10 +10,10 @@ import (
 
 // TestTestnetOrderLifecycle is deliberately opt-in. CI remains credential-free;
 // run it only with newly generated Testnet credentials:
-// RUN_BYBIT_INTEGRATION=1 BYBIT_API_KEY=... BYBIT_API_SECRET=... go test ./internal/rest -run TestTestnetOrderLifecycle -v
+// RUN_MULTI_VENUE_E2E=1 RUN_BYBIT_TRADING_TESTS=1 BYBIT_API_KEY=... BYBIT_API_SECRET=... go test ./internal/rest -run TestTestnetOrderLifecycle -v
 func TestTestnetOrderLifecycle(t *testing.T) {
-	if os.Getenv("RUN_BYBIT_INTEGRATION") != "1" {
-		t.Skip("set RUN_BYBIT_INTEGRATION=1 with fresh Bybit Testnet credentials")
+	if os.Getenv("RUN_MULTI_VENUE_E2E") != "1" || os.Getenv("RUN_BYBIT_TRADING_TESTS") != "1" {
+		t.Skip("set both RUN_MULTI_VENUE_E2E=1 and RUN_BYBIT_TRADING_TESTS=1 with fresh Bybit Testnet credentials")
 	}
 	apiKey, apiSecret := os.Getenv("BYBIT_API_KEY"), os.Getenv("BYBIT_API_SECRET")
 	if apiKey == "" || apiSecret == "" {

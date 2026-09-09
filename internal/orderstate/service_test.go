@@ -132,6 +132,43 @@ func TestServicePersistsAndReloads(t *testing.T) {
 	}
 }
 
+func TestServiceIsolatesIdenticalOrderAndExecutionIDsAcrossVenues(t *testing.T) {
+	ctx := context.Background()
+	service, err := NewService(ctx, FileStore{Path: filepath.Join(t.TempDir(), "orders.json")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	orders := []domain.Order{
+		{Exchange: "bybit", Environment: "testnet", AccountAlias: "bybit-test", Category: "linear", Symbol: "BTCUSDT", OrderID: "same-order", OrderLinkID: "same-link", Status: domain.OrderStatusNew},
+		{Exchange: "deribit", Environment: "testnet", AccountAlias: "deribit-test", Category: "future", Symbol: "BTC-PERPETUAL", OrderID: "same-order", OrderLinkID: "same-link", Status: domain.OrderStatusNew},
+	}
+	for _, order := range orders {
+		if err := service.ApplyOrder(ctx, order); err != nil {
+			t.Fatalf("apply %+v: %v", order, err)
+		}
+	}
+	for _, execution := range []domain.Execution{
+		{Exchange: "bybit", Environment: "testnet", AccountAlias: "bybit-test", ExecutionID: "same-trade", OrderID: "same-order", OrderLinkID: "same-link", Qty: "1"},
+		{Exchange: "deribit", Environment: "testnet", AccountAlias: "deribit-test", ExecutionID: "same-trade", OrderID: "same-order", OrderLinkID: "same-link", Qty: "2"},
+	} {
+		if err := service.ApplyExecution(ctx, execution); err != nil {
+			t.Fatalf("apply execution %+v: %v", execution, err)
+		}
+	}
+	snapshot := service.Snapshot()
+	if len(snapshot.Orders) != 2 || len(snapshot.Executions) != 2 {
+		t.Fatalf("cross-venue collision: %d orders, %d executions", len(snapshot.Orders), len(snapshot.Executions))
+	}
+	for _, order := range snapshot.Orders {
+		if order.Exchange == "bybit" && order.CumFilledQty != "1" {
+			t.Fatalf("Bybit fill contaminated: %+v", order)
+		}
+		if order.Exchange == "deribit" && order.CumFilledQty != "2" {
+			t.Fatalf("Deribit fill contaminated: %+v", order)
+		}
+	}
+}
+
 func TestIndependentServicesDoNotLoseEachOthersOrders(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "orders.json")
 	store := FileStore{Path: path}

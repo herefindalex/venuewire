@@ -51,6 +51,8 @@ const (
 // lose precision through binary floating-point conversion.
 type Order struct {
 	Exchange     string      `json:"exchange"`
+	Environment  string      `json:"environment,omitempty"`
+	AccountAlias string      `json:"accountAlias,omitempty"`
 	Category     string      `json:"category"`
 	Symbol       string      `json:"symbol"`
 	OrderID      string      `json:"orderId"`
@@ -63,12 +65,15 @@ type Order struct {
 	AvgFillPrice string      `json:"avgFillPrice"`
 	Status       OrderStatus `json:"status"`
 	RawStatus    string      `json:"rawStatus"`
+	IntentID     string      `json:"intentId,omitempty"`
 	CreatedAt    time.Time   `json:"createdAt"`
 	UpdatedAt    time.Time   `json:"updatedAt"`
 }
 
 type Execution struct {
 	Exchange     string    `json:"exchange"`
+	Environment  string    `json:"environment,omitempty"`
+	AccountAlias string    `json:"accountAlias,omitempty"`
 	Category     string    `json:"category"`
 	Symbol       string    `json:"symbol"`
 	ExecutionID  string    `json:"executionId"`
@@ -77,12 +82,16 @@ type Execution struct {
 	Side         Side      `json:"side"`
 	Price        string    `json:"price"`
 	Qty          string    `json:"qty"`
+	Fee          string    `json:"fee,omitempty"`
+	FeeCurrency  string    `json:"feeCurrency,omitempty"`
 	ExchangeTime time.Time `json:"exchangeTime"`
 	ReceivedAt   time.Time `json:"receivedAt"`
 }
 
 type Position struct {
 	Exchange      string    `json:"exchange"`
+	Environment   string    `json:"environment,omitempty"`
+	AccountAlias  string    `json:"accountAlias,omitempty"`
 	Category      string    `json:"category"`
 	Symbol        string    `json:"symbol"`
 	Side          Side      `json:"side"`

@@ -13,8 +13,8 @@ import (
 // an external exchange. Its default duration is the five-minute acceptance
 // interval; BYBIT_WS_TEST_DURATION may shorten local diagnostics only.
 func TestPublicTestnetFiveMinutes(t *testing.T) {
-	if os.Getenv("RUN_BYBIT_WS_INTEGRATION") != "1" {
-		t.Skip("set RUN_BYBIT_WS_INTEGRATION=1 to run the public Testnet soak")
+	if os.Getenv("RUN_BYBIT_READ_TESTS") != "1" {
+		t.Skip("set RUN_BYBIT_READ_TESTS=1 to run the public Testnet soak")
 	}
 	duration := 5 * time.Minute
 	if configured := os.Getenv("BYBIT_WS_TEST_DURATION"); configured != "" {

@@ -5,7 +5,7 @@ Specification: `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md`
 | Phase | Status | Evidence |
 |---|---|---|
 | 0 — Baseline audit and safety scaffold | Complete | `docs/upgrade/BASELINE_AUDIT.md`; 115 tests pass normally and with `-race`; vet/build pass |
-| 1 — Venue model, configuration, and migration | Not started | — |
+| 1 — Venue model, configuration, and migration | Complete | Compound identity/collision tests; exact Deribit Testnet guards; nonzero risk validation; explicit dry-run/backup/restore v1→v2 migration; 138 tests pass |
 | 2 — Deribit JSON-RPC, auth, metadata, and account reads | Not started | — |
 | 3 — Deribit public/private WS, book, and heartbeat | Not started | — |
 | 4 — HTTP/WS plan→execute order lifecycle | Not started | — |
@@ -22,7 +22,7 @@ Specification: `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md`
 |---|---|
 | Existing Bybit regression | PASS |
 | Deribit authenticated account-summary probe | PASS — read-only credential/asset check on 2026-09-09 |
-| Deribit R1 local tests | NOT_RUN |
+| Deribit R1 local tests | IN_PROGRESS — Phase 1 local tests pass |
 | Deribit R1 Testnet reads | NOT_RUN |
 | Deribit R1 Testnet order lifecycle | NOT_RUN |
 | Deribit FIX implemented | NOT_RUN |
@@ -32,4 +32,4 @@ Specification: `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md`
 
 ## Deviations
 
-None. User-approved choices are recorded in `docs/upgrade/BASELINE_AUDIT.md` and remain within the V2 specification's configurable boundaries.
+The former `RUN_BYBIT_INTEGRATION` and `RUN_BYBIT_WS_INTEGRATION` test gates were intentionally removed without compatibility aliases. Use the symmetric read/trading/FIX gates documented in `.env.example`. User-approved choices are recorded in `docs/upgrade/BASELINE_AUDIT.md`.
