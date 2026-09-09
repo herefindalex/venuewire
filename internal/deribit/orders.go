@@ -60,14 +60,14 @@ type Ticker struct {
 }
 
 type PlaceParams struct {
-	InstrumentName string `json:"instrument_name"`
-	Amount         string `json:"amount"`
-	Type           string `json:"type"`
-	Label          string `json:"label"`
-	Price          string `json:"price,omitempty"`
-	TimeInForce    string `json:"time_in_force,omitempty"`
-	PostOnly       bool   `json:"post_only,omitempty"`
-	ReduceOnly     bool   `json:"reduce_only,omitempty"`
+	InstrumentName string      `json:"instrument_name"`
+	Amount         json.Number `json:"amount"`
+	Type           string      `json:"type"`
+	Label          string      `json:"label"`
+	Price          json.Number `json:"price,omitempty"`
+	TimeInForce    string      `json:"time_in_force,omitempty"`
+	PostOnly       bool        `json:"post_only,omitempty"`
+	ReduceOnly     bool        `json:"reduce_only,omitempty"`
 }
 
 func (c *Client) PrivateWrite(ctx context.Context, method string, params any, result any) error {
@@ -101,9 +101,9 @@ func (c *Client) Place(ctx context.Context, side string, params PlaceParams) (Or
 }
 
 func (c *Client) Edit(ctx context.Context, orderID, amount, price string) (OrderResult, error) {
-	params := map[string]any{"order_id": orderID, "amount": amount}
+	params := map[string]any{"order_id": orderID, "amount": json.Number(amount)}
 	if price != "" {
-		params["price"] = price
+		params["price"] = json.Number(price)
 	}
 	var result OrderResult
 	err := c.PrivateWrite(ctx, "private/edit", params, &result)

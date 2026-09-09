@@ -222,6 +222,12 @@ func TestPrivateWriteDoesNotRetryAmbiguousTransportFailure(t *testing.T) {
 			respond(t, writer, got.ID, map[string]any{"access_token": "token", "expires_in": 300}, nil)
 			return
 		}
+		if _, ok := got.Params["amount"].(float64); !ok {
+			t.Errorf("amount wire type=%T, want JSON number", got.Params["amount"])
+		}
+		if _, ok := got.Params["price"].(float64); !ok {
+			t.Errorf("price wire type=%T, want JSON number", got.Params["price"])
+		}
 		writes.Add(1)
 		_, _ = writer.Write([]byte(`not-json`))
 	}))

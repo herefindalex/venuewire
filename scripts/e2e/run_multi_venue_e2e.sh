@@ -62,6 +62,25 @@ trap 'echo "E2E assertion failed at line $LINENO" >&2' ERR
 
 echo "E2E: shared read surfaces"
 "$binary" help >"$e2e_tmp/help.txt"
+
+echo "E2E: reversible local state migration"
+operational_state_file=$BYBIT_STATE_FILE
+migration_state_file="$e2e_tmp/migration/orders.json"
+mkdir -p "$(dirname "$migration_state_file")"
+printf '%s\n' '{"version":1,"updatedAt":"2026-09-09T00:00:00Z","orders":{"fixture":{"category":"linear","orderId":"migration-order","orderLinkId":"migration-link"}},"executions":{}}' >"$migration_state_file"
+chmod 600 "$migration_state_file"
+export BYBIT_STATE_FILE=$migration_state_file
+"$binary" state migrate-v1 --bybit-account-alias bybit-test --dry-run >"$e2e_tmp/migration-dry-run.json"
+jq -e '.fromVersion == 1 and .toVersion == 2 and .dryRun == true and .changed == true' "$e2e_tmp/migration-dry-run.json" >/dev/null
+jq -e '.version == 1' "$migration_state_file" >/dev/null
+"$binary" state migrate-v1 --bybit-account-alias bybit-test >"$e2e_tmp/migration-apply.json"
+jq -e '.fromVersion == 1 and .toVersion == 2 and .dryRun == false and .changed == true' "$e2e_tmp/migration-apply.json" >/dev/null
+jq -e '.version == 2' "$migration_state_file" >/dev/null
+[[ -f $migration_state_file.v1.bak ]]
+"$binary" state restore-v1 >"$e2e_tmp/migration-restore.json"
+jq -e '.version == 1' "$migration_state_file" >/dev/null
+export BYBIT_STATE_FILE=$operational_state_file
+
 "$binary" --venue all status >"$e2e_tmp/all-status.json"
 jq -e '.allHealthy == true and ([.results[].ok] | all)' "$e2e_tmp/all-status.json" >/dev/null
 "$binary" --venue all portfolio >"$e2e_tmp/portfolio.json"
@@ -166,6 +185,7 @@ rg -q "$bybit_fill_link" "$e2e_tmp/bybit-private.jsonl"
 echo "E2E: Deribit reads and timed streams"
 "$binary" --venue deribit doctor >"$e2e_tmp/deribit-doctor.json"
 jq -e '.public.ok and .private.ok and (.tradingWritePerformed == false)' "$e2e_tmp/deribit-doctor.json" >/dev/null
+"$binary" --venue deribit time >"$e2e_tmp/deribit-time.json"
 "$binary" --venue deribit instruments --currency BTC --kind future >"$e2e_tmp/deribit-instruments.json"
 "$binary" --venue deribit instrument --name BTC-PERPETUAL >"$e2e_tmp/deribit-instrument.json"
 "$binary" --venue deribit ticker --instrument BTC-PERPETUAL >"$e2e_tmp/deribit-ticker.json"
@@ -176,6 +196,7 @@ jq -e 'all(.[]; (.size | tonumber) == 0)' "$e2e_tmp/deribit-position-before.json
 jq -e 'length == 0' "$e2e_tmp/deribit-open-before.json" >/dev/null
 "$binary" --venue deribit market trades --instrument BTC-PERPETUAL --duration 5s >"$e2e_tmp/deribit-market-trades.jsonl"
 "$binary" --venue deribit market orderbook --instrument BTC-PERPETUAL --depth 10 --duration 5s >"$e2e_tmp/deribit-market-book.jsonl"
+"$binary" --venue deribit public-stream --channels ticker.BTC-PERPETUAL.100ms --duration 5s >"$e2e_tmp/deribit-public-stream.jsonl"
 "$binary" --venue deribit private-stream --duration 35s --enable-connection-cod --confirm >"$e2e_tmp/deribit-private.jsonl" &
 deribit_private_pid=$!
 sleep 2
@@ -187,10 +208,7 @@ deribit_amend=$(awk -v p="$deribit_mark" -v t="$deribit_tick" 'BEGIN { printf "%
 
 deribit_lifecycle() {
   local transport=$1 prefix=$2 plan plan_id execution order_id
-  local mutation_transport=http
-  if [[ $transport == fix ]]; then
-    mutation_transport=fix
-  fi
+  local mutation_transport=$transport
   plan=$("$binary" --venue deribit order plan --instrument BTC-PERPETUAL --side buy --amount "$deribit_amount" --type limit --price "$deribit_price" --transport "$transport" --post-only)
   jq -e --arg transport "$transport" '.status == "Planned" and .amountUnit == "USD_notional" and .transport == $transport' <<<"$plan" >/dev/null
   plan_id=$(jq -er .id <<<"$plan")

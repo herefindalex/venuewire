@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base32"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -103,7 +104,7 @@ func (p *Planner) Execute(ctx context.Context, id string, confirm bool) (Executi
 	if err != nil {
 		return ExecutionResult{}, err
 	}
-	params := deribit.PlaceParams{InstrumentName: claimed.Instrument, Amount: claimed.Amount, Type: claimed.OrderType, Label: claimed.ID, Price: claimed.Price, TimeInForce: claimed.TimeInForce, PostOnly: claimed.PostOnly, ReduceOnly: claimed.ReduceOnly}
+	params := deribit.PlaceParams{InstrumentName: claimed.Instrument, Amount: json.Number(claimed.Amount), Type: claimed.OrderType, Label: claimed.ID, Price: json.Number(claimed.Price), TimeInForce: claimed.TimeInForce, PostOnly: claimed.PostOnly, ReduceOnly: claimed.ReduceOnly}
 	var ack deribit.OrderResult
 	switch claimed.Transport {
 	case "ws":

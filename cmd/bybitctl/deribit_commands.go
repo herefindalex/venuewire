@@ -381,7 +381,7 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			orderID := flags.String("order-id", "", "native order ID")
 			amount := flags.String("amount", "", "new USD amount")
 			price := flags.String("price", "", "new limit price")
-			transport := flags.String("transport", "http", "http or fix")
+			transport := flags.String("transport", "http", "http, ws, or fix")
 			confirm := flags.Bool("confirm", false, "confirm write")
 			if err := flags.Parse(args[4:]); err != nil {
 				return true, err
@@ -406,6 +406,8 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			switch strings.ToLower(*transport) {
 			case "http":
 				ack, err = client.Edit(ctx, *orderID, *amount, *price)
+			case "ws":
+				ack, err = client.EditWS(ctx, cfg.Deribit.WSURL, *orderID, *amount, *price)
 			case "fix":
 				ownedPlan, ownershipErr := requireConnectorOwnedFIXOrder(ctx, planner.Store, before)
 				if ownershipErr != nil {
@@ -413,7 +415,7 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 				}
 				ack, err = amendDeribitFIX(ctx, cfg, client, before, ownedPlan, *amount, *price)
 			default:
-				return true, errors.New("amend transport must be http or fix")
+				return true, errors.New("amend transport must be http, ws, or fix")
 			}
 			if err != nil {
 				return true, err
@@ -431,7 +433,7 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			flags := flag.NewFlagSet("venue deribit order cancel", flag.ContinueOnError)
 			flags.SetOutput(io.Discard)
 			orderID := flags.String("order-id", "", "native order ID")
-			transport := flags.String("transport", "http", "http or fix")
+			transport := flags.String("transport", "http", "http, ws, or fix")
 			confirm := flags.Bool("confirm", false, "confirm write")
 			if err := flags.Parse(args[4:]); err != nil {
 				return true, err
@@ -446,6 +448,8 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			switch strings.ToLower(*transport) {
 			case "http":
 				ack, err = client.Cancel(ctx, *orderID)
+			case "ws":
+				ack, err = client.CancelWS(ctx, cfg.Deribit.WSURL, *orderID)
 			case "fix":
 				before, readErr := client.OrderState(ctx, *orderID)
 				if readErr != nil {
@@ -459,7 +463,7 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 				}
 				ack, err = cancelDeribitFIX(ctx, cfg, client, before)
 			default:
-				return true, errors.New("cancel transport must be http or fix")
+				return true, errors.New("cancel transport must be http, ws, or fix")
 			}
 			if err != nil {
 				return true, err

@@ -37,8 +37,8 @@ Deribit Testnet JSON-RPC:
   bybitctl venue deribit order plan --instrument BTC-PERPETUAL --side buy --amount 10 --type limit --price PRICE [--transport http|ws|fix] [--post-only]
   bybitctl venue deribit order execute --plan-id ID --confirm
   bybitctl venue deribit order status --order-id ID
-  bybitctl venue deribit order amend --order-id ID --amount AMOUNT --price PRICE [--transport http|fix] --confirm
-  bybitctl venue deribit order cancel --order-id ID [--transport http|fix] --confirm
+  bybitctl venue deribit order amend --order-id ID --amount AMOUNT --price PRICE [--transport http|ws|fix] --confirm
+  bybitctl venue deribit order cancel --order-id ID [--transport http|ws|fix] --confirm
   bybitctl venue deribit order trades --order-id ID
   bybitctl venue deribit reconcile
   bybitctl --venue deribit fix mock-demo
