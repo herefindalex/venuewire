@@ -71,10 +71,10 @@ printf '%s\n' '{"version":1,"updatedAt":"2026-09-09T00:00:00Z","orders":{"fixtur
 chmod 600 "$migration_state_file"
 export BYBIT_STATE_FILE=$migration_state_file
 "$binary" state migrate-v1 --bybit-account-alias bybit-test --dry-run >"$e2e_tmp/migration-dry-run.json"
-jq -e '.fromVersion == 1 and .toVersion == 2 and .dryRun == true and .changed == true' "$e2e_tmp/migration-dry-run.json" >/dev/null
+jq -e '.FromVersion == 1 and .ToVersion == 2 and .DryRun == true and .Changed == true' "$e2e_tmp/migration-dry-run.json" >/dev/null
 jq -e '.version == 1' "$migration_state_file" >/dev/null
 "$binary" state migrate-v1 --bybit-account-alias bybit-test >"$e2e_tmp/migration-apply.json"
-jq -e '.fromVersion == 1 and .toVersion == 2 and .dryRun == false and .changed == true' "$e2e_tmp/migration-apply.json" >/dev/null
+jq -e '.FromVersion == 1 and .ToVersion == 2 and .DryRun == false and .Changed == true' "$e2e_tmp/migration-apply.json" >/dev/null
 jq -e '.version == 2' "$migration_state_file" >/dev/null
 [[ -f $migration_state_file.v1.bak ]]
 "$binary" state restore-v1 >"$e2e_tmp/migration-restore.json"
