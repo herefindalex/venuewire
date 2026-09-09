@@ -152,6 +152,37 @@ func TestPlanRejectsMetadataAndRiskViolations(t *testing.T) {
 	}
 }
 
+func TestPlanUsesEffectiveSegmentedTick(t *testing.T) {
+	planner, market, _ := validPlanner(t)
+	ids := []string{"boundary", "above-boundary"}
+	planner.NewID = func() (string, error) {
+		id := ids[0]
+		ids = ids[1:]
+		return id, nil
+	}
+	market.instrument.TickSize = json.Number("0.1")
+	market.instrument.TickSizeSteps = []deribit.TickSizeStep{{AbovePrice: json.Number("80000"), TickSize: json.Number("0.5")}}
+	market.ticker.MarkPrice = json.Number("80000")
+
+	atBoundary, err := planner.Create(context.Background(), Request{Instrument: "BTC-PERPETUAL", Side: "buy", OrderType: "limit", Amount: "10", Price: "80000"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if atBoundary.ValidTick != "0.1" {
+		t.Fatalf("boundary tick=%s, want 0.1", atBoundary.ValidTick)
+	}
+	if _, err := planner.Create(context.Background(), Request{Instrument: "BTC-PERPETUAL", Side: "buy", OrderType: "limit", Amount: "10", Price: "80000.1"}); err == nil {
+		t.Fatal("price violating stepped tick was accepted")
+	}
+	aboveBoundary, err := planner.Create(context.Background(), Request{Instrument: "BTC-PERPETUAL", Side: "buy", OrderType: "limit", Amount: "10", Price: "80000.5"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if aboveBoundary.ValidTick != "0.5" {
+		t.Fatalf("stepped tick=%s, want 0.5", aboveBoundary.ValidTick)
+	}
+}
+
 func TestExecuteMarksNeedsReviewWhenReadVerificationFails(t *testing.T) {
 	planner, market, _ := validPlanner(t)
 	plan, _ := planner.Create(context.Background(), Request{Instrument: "BTC-PERPETUAL", Side: "buy", OrderType: "limit", Amount: "10", Price: "80000"})

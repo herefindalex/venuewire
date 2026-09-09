@@ -210,17 +210,23 @@ func (p *Planner) validate(ctx context.Context, request Request) (Plan, error) {
 		return Plan{}, err
 	}
 	priceText := request.Price
+	validTick := instrument.TickSize.String()
 	if orderType == "limit" {
 		price, err := positiveRat("price", request.Price)
 		if err != nil {
 			return Plan{}, err
 		}
-		tick, err := positiveRat("tick size", instrument.TickSize.String())
+		effectiveTick, err := instrument.EffectiveTickSize(request.Price)
+		if err != nil {
+			return Plan{}, err
+		}
+		validTick = effectiveTick.String()
+		tick, err := positiveRat("tick size", validTick)
 		if err != nil {
 			return Plan{}, err
 		}
 		if !isInteger(new(big.Rat).Quo(price, tick)) {
-			return Plan{}, fmt.Errorf("price must be a multiple of tick size %s", instrument.TickSize.String())
+			return Plan{}, fmt.Errorf("price must be a multiple of tick size %s", validTick)
 		}
 		deviation := new(big.Rat).Sub(price, mark)
 		if deviation.Sign() < 0 {
@@ -269,7 +275,7 @@ func (p *Planner) validate(ctx context.Context, request Request) (Plan, error) {
 	if aggregate.Cmp(maxAggregate) > 0 {
 		return Plan{}, errors.New("aggregate open USD risk limit exceeded")
 	}
-	return Plan{Venue: "deribit", Environment: "testnet", AccountAlias: p.AccountAlias, Instrument: request.Instrument, SettlementCurrency: instrument.SettlementCurrency, Side: side, OrderType: orderType, Transport: transport, Amount: request.Amount, AmountUnit: "USD_notional", Price: priceText, TimeInForce: request.TimeInForce, PostOnly: request.PostOnly, ReduceOnly: request.ReduceOnly, MarkPrice: ticker.MarkPrice.String(), ValidTick: instrument.TickSize.String(), EstimatedNotionalUSD: request.Amount, MetadataAt: metadataAt, PriceAt: priceAt, CODProtected: false, OpenOrderCount: openCount, AggregateOpenUSD: aggregate.FloatString(8)}, nil
+	return Plan{Venue: "deribit", Environment: "testnet", AccountAlias: p.AccountAlias, Instrument: request.Instrument, SettlementCurrency: instrument.SettlementCurrency, Side: side, OrderType: orderType, Transport: transport, Amount: request.Amount, AmountUnit: "USD_notional", Price: priceText, TimeInForce: request.TimeInForce, PostOnly: request.PostOnly, ReduceOnly: request.ReduceOnly, MarkPrice: ticker.MarkPrice.String(), ValidTick: validTick, EstimatedNotionalUSD: request.Amount, MetadataAt: metadataAt, PriceAt: priceAt, CODProtected: false, OpenOrderCount: openCount, AggregateOpenUSD: aggregate.FloatString(8)}, nil
 }
 
 func (p *Planner) now() time.Time {

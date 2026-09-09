@@ -173,7 +173,7 @@ jq -e 'all(.[]; (.size | tonumber) == 0)' "$e2e_tmp/deribit-position-before.json
 jq -e 'length == 0' "$e2e_tmp/deribit-open-before.json" >/dev/null
 "$binary" --venue deribit market trades --instrument BTC-PERPETUAL --duration 5s >"$e2e_tmp/deribit-market-trades.jsonl"
 "$binary" --venue deribit market orderbook --instrument BTC-PERPETUAL --depth 10 --duration 5s >"$e2e_tmp/deribit-market-book.jsonl"
-"$binary" --venue deribit private-stream --duration 35s >"$e2e_tmp/deribit-private.jsonl" &
+"$binary" --venue deribit private-stream --duration 35s --enable-connection-cod --confirm >"$e2e_tmp/deribit-private.jsonl" &
 deribit_private_pid=$!
 sleep 2
 deribit_amount=$(jq -er '.min_trade_amount' "$e2e_tmp/deribit-instrument.json")
@@ -247,6 +247,7 @@ jq -e 'all(.[]; (.size | tonumber) == 0)' "$e2e_tmp/deribit-position-after.json"
 
 wait "$deribit_private_pid"
 unset deribit_private_pid
+jq -s -e 'last.metrics.CODQueried == true and last.metrics.CODScope == "connection" and last.metrics.CODEnabled == true' "$e2e_tmp/deribit-private.jsonl" >/dev/null
 rg -q "$deribit_fill_id" "$e2e_tmp/deribit-private.jsonl"
 wait "$bybit_private_pid" || [[ $? == 124 ]]
 unset bybit_private_pid

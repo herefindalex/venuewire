@@ -72,6 +72,7 @@ func TestUsageListsEveryImplementedCommand(t *testing.T) {
 	for _, command := range []string{
 		"bybitctl --venue deribit fix mock-demo",
 		"bybitctl --venue deribit fix connect-testnet",
+		"--enable-connection-cod --confirm",
 	} {
 		if !strings.Contains(usage, command) {
 			t.Errorf("help does not list %q", command)
@@ -95,6 +96,15 @@ func TestRunAllowsDeribitFIXMockWhenVenueIsDisabled(t *testing.T) {
 
 	if code := runContext(context.Background(), []string{"--venue", "deribit", "fix", "mock-demo"}); code != 0 {
 		t.Fatalf("runContext returned %d, want 0 for credential-free local mock", code)
+	}
+}
+
+func TestDeribitPrivateStreamCODRequiresExplicitConfirmation(t *testing.T) {
+	setCleanTestnetEnvironment(t)
+	cfg := config.Load()
+	handled, err := executeDeribitCommand(context.Background(), cfg, []string{"venue", "deribit", "private-stream", "--enable-connection-cod"}, io.Discard)
+	if !handled || err == nil || !strings.Contains(err.Error(), "--confirm") {
+		t.Fatalf("handled=%v error=%v, want explicit confirmation error", handled, err)
 	}
 }
 

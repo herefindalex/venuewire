@@ -32,17 +32,18 @@ type WSNotification struct {
 }
 
 type WSConfig struct {
-	URL               string
-	Channels          []string
-	Private           bool
-	QueueSize         int
-	HeartbeatInterval time.Duration
-	StaleAfter        time.Duration
-	ReconnectMin      time.Duration
-	ReconnectMax      time.Duration
-	Dial              WSDialFunc
-	Now               func() time.Time
-	OnReady           func(context.Context, uint64) error
+	URL                 string
+	Channels            []string
+	Private             bool
+	EnableConnectionCOD bool
+	QueueSize           int
+	HeartbeatInterval   time.Duration
+	StaleAfter          time.Duration
+	ReconnectMin        time.Duration
+	ReconnectMax        time.Duration
+	Dial                WSDialFunc
+	Now                 func() time.Time
+	OnReady             func(context.Context, uint64) error
 }
 
 type WSMetrics struct {
@@ -54,6 +55,9 @@ type WSMetrics struct {
 	QueueDepth    int64
 	LastError     string
 	Ready         uint64
+	CODQueried    bool
+	CODScope      string
+	CODEnabled    bool
 }
 
 type WSClient struct {
@@ -68,6 +72,9 @@ type WSClient struct {
 	queueDepth    atomic.Int64
 	errorMu       sync.Mutex
 	lastError     string
+	codQueried    bool
+	codScope      string
+	codEnabled    bool
 	ready         atomic.Uint64
 }
 
@@ -183,6 +190,7 @@ func (c *WSClient) runConnection(ctx context.Context, conn WSConnection, generat
 	}
 	params := map[string]any{"channels": c.config.Channels}
 	method := "public/subscribe"
+	var codEnableID, codQueryID uint64
 	if c.config.Private {
 		token, err := c.httpClient.accessToken(ctx, false)
 		if err != nil {
@@ -190,6 +198,16 @@ func (c *WSClient) runConnection(ctx context.Context, conn WSConnection, generat
 		}
 		params["access_token"] = token
 		method = "private/subscribe"
+		if c.config.EnableConnectionCOD {
+			codEnableID = c.nextID.Add(1)
+			if err := conn.WriteJSON(request{JSONRPC: "2.0", ID: codEnableID, Method: "private/enable_cancel_on_disconnect", Params: map[string]any{"access_token": token, "scope": "connection"}}); err != nil {
+				return err
+			}
+		}
+		codQueryID = c.nextID.Add(1)
+		if err := conn.WriteJSON(request{JSONRPC: "2.0", ID: codQueryID, Method: "private/get_cancel_on_disconnect", Params: map[string]any{"access_token": token, "scope": "connection"}}); err != nil {
+			return err
+		}
 	}
 	subscribeID := c.nextID.Add(1)
 	if err := conn.WriteJSON(request{JSONRPC: "2.0", ID: subscribeID, Method: method, Params: params}); err != nil {
@@ -218,6 +236,39 @@ func (c *WSClient) runConnection(ctx context.Context, conn WSConnection, generat
 	}()
 	defer close(events)
 	ready := false
+	subscribed := false
+	codQueryDone := !c.config.Private
+	codEnableDone := !c.config.EnableConnectionCOD
+	pendingNotifications := make([]WSNotification, 0, c.config.QueueSize)
+	enqueue := func(event WSNotification) error {
+		select {
+		case events <- event:
+			c.queueDepth.Add(1)
+			c.notifications.Add(1)
+			return nil
+		default:
+			return errors.New("Deribit WebSocket event queue full; connection requires recovery")
+		}
+	}
+	becomeReady := func() error {
+		if ready || !subscribed || !codQueryDone || !codEnableDone {
+			return nil
+		}
+		if c.config.OnReady != nil {
+			if err := c.config.OnReady(ctx, generation); err != nil {
+				return fmt.Errorf("Deribit recovery callback: %w", err)
+			}
+		}
+		ready = true
+		c.ready.Add(1)
+		for _, event := range pendingNotifications {
+			if err := enqueue(event); err != nil {
+				return err
+			}
+		}
+		pendingNotifications = nil
+		return nil
+	}
 	for {
 		select {
 		case err := <-processorErrors:
@@ -241,15 +292,45 @@ func (c *WSClient) runConnection(ctx context.Context, conn WSConnection, generat
 			message.Error.Data = nil
 			return message.Error
 		}
-		if message.ID == subscribeID && !ready {
-			ready = true
-			c.ready.Add(1)
-			if c.config.OnReady != nil {
-				if err := c.config.OnReady(ctx, generation); err != nil {
-					return fmt.Errorf("Deribit recovery callback: %w", err)
+		if message.ID != 0 {
+			handled := true
+			switch message.ID {
+			case subscribeID:
+				subscribed = true
+			case codEnableID:
+				if codEnableID == 0 {
+					handled = false
+					break
 				}
+				var result string
+				if err := json.Unmarshal(message.Result, &result); err != nil || result != "ok" {
+					return errors.New("Deribit connection COD enable returned an invalid acknowledgement")
+				}
+				codEnableDone = true
+			case codQueryID:
+				if codQueryID == 0 {
+					handled = false
+					break
+				}
+				var status CancelOnDisconnect
+				if err := json.Unmarshal(message.Result, &status); err != nil || status.Scope != "connection" {
+					return errors.New("Deribit connection COD query returned an invalid result")
+				}
+				c.errorMu.Lock()
+				c.codQueried = true
+				c.codScope = status.Scope
+				c.codEnabled = status.Enabled
+				c.errorMu.Unlock()
+				codQueryDone = true
+			default:
+				handled = false
 			}
-			continue
+			if handled {
+				if err := becomeReady(); err != nil {
+					return err
+				}
+				continue
+			}
 		}
 		if message.Method == "heartbeat" && message.Params.Type == "test_request" {
 			c.testRequests.Add(1)
@@ -262,16 +343,16 @@ func (c *WSClient) runConnection(ctx context.Context, conn WSConnection, generat
 		if message.Method != "subscription" {
 			continue
 		}
-		if !ready {
-			return errors.New("Deribit subscription data arrived before subscribe acknowledgement")
-		}
 		event := WSNotification{Channel: message.Params.Channel, Data: message.Params.Data, ReceivedAt: c.config.Now().UTC(), Generation: generation}
-		select {
-		case events <- event:
-			c.queueDepth.Add(1)
-			c.notifications.Add(1)
-		default:
-			return errors.New("Deribit WebSocket event queue full; connection requires recovery")
+		if !ready {
+			if len(pendingNotifications) >= c.config.QueueSize {
+				return errors.New("Deribit WebSocket recovery buffer full before connection became ready")
+			}
+			pendingNotifications = append(pendingNotifications, event)
+			continue
+		}
+		if err := enqueue(event); err != nil {
+			return err
 		}
 	}
 }
@@ -279,8 +360,11 @@ func (c *WSClient) runConnection(ctx context.Context, conn WSConnection, generat
 func (c *WSClient) Metrics() WSMetrics {
 	c.errorMu.Lock()
 	lastError := c.lastError
+	codQueried := c.codQueried
+	codScope := c.codScope
+	codEnabled := c.codEnabled
 	c.errorMu.Unlock()
-	return WSMetrics{Connections: c.connections.Load(), Reconnects: c.reconnects.Load(), Messages: c.messages.Load(), Notifications: c.notifications.Load(), TestRequests: c.testRequests.Load(), QueueDepth: c.queueDepth.Load(), LastError: lastError, Ready: c.ready.Load()}
+	return WSMetrics{Connections: c.connections.Load(), Reconnects: c.reconnects.Load(), Messages: c.messages.Load(), Notifications: c.notifications.Load(), TestRequests: c.testRequests.Load(), QueueDepth: c.queueDepth.Load(), LastError: lastError, Ready: c.ready.Load(), CODQueried: codQueried, CODScope: codScope, CODEnabled: codEnabled}
 }
 
 func waitContext(ctx context.Context, duration time.Duration) error {

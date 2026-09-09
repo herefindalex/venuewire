@@ -38,6 +38,41 @@ type Report struct {
 	Pages                     int `json:"pages"`
 }
 
+type PrivateEventReport struct {
+	OrdersApplied             int `json:"ordersApplied"`
+	TradesApplied             int `json:"tradesApplied"`
+	DuplicateOrExternalTrades int `json:"duplicateOrExternalTrades"`
+	PositionsObserved         int `json:"positionsObserved"`
+}
+
+func (r *Reconciler) ApplyUserChanges(ctx context.Context, changes deribit.UserChanges) (PrivateEventReport, error) {
+	var report PrivateEventReport
+	if r.State == nil {
+		return report, errors.New("Deribit private-event reducer requires order state")
+	}
+	labels := make(map[string]string, len(changes.Orders))
+	for _, order := range changes.Orders {
+		if err := r.applyOrder(ctx, order); err != nil {
+			return report, err
+		}
+		labels[order.OrderID] = order.Label
+		report.OrdersApplied++
+	}
+	for _, trade := range changes.Trades {
+		applied, err := r.recordTrade(ctx, trade, labels[trade.OrderID])
+		if err != nil {
+			return report, err
+		}
+		if applied {
+			report.TradesApplied++
+		} else {
+			report.DuplicateOrExternalTrades++
+		}
+	}
+	report.PositionsObserved = len(changes.Positions)
+	return report, nil
+}
+
 func (r *Reconciler) Run(ctx context.Context) (Report, error) {
 	return r.run(ctx, false)
 }

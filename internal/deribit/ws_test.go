@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -149,18 +150,73 @@ func TestWSQueueOverflowFailsClosed(t *testing.T) {
 
 func TestPrivateWSUsesTokenAndPrivateSubscribe(t *testing.T) {
 	conn := newFakeWS()
-	conn.reads <- fakeWSRead{payload: wsPayload(`{"jsonrpc":"2.0","id":2,"result":[]}`)}
+	conn.reads <- fakeWSRead{payload: wsPayload(`{"jsonrpc":"2.0","id":2,"result":{"scope":"connection","enabled":false}}`)}
+	conn.reads <- fakeWSRead{payload: wsPayload(`{"jsonrpc":"2.0","id":3,"result":[]}`)}
 	conn.reads <- fakeWSRead{err: io.EOF}
 	httpClient := &Client{token: "token", tokenExpiresAt: time.Now().Add(time.Hour), now: time.Now}
 	client, _ := NewWSClient(httpClient, WSConfig{URL: "wss://test.deribit.com/ws/api/v2", Channels: []string{"user.changes.any.any.raw"}, Private: true, Dial: func(context.Context, string) (WSConnection, error) { return conn, nil }})
 	_ = client.runConnection(context.Background(), conn, 1, func(context.Context, WSNotification) error { return nil })
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
-	if len(conn.writes) < 2 || conn.writes[1].Method != "private/subscribe" {
+	if len(conn.writes) != 3 || conn.writes[1].Method != "private/get_cancel_on_disconnect" || conn.writes[2].Method != "private/subscribe" {
 		t.Fatalf("writes=%+v", conn.writes)
 	}
-	params := conn.writes[1].Params.(map[string]any)
+	params := conn.writes[2].Params.(map[string]any)
 	if params["access_token"] != "token" {
 		t.Fatal("private subscription token absent")
+	}
+	metrics := client.Metrics()
+	if !metrics.CODQueried || metrics.CODScope != "connection" || metrics.CODEnabled {
+		t.Fatalf("metrics=%+v", metrics)
+	}
+}
+
+func TestPrivateWSCODHandlesReorderedResponsesAndEarlyEvent(t *testing.T) {
+	conn := newFakeWS()
+	conn.reads <- fakeWSRead{payload: wsPayload(`{"jsonrpc":"2.0","method":"subscription","params":{"channel":"user.changes.any.any.raw","data":{"orders":[{"order_id":"early"}]}}}`)}
+	conn.reads <- fakeWSRead{payload: wsPayload(`{"jsonrpc":"2.0","id":4,"result":[]}`)}
+	conn.reads <- fakeWSRead{payload: wsPayload(`{"jsonrpc":"2.0","id":3,"result":{"scope":"connection","enabled":true}}`)}
+	conn.reads <- fakeWSRead{payload: wsPayload(`{"jsonrpc":"2.0","id":2,"result":"ok"}`)}
+
+	httpClient := &Client{token: "token", tokenExpiresAt: time.Now().Add(time.Hour), now: time.Now}
+	stream, err := NewWSClient(httpClient, WSConfig{
+		URL:                 "wss://test.deribit.com/ws/api/v2",
+		Channels:            []string{"user.changes.any.any.raw"},
+		Private:             true,
+		EnableConnectionCOD: true,
+		Dial:                func(context.Context, string) (WSConnection, error) { return conn, nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- stream.Run(ctx, func(_ context.Context, event WSNotification) error {
+			if event.Channel != "user.changes.any.any.raw" {
+				t.Errorf("channel=%q", event.Channel)
+			}
+			cancel()
+			return nil
+		})
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("stream did not deliver buffered early event")
+	}
+	conn.mu.Lock()
+	methods := make([]string, len(conn.writes))
+	for index, write := range conn.writes {
+		methods[index] = write.Method
+	}
+	conn.mu.Unlock()
+	want := []string{"public/set_heartbeat", "private/enable_cancel_on_disconnect", "private/get_cancel_on_disconnect", "private/subscribe"}
+	if !slices.Equal(methods, want) {
+		t.Fatalf("methods=%v, want %v", methods, want)
+	}
+	metrics := stream.Metrics()
+	if metrics.Ready != 1 || !metrics.CODQueried || !metrics.CODEnabled || metrics.Notifications != 1 {
+		t.Fatalf("metrics=%+v", metrics)
 	}
 }

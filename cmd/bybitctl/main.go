@@ -33,7 +33,7 @@ Deribit Testnet JSON-RPC:
   bybitctl venue deribit account balances [--currency all|BTC,ETH]
   bybitctl venue deribit positions [--currency BTC] [--kind future]
   bybitctl venue deribit public-stream [--channels trades.BTC-PERPETUAL.100ms,book.BTC-PERPETUAL.100ms] [--duration 30s]
-  bybitctl venue deribit private-stream [--channels user.changes.any.any.raw] [--duration 30s]
+  bybitctl venue deribit private-stream [--channels user.changes.any.any.raw] [--duration 30s] [--enable-connection-cod --confirm]
   bybitctl venue deribit order plan --instrument BTC-PERPETUAL --side buy --amount 10 --type limit --price PRICE [--transport http|ws|fix] [--post-only]
   bybitctl venue deribit order execute --plan-id ID --confirm
   bybitctl venue deribit order status --order-id ID

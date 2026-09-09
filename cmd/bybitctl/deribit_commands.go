@@ -51,7 +51,12 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			if err != nil {
 				result["private"] = map[string]any{"ok": false, "error": err.Error()}
 			} else {
-				result["private"] = map[string]any{"ok": true, "currencies": len(summaries)}
+				cod, codErr := client.CancelOnDisconnect(ctx, "account")
+				if codErr != nil {
+					result["private"] = map[string]any{"ok": false, "currencies": len(summaries), "error": codErr.Error()}
+				} else {
+					result["private"] = map[string]any{"ok": true, "currencies": len(summaries), "cancelOnDisconnect": cod}
+				}
 			}
 		}
 		return true, encoder.Encode(result)
@@ -170,23 +175,37 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 		}
 		channelsRaw := flags.String("channels", defaultChannels, "comma-separated channels")
 		duration := flags.Duration("duration", 30*time.Second, "bounded stream duration")
+		enableConnectionCOD := flags.Bool("enable-connection-cod", false, "enable cancel-on-disconnect for this private connection")
+		confirm := flags.Bool("confirm", false, "confirm the connection-scoped COD change")
 		if err := flags.Parse(args[3:]); err != nil {
 			return true, err
 		}
 		if flags.NArg() != 0 || *duration <= 0 {
 			return true, errors.New("stream requires a positive duration and no positional arguments")
 		}
+		if *enableConnectionCOD {
+			if !private {
+				return true, errors.New("connection COD is available only on private-stream")
+			}
+			if !*confirm {
+				return true, errors.New("enabling connection COD requires --confirm")
+			}
+			if err := requireDeribitTradingGates(); err != nil {
+				return true, err
+			}
+		}
 		channels, err := splitNonempty(*channelsRaw)
 		if err != nil {
 			return true, err
 		}
-		streamConfig := deribit.WSConfig{URL: cfg.Deribit.WSURL, Channels: channels, Private: private}
+		streamConfig := deribit.WSConfig{URL: cfg.Deribit.WSURL, Channels: channels, Private: private, EnableConnectionCOD: *enableConnectionCOD}
+		var privateReconciler *deribitreconcile.Reconciler
 		if private {
-			reconciler, err := newDeribitReconciler(ctx, cfg, client)
+			privateReconciler, err = newDeribitReconciler(ctx, cfg, client)
 			if err != nil {
 				return true, err
 			}
-			streamConfig.OnReady = func(readyCtx context.Context, _ uint64) error { _, err := reconciler.Run(readyCtx); return err }
+			streamConfig.OnReady = func(readyCtx context.Context, _ uint64) error { _, err := privateReconciler.Run(readyCtx); return err }
 		}
 		stream, err := deribit.NewWSClient(client, streamConfig)
 		if err != nil {
@@ -194,7 +213,18 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 		}
 		streamCtx, cancel := context.WithTimeout(ctx, *duration)
 		defer cancel()
-		err = stream.Run(streamCtx, func(_ context.Context, event deribit.WSNotification) error { return encoder.Encode(event) })
+		err = stream.Run(streamCtx, func(eventCtx context.Context, event deribit.WSNotification) error {
+			if privateReconciler != nil && strings.HasPrefix(event.Channel, "user.changes.") {
+				changes, err := deribit.DecodeUserChanges(event.Data)
+				if err != nil {
+					return err
+				}
+				if _, err := privateReconciler.ApplyUserChanges(eventCtx, changes); err != nil {
+					return err
+				}
+			}
+			return encoder.Encode(event)
+		})
 		if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 			return true, err
 		}

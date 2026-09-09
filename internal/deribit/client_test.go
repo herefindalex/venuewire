@@ -289,3 +289,44 @@ func TestRequestLimiterHonorsContextCancellation(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestCancelOnDisconnectReadsRequestedScope(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+		var got capturedRequest
+		_ = json.NewDecoder(req.Body).Decode(&got)
+		switch got.Method {
+		case "public/auth":
+			respond(t, writer, got.ID, map[string]any{"access_token": "token", "expires_in": 300}, nil)
+		case "private/get_cancel_on_disconnect":
+			if got.Params["scope"] != "account" {
+				t.Errorf("scope=%v", got.Params["scope"])
+			}
+			respond(t, writer, got.ID, map[string]any{"scope": "account", "enabled": false}, nil)
+		default:
+			t.Errorf("unexpected method %s", got.Method)
+		}
+	}))
+	defer server.Close()
+	client, _ := NewClient(server.URL, "key", "secret", server.Client())
+	status, err := client.CancelOnDisconnect(context.Background(), "account")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Scope != "account" || status.Enabled {
+		t.Fatalf("status=%+v", status)
+	}
+}
+
+func FuzzRPCEnvelopeDecode(f *testing.F) {
+	f.Add([]byte(`{"jsonrpc":"2.0","id":1,"result":{"value":0.00000001}}`))
+	f.Add([]byte(`{"jsonrpc":"2.0","id":1,"error":{"code":10028,"message":"too_many_requests"}}`))
+	f.Add([]byte(`{"jsonrpc":"2.0","id":1,"result":null}`))
+	f.Add([]byte(`not-json`))
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		if len(raw) > 4<<20 {
+			t.Skip()
+		}
+		var decoded envelope
+		_ = decodeRPCEnvelope(raw, &decoded)
+	})
+}

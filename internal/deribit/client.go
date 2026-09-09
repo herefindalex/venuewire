@@ -101,7 +101,7 @@ func (c *Client) call(ctx context.Context, method string, params any, token stri
 		return fmt.Errorf("read Deribit response: %w", err)
 	}
 	var decoded envelope
-	if err := json.Unmarshal(raw, &decoded); err != nil {
+	if err := decodeRPCEnvelope(raw, &decoded); err != nil {
 		if response.StatusCode != http.StatusOK {
 			return fmt.Errorf("Deribit HTTP status %d", response.StatusCode)
 		}
@@ -133,6 +133,10 @@ func (c *Client) call(ctx context.Context, method string, params any, token stri
 		return fmt.Errorf("decode Deribit result: %w", err)
 	}
 	return nil
+}
+
+func decodeRPCEnvelope(raw []byte, decoded *envelope) error {
+	return json.Unmarshal(raw, decoded)
 }
 
 func (c *Client) acquire(ctx context.Context) error {

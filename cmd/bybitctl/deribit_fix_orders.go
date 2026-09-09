@@ -28,14 +28,24 @@ func (e *deribitFIXRejectError) Error() string {
 	return fmt.Sprintf("Deribit FIX %s rejected request with reason code %s", e.MessageType, e.ReasonCode)
 }
 
+func requireDeribitTradingGates() error {
+	for _, gate := range []string{"RUN_MULTI_VENUE_E2E", "RUN_DERIBIT_TRADING_TESTS"} {
+		if strings.TrimSpace(os.Getenv(gate)) != "1" {
+			return fmt.Errorf("Deribit write requires %s=1", gate)
+		}
+	}
+	return nil
+}
+
 func requireDeribitFIXTradingGates(cfg config.Config) error {
 	if !cfg.Deribit.FIXEnabled {
 		return errors.New("DERIBIT_FIX_ENABLED must be true for a FIX write")
 	}
-	for _, gate := range []string{"RUN_MULTI_VENUE_E2E", "RUN_DERIBIT_TRADING_TESTS", "RUN_DERIBIT_FIX_TESTS"} {
-		if strings.TrimSpace(os.Getenv(gate)) != "1" {
-			return fmt.Errorf("Deribit FIX write requires %s=1", gate)
-		}
+	if err := requireDeribitTradingGates(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(os.Getenv("RUN_DERIBIT_FIX_TESTS")) != "1" {
+		return errors.New("Deribit FIX write requires RUN_DERIBIT_FIX_TESTS=1")
 	}
 	return cfg.Deribit.RequireCredentials()
 }

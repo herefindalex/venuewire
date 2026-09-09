@@ -38,6 +38,22 @@ func TestDeribitFIXTradingRequiresAllIndependentGates(t *testing.T) {
 	}
 }
 
+func TestDeribitConnectionCODRequiresGeneralTradingGates(t *testing.T) {
+	for _, gate := range []string{"RUN_MULTI_VENUE_E2E", "RUN_DERIBIT_TRADING_TESTS"} {
+		t.Setenv("RUN_MULTI_VENUE_E2E", "1")
+		t.Setenv("RUN_DERIBIT_TRADING_TESTS", "1")
+		t.Setenv(gate, "0")
+		if err := requireDeribitTradingGates(); err == nil {
+			t.Fatalf("connection COD accepted %s disabled", gate)
+		}
+	}
+	t.Setenv("RUN_MULTI_VENUE_E2E", "1")
+	t.Setenv("RUN_DERIBIT_TRADING_TESTS", "1")
+	if err := requireDeribitTradingGates(); err != nil {
+		t.Fatalf("all general trading gates enabled: %v", err)
+	}
+}
+
 func TestFIXAmendCancelRequiresConnectorOwnedIdentity(t *testing.T) {
 	ctx := context.Background()
 	store := intent.Store{Path: filepath.Join(t.TempDir(), "intents.json")}

@@ -3,22 +3,63 @@ package deribit
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"math/big"
 	"time"
 )
 
+type TickSizeStep struct {
+	AbovePrice json.Number `json:"above_price"`
+	TickSize   json.Number `json:"tick_size"`
+}
+
 type Instrument struct {
-	InstrumentName      string      `json:"instrument_name"`
-	Kind                string      `json:"kind"`
-	BaseCurrency        string      `json:"base_currency"`
-	CounterCurrency     string      `json:"counter_currency"`
-	SettlementCurrency  string      `json:"settlement_currency"`
-	QuoteCurrency       string      `json:"quote_currency"`
-	TickSize            json.Number `json:"tick_size"`
-	MinTradeAmount      json.Number `json:"min_trade_amount"`
-	ContractSize        json.Number `json:"contract_size"`
-	IsActive            bool        `json:"is_active"`
-	InstrumentID        int64       `json:"instrument_id"`
-	ExpirationTimestamp int64       `json:"expiration_timestamp"`
+	InstrumentName      string         `json:"instrument_name"`
+	Kind                string         `json:"kind"`
+	BaseCurrency        string         `json:"base_currency"`
+	CounterCurrency     string         `json:"counter_currency"`
+	SettlementCurrency  string         `json:"settlement_currency"`
+	QuoteCurrency       string         `json:"quote_currency"`
+	TickSize            json.Number    `json:"tick_size"`
+	TickSizeSteps       []TickSizeStep `json:"tick_size_steps,omitempty"`
+	MinTradeAmount      json.Number    `json:"min_trade_amount"`
+	ContractSize        json.Number    `json:"contract_size"`
+	IsActive            bool           `json:"is_active"`
+	InstrumentID        int64          `json:"instrument_id"`
+	ExpirationTimestamp int64          `json:"expiration_timestamp"`
+}
+
+func (i Instrument) EffectiveTickSize(price string) (json.Number, error) {
+	priceValue, ok := new(big.Rat).SetString(price)
+	if !ok || priceValue.Sign() <= 0 {
+		return "", errors.New("price must be a positive decimal")
+	}
+	if tick, ok := new(big.Rat).SetString(i.TickSize.String()); !ok || tick.Sign() <= 0 {
+		return "", errors.New("instrument tick_size must be a positive decimal")
+	}
+
+	selected := i.TickSize
+	var selectedThreshold *big.Rat
+	for _, step := range i.TickSizeSteps {
+		threshold, thresholdOK := new(big.Rat).SetString(step.AbovePrice.String())
+		stepTick, tickOK := new(big.Rat).SetString(step.TickSize.String())
+		if !thresholdOK || threshold.Sign() < 0 || !tickOK || stepTick.Sign() <= 0 {
+			return "", errors.New("instrument tick_size_steps contains an invalid decimal")
+		}
+		if priceValue.Cmp(threshold) <= 0 {
+			continue
+		}
+		if selectedThreshold == nil || threshold.Cmp(selectedThreshold) > 0 {
+			selectedThreshold = threshold
+			selected = step.TickSize
+		}
+	}
+	return selected, nil
+}
+
+type CancelOnDisconnect struct {
+	Scope   string `json:"scope"`
+	Enabled bool   `json:"enabled"`
 }
 
 type AccountSummary struct {
@@ -120,5 +161,11 @@ func (c *Client) Positions(ctx context.Context, currency, kind string) ([]Positi
 	}
 	var result []Position
 	err := c.PrivateRead(ctx, "private/get_positions", params, &result)
+	return result, err
+}
+
+func (c *Client) CancelOnDisconnect(ctx context.Context, scope string) (CancelOnDisconnect, error) {
+	var result CancelOnDisconnect
+	err := c.PrivateRead(ctx, "private/get_cancel_on_disconnect", map[string]string{"scope": scope}, &result)
 	return result, err
 }

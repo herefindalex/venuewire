@@ -118,3 +118,44 @@ func TestPaginationSameMillisecondCursorAndNoProgressGuard(t *testing.T) {
 		t.Fatalf("cursor=%+v", cursor)
 	}
 }
+
+func TestPrivateUserChangesUseCanonicalOrderAndTradeReducer(t *testing.T) {
+	reconciler, _, state := newReconciler(t, &fakeQueries{})
+	changes := deribit.UserChanges{
+		Orders: []deribit.Order{{
+			OrderID: "native-1", Label: "intent-1", InstrumentName: "BTC-PERPETUAL",
+			Direction: "buy", OrderType: "limit", OrderState: "filled",
+			Amount: json.Number("10"), FilledAmount: json.Number("10"), Price: json.Number("80000"),
+			CreationTimestamp: 1000, LastUpdateTimestamp: 2000,
+		}},
+		Trades: []deribit.Trade{{
+			TradeID: "trade-1", OrderID: "native-1", InstrumentName: "BTC-PERPETUAL",
+			Direction: "buy", Amount: json.Number("10"), Price: json.Number("80000"),
+			Fee: json.Number("-0.00000001"), FeeCurrency: "BTC", Timestamp: 2000,
+		}},
+		Positions: []deribit.Position{{InstrumentName: "BTC-PERPETUAL", Size: json.Number("10")}},
+	}
+	first, err := reconciler.ApplyUserChanges(context.Background(), changes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.OrdersApplied != 1 || first.TradesApplied != 1 || first.PositionsObserved != 1 {
+		t.Fatalf("first report=%+v", first)
+	}
+	second, err := reconciler.ApplyUserChanges(context.Background(), changes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.TradesApplied != 0 || second.DuplicateOrExternalTrades != 1 {
+		t.Fatalf("second report=%+v", second)
+	}
+	snapshot := state.Snapshot()
+	if len(snapshot.Orders) != 1 || len(snapshot.Executions) != 1 {
+		t.Fatalf("snapshot=%+v", snapshot)
+	}
+	for _, execution := range snapshot.Executions {
+		if execution.Fee != "-0.00000001" || execution.FeeCurrency != "BTC" {
+			t.Fatalf("execution=%+v", execution)
+		}
+	}
+}
