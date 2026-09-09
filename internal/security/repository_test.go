@@ -14,12 +14,12 @@ import (
 
 func TestRepositoryContainsNoCredentialAssignmentsOrPrivateKeys(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
-	assignment := regexp.MustCompile(`(?m)BYBIT_(?:API_KEY|API_SECRET|FIX_API_KEY)=[A-Za-z0-9_\-]{16,}`)
+	assignment := regexp.MustCompile(`(?m)(?:BYBIT_(?:API_KEY|API_SECRET|FIX_API_KEY)|DERIBIT_(?:API_KEY|API_SECRET))=[A-Za-z0-9_\-]{16,}`)
 	privateKey := regexp.MustCompile(`BEGIN (?:RSA )?PRIVATE KEY`)
 	specExamples := map[string]bool{
-		"docs/05_TEST_PLAN.md":              true,
-		"docs/06_SECURITY_OPERATIONS.md":    true,
-		"docs/BYBIT_CONNECTOR_FULL_SPEC.md": true,
+		"docs/1_bybit/05_TEST_PLAN.md":              true,
+		"docs/1_bybit/06_SECURITY_OPERATIONS.md":    true,
+		"docs/1_bybit/BYBIT_CONNECTOR_FULL_SPEC.md": true,
 	}
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -59,7 +59,29 @@ func TestEnvironmentExampleIsEmptyAndSecretsAreIgnored(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer file.Close()
-	allowed := map[string]string{"BYBIT_ENV": "testnet", "BYBIT_API_KEY": "", "BYBIT_API_SECRET": "", "BYBIT_FIX_API_KEY": "", "BYBIT_FIX_PRIVATE_KEY_PATH": ""}
+	allowed := map[string]string{
+		"BYBIT_ENV":                       "testnet",
+		"BYBIT_API_KEY":                   "",
+		"BYBIT_API_SECRET":                "",
+		"BYBIT_FIX_API_KEY":               "",
+		"BYBIT_FIX_PRIVATE_KEY_PATH":      "",
+		"DERIBIT_ENV":                     "testnet",
+		"DERIBIT_ENABLED":                 "false",
+		"DERIBIT_ACCOUNT_ALIAS":           "deribit-test",
+		"DERIBIT_API_KEY":                 "",
+		"DERIBIT_API_SECRET":              "",
+		"DERIBIT_FIX_ENABLED":             "false",
+		"DERIBIT_FIX_SENDER_COMP_ID":      "connector-lab",
+		"DERIBIT_MAX_ORDER_USD":           "100",
+		"DERIBIT_MAX_OPEN_USD":            "500",
+		"DERIBIT_MAX_PRICE_DEVIATION_PCT": "2",
+		"DERIBIT_MAX_OPEN_ORDERS":         "5",
+		"DERIBIT_PLAN_TTL":                "30s",
+		"RUN_MULTI_VENUE_E2E":             "0",
+		"RUN_DERIBIT_READ_TESTS":          "0",
+		"RUN_DERIBIT_TRADING_TESTS":       "0",
+		"RUN_DERIBIT_FIX_TESTS":           "0",
+	}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
