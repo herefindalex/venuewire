@@ -1,0 +1,146 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+
+	"bybit/internal/config"
+	"bybit/internal/observability"
+)
+
+const usage = `bybitctl - Bybit Testnet connectivity lab
+
+Usage:
+  bybitctl <command> [options]
+
+Public REST:
+  bybitctl time
+  bybitctl instrument [--category linear] [--symbol BTCUSDT]
+
+Market WebSocket:
+  bybitctl market trades [--symbol BTCUSDT]
+  bybitctl market orderbook [--symbol BTCUSDT] [--depth 50]
+
+Authenticated REST:
+  bybitctl account info
+  bybitctl account balances [--coin BTC,ETH,USDT]
+  bybitctl order place --side Buy|Sell --qty QTY [--category linear] [--symbol BTCUSDT] [--type Limit|Market] [--price PRICE] [--time-in-force GTC]
+  bybitctl order cancel [--category linear] [--symbol BTCUSDT] (--order-id ID | --order-link-id ID)
+  bybitctl order amend [--category linear] [--symbol BTCUSDT] (--order-id ID | --order-link-id ID) [--qty QTY] [--price PRICE]
+  bybitctl order status [--category linear] [--symbol BTCUSDT] [--order-id ID] [--order-link-id ID]
+  bybitctl executions [--category linear] [--symbol BTCUSDT] [--order-id ID] [--order-link-id ID]
+  bybitctl positions [--category linear] [--symbol BTCUSDT]
+
+Private state and reconciliation:
+  bybitctl private-stream [--symbol BTCUSDT]
+  bybitctl reconcile [--category linear] [--symbol BTCUSDT]
+
+FIX:
+  bybitctl fix mock-demo
+  bybitctl fix mock-server [--listen 127.0.0.1:9001] [--scenario accepted]
+  bybitctl fix connect-testnet
+
+Help:
+  bybitctl help | --help | -h
+
+Safety:
+  All authenticated commands fail closed unless exact Testnet endpoints and the
+  required credentials are configured. Mainnet hosts are always rejected.`
+
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	os.Exit(runContext(ctx, os.Args[1:]))
+}
+
+func run(args []string) int {
+	return runContext(context.Background(), args)
+}
+
+func runContext(ctx context.Context, args []string) int {
+	cfg := config.Load()
+	logger := observability.NewJSON(os.Stderr, cfg.APISecret)
+
+	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+		fmt.Fprintln(os.Stdout, usage)
+		return 0
+	}
+
+	if err := cfg.ValidateTestnet(); err != nil {
+		logger.Error("configuration rejected", slog.String("error", err.Error()))
+		return 2
+	}
+
+	if isRESTAuthenticatedCommand(args) {
+		if err := cfg.RequireRESTCredentials(); err != nil {
+			logger.Error("authenticated command refused", slog.String("error", err.Error()))
+			return 2
+		}
+	}
+	if isFIXAuthenticatedCommand(args) {
+		if err := cfg.RequireFIXCredentials(); err != nil {
+			logger.Error("authenticated FIX command refused", slog.String("error", err.Error()))
+			return 2
+		}
+	}
+
+	if handled, err := executeRESTCommand(ctx, cfg, logger, args, os.Stdout); handled {
+		if err != nil {
+			logger.Error("command failed", slog.String("error", err.Error()))
+			return 1
+		}
+		return 0
+	}
+	if handled, err := executeReconcileCommand(ctx, cfg, logger, args, os.Stdout); handled {
+		if err != nil {
+			logger.Error("reconciliation failed", slog.String("error", err.Error()))
+			return 1
+		}
+		return 0
+	}
+	if handled, err := executeMarketCommand(ctx, cfg, logger, args, os.Stdout); handled {
+		if err != nil {
+			logger.Error("market stream failed", slog.String("error", err.Error()))
+			return 1
+		}
+		return 0
+	}
+	if handled, err := executePrivateStreamCommand(ctx, cfg, logger, args, os.Stdout); handled {
+		if err != nil {
+			logger.Error("private stream failed", slog.String("error", err.Error()))
+			return 1
+		}
+		return 0
+	}
+	if handled, err := executeFIXCommand(ctx, cfg, logger, args, os.Stdout); handled {
+		if err != nil {
+			logger.Error("FIX command failed", slog.String("error", err.Error()))
+			return 1
+		}
+		return 0
+	}
+
+	logger.Error("command is not implemented in the current phase", slog.String("command", strings.Join(args, " ")))
+	return 1
+}
+
+func isRESTAuthenticatedCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "account", "order", "executions", "positions", "private-stream", "reconcile":
+		return true
+	default:
+		return false
+	}
+}
+
+func isFIXAuthenticatedCommand(args []string) bool {
+	return len(args) >= 2 && args[0] == "fix" && args[1] == "connect-testnet"
+}

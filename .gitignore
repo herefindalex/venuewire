@@ -1,0 +1,12 @@
+.env
+.env.*
+.env~
+!.env.example
+.idea/
+*.pem
+*.key
+secrets/
+data/
+state/
+bin/
+coverage.out
