@@ -113,12 +113,24 @@ func (s Server) Serve(ctx context.Context, transport bybitfix.Transport) error {
 }
 
 func (s Server) serveOrderLifecycle(ctx context.Context, transport bybitfix.Transport, reader *messageReader, clientSender string) error {
+	securityRequest, err := reader.read(ctx)
+	if err != nil {
+		return err
+	}
+	if typ, _ := securityRequest.Get(35); typ != "x" {
+		return fmt.Errorf("mock expected SecurityListRequest, got MsgType=%q", typ)
+	}
+	if requestType, _ := securityRequest.Get(559); requestType != "0" {
+		return errors.New("mock SecurityListRequest was not a snapshot")
+	}
 	if err := s.write(transport, clientSender, "y", 7, []bybitfix.Field{
 		{Tag: 320, Value: "mock-security"},
 		{Tag: 146, Value: "1"},
 		{Tag: 55, Value: "BTC-PERPETUAL"},
 		{Tag: 167, Value: "FUT"},
 		{Tag: 120, Value: "BTC"},
+		{Tag: 479, Value: "BTC"},
+		{Tag: 1524, Value: "USD"},
 		{Tag: 231, Value: "10"},
 		{Tag: 562, Value: "1"},
 		{Tag: 454, Value: "0"},

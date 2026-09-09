@@ -188,6 +188,33 @@ func TestResendOutsideBoundedJournalFailsClosed(t *testing.T) {
 	}
 }
 
+type partialWriteTransport struct {
+	memoryTransport
+	maxWrite int
+}
+
+func (p *partialWriteTransport) Write(data []byte) (int, error) {
+	if len(data) > p.maxWrite {
+		data = data[:p.maxWrite]
+	}
+	return p.memoryTransport.Write(data)
+}
+
+func TestSessionCompletesPartialTransportWrites(t *testing.T) {
+	transport := &partialWriteTransport{maxWrite: 3}
+	session := &Session{config: SessionConfig{Now: time.Now}, transport: transport}
+	raw, err := bybitfix.Encode("FIX.4.4", []bybitfix.Field{{Tag: 35, Value: "0"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := session.writeRawLocked(raw); err != nil {
+		t.Fatal(err)
+	}
+	if got := transport.Bytes(); string(got) != string(raw) {
+		t.Fatalf("partial write lost bytes: got=%q want=%q", got, raw)
+	}
+}
+
 func TestRunCancellationSendsLogoutAndJoinsReader(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
 	defer serverConn.Close()

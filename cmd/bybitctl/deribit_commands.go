@@ -261,6 +261,9 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			return true, fmt.Errorf("pre-trade recovery failed: %w", err)
 		}
 		planner := &intent.Planner{Market: client, Store: intent.Store{Path: cfg.IntentFile}, Limits: intent.Limits{MaxOrderUSD: cfg.Deribit.Risk.MaxOrderUSD, MaxAggregateOpenUSD: cfg.Deribit.Risk.MaxAggregateOpenUSD, MaxPriceDeviationPct: cfg.Deribit.Risk.MaxPriceDeviationPct, MaxOpenOrders: cfg.Deribit.Risk.MaxOpenOrders, TTL: cfg.Deribit.PlanTTL}, AccountAlias: cfg.Deribit.AccountAlias, WSURL: cfg.Deribit.WSURL}
+		planner.FIXPlace = func(fixCtx context.Context, plan intent.Plan) (deribit.OrderResult, error) {
+			return placeDeribitFIX(fixCtx, cfg, client, plan)
+		}
 		switch args[3] {
 		case "plan":
 			flags := flag.NewFlagSet("venue deribit order plan", flag.ContinueOnError)
@@ -269,7 +272,7 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			side := flags.String("side", "", "buy or sell")
 			amount := flags.String("amount", "", "USD notional amount")
 			orderType := flags.String("type", "limit", "limit or market")
-			transport := flags.String("transport", "http", "http or ws")
+			transport := flags.String("transport", "http", "http, ws, or fix")
 			price := flags.String("price", "", "limit price")
 			tif := flags.String("time-in-force", "good_til_cancelled", "time in force")
 			postOnly := flags.Bool("post-only", false, "post only")
@@ -295,6 +298,17 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			}
 			if flags.NArg() != 0 || *planID == "" {
 				return true, errors.New("execute requires --plan-id and no positional arguments")
+			}
+			if *confirm {
+				stored, readErr := planner.Store.Get(ctx, *planID)
+				if readErr != nil {
+					return true, readErr
+				}
+				if stored.Transport == "fix" {
+					if gateErr := requireDeribitFIXTradingGates(cfg); gateErr != nil {
+						return true, gateErr
+					}
+				}
 			}
 			result, err := planner.Execute(ctx, *planID, *confirm)
 			if err != nil {
@@ -337,6 +351,7 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			orderID := flags.String("order-id", "", "native order ID")
 			amount := flags.String("amount", "", "new USD amount")
 			price := flags.String("price", "", "new limit price")
+			transport := flags.String("transport", "http", "http or fix")
 			confirm := flags.Bool("confirm", false, "confirm write")
 			if err := flags.Parse(args[4:]); err != nil {
 				return true, err
@@ -354,10 +369,22 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			if before.OrderState != "open" && before.OrderState != "untriggered" {
 				return true, fmt.Errorf("order is not amendable: %s", before.OrderState)
 			}
-			if _, err := planner.ValidateRequest(ctx, intent.Request{Instrument: before.InstrumentName, Side: before.Direction, OrderType: "limit", Amount: *amount, Price: *price, ReduceOnly: before.ReduceOnly}); err != nil {
+			if _, err := planner.ValidateRequest(ctx, intent.Request{Instrument: before.InstrumentName, Side: before.Direction, OrderType: "limit", Transport: *transport, Amount: *amount, Price: *price, ReduceOnly: before.ReduceOnly}); err != nil {
 				return true, fmt.Errorf("amend risk validation: %w", err)
 			}
-			ack, err := client.Edit(ctx, *orderID, *amount, *price)
+			var ack any
+			switch strings.ToLower(*transport) {
+			case "http":
+				ack, err = client.Edit(ctx, *orderID, *amount, *price)
+			case "fix":
+				ownedPlan, ownershipErr := requireConnectorOwnedFIXOrder(ctx, planner.Store, before)
+				if ownershipErr != nil {
+					return true, ownershipErr
+				}
+				ack, err = amendDeribitFIX(ctx, cfg, client, before, ownedPlan, *amount, *price)
+			default:
+				return true, errors.New("amend transport must be http or fix")
+			}
 			if err != nil {
 				return true, err
 			}
@@ -374,6 +401,7 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			flags := flag.NewFlagSet("venue deribit order cancel", flag.ContinueOnError)
 			flags.SetOutput(io.Discard)
 			orderID := flags.String("order-id", "", "native order ID")
+			transport := flags.String("transport", "http", "http or fix")
 			confirm := flags.Bool("confirm", false, "confirm write")
 			if err := flags.Parse(args[4:]); err != nil {
 				return true, err
@@ -384,7 +412,25 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			if !*confirm {
 				return true, errors.New("cancel requires --confirm")
 			}
-			ack, err := client.Cancel(ctx, *orderID)
+			var ack any
+			switch strings.ToLower(*transport) {
+			case "http":
+				ack, err = client.Cancel(ctx, *orderID)
+			case "fix":
+				before, readErr := client.OrderState(ctx, *orderID)
+				if readErr != nil {
+					return true, fmt.Errorf("FIX cancel independent pre-read: %w", readErr)
+				}
+				if before.OrderState != "open" && before.OrderState != "untriggered" {
+					return true, fmt.Errorf("order is not cancellable: %s", before.OrderState)
+				}
+				if _, ownershipErr := requireConnectorOwnedFIXOrder(ctx, planner.Store, before); ownershipErr != nil {
+					return true, ownershipErr
+				}
+				ack, err = cancelDeribitFIX(ctx, cfg, client, before)
+			default:
+				return true, errors.New("cancel transport must be http or fix")
+			}
 			if err != nil {
 				return true, err
 			}

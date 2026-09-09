@@ -57,3 +57,10 @@ Rechecked against Deribit's current `production` (classic) FIX documentation on 
 - `SecurityList(y)` repeating groups preserve all fields. Unsupported nested groups fail explicitly. A live order is eligible only when JSON `contract_size` equals FIX `ContractMultiplier(231)` and JSON minimum USD units equal FIX `MinTradeVol(562) × multiplier`.
 - New/replace requests explicitly set `QtyType(854)=Units(0)`. For an inverse perpetual, request `OrderQty(38)` is USD units, while ExecutionReport quantities are contracts; reports are converted with the proven multiplier before comparison with the JSON amount.
 - ExecutionReport correlation uses `OrigClOrdID(41)` and/or `DeribitLabel(100010)` together with native `OrderID(37)`. It never assumes the server-replaced `ClOrdID(11)` is the original client identifier. FIX execution IDs remain protocol evidence; canonical accounting and deduplication use independently read JSON trade IDs.
+
+### Testnet observations
+
+The live Testnet lifecycle on 2026-09-09 confirmed two details that must remain covered by fixtures:
+
+- For BTC-PERPETUAL, FIX `SettlCurrency(120)` can express USD quote/contract settlement semantics while JSON-RPC `settlement_currency` and FIX `CommCurrency(479)` identify native BTC collateral/fees. Validation therefore checks the complete tuple (JSON native settlement, JSON quote/counter currency, FIX settlement, FIX commission currency) instead of requiring tag 120 to equal the collateral code.
+- A cancel ExecutionReport may omit optional `OrderID(37)` and `OrderQty(38)`, and may first report `OrdStatus(39)=6` pending cancel. F/G are restricted to orders whose independent JSON pre-read identity matches a persisted connector-owned FIX intent; this also restores the original post-only/reduce-only policy without guessing. Any conflicting report ID fails closed; missing optional fields are not fabricated in protocol evidence. Completion is determined by a fresh JSON-RPC read reaching `cancelled` or `filled`.

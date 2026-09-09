@@ -143,6 +143,15 @@ func runDeribitFIXMockDemo(ctx context.Context, cfg config.Config, logger *slog.
 		cancel()
 		return err
 	}
+	securityRequest, err := deribitfix.SecurityListRequestFields("mock-security", "BTC")
+	if err != nil {
+		cancel()
+		return err
+	}
+	if err := session.Send("x", securityRequest); err != nil {
+		cancel()
+		return err
+	}
 	var quantity deribitfix.QuantitySpec
 	select {
 	case quantity = <-securityReady:

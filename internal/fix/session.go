@@ -169,6 +169,9 @@ func (s *Session) runOnce(ctx context.Context, onLogon func(context.Context) err
 			_ = s.send(transport, "5", nil)
 			return nil
 		case err := <-readErrors:
+			if ctx.Err() != nil {
+				return nil
+			}
 			if errors.Is(err, io.EOF) {
 				return io.EOF
 			}
@@ -178,6 +181,9 @@ func (s *Session) runOnce(ctx context.Context, onLogon func(context.Context) err
 			s.inbound.Add(1)
 			seq, err := messageSequence(message)
 			if err != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
 				return err
 			}
 			if seq != s.inboundSeq {
@@ -193,6 +199,9 @@ func (s *Session) runOnce(ctx context.Context, onLogon func(context.Context) err
 			case "A":
 				if !loggedOn && onLogon != nil {
 					if err := onLogon(ctx); err != nil {
+						if ctx.Err() != nil {
+							return nil
+						}
 						return err
 					}
 				}
@@ -203,6 +212,9 @@ func (s *Session) runOnce(ctx context.Context, onLogon func(context.Context) err
 				s.testRequests.Add(1)
 				requestID, _ := message.Get(112)
 				if err := s.send(transport, "0", []Field{{112, requestID}}); err != nil {
+					if ctx.Err() != nil {
+						return nil
+					}
 					return err
 				}
 			case "5":
@@ -215,6 +227,9 @@ func (s *Session) runOnce(ctx context.Context, onLogon func(context.Context) err
 			default:
 				if s.config.OnMessage != nil {
 					if err := s.config.OnMessage(ctx, message); err != nil {
+						if ctx.Err() != nil {
+							return nil
+						}
 						return err
 					}
 				}
@@ -224,6 +239,9 @@ func (s *Session) runOnce(ctx context.Context, onLogon func(context.Context) err
 			lastOutbound := time.Unix(0, s.lastOutboundNS.Load())
 			if loggedOn && now.Sub(lastOutbound) >= s.config.Heartbeat {
 				if err := s.send(transport, "0", nil); err != nil {
+					if ctx.Err() != nil {
+						return nil
+					}
 					return err
 				}
 				s.heartbeats.Add(1)
@@ -231,12 +249,18 @@ func (s *Session) runOnce(ctx context.Context, onLogon func(context.Context) err
 			if loggedOn && now.Sub(lastInbound) >= 2*s.config.Heartbeat && !testRequestOutstanding {
 				id := "test-" + strconv.FormatInt(now.UnixMilli(), 10)
 				if err := s.send(transport, "1", []Field{{112, id}}); err != nil {
+					if ctx.Err() != nil {
+						return nil
+					}
 					return err
 				}
 				testRequestOutstanding = true
 				s.testRequests.Add(1)
 			}
 			if loggedOn && now.Sub(lastInbound) >= 3*s.config.Heartbeat {
+				if ctx.Err() != nil {
+					return nil
+				}
 				return errors.New("FIX session stale after unanswered TestRequest")
 			}
 		}

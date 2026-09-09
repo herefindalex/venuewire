@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -68,10 +69,10 @@ func runFIXMockDemo(ctx context.Context, cfg config.Config, logger *slog.Logger,
 	}
 	cancel()
 	if err := <-done; err != nil {
-		return err
+		return fmt.Errorf("local FIX client shutdown: %w", err)
 	}
-	if mockErr := <-mockDone; mockErr != nil {
-		return mockErr
+	if mockErr := <-mockDone; mockErr != nil && !errors.Is(mockErr, context.Canceled) && !errors.Is(mockErr, io.EOF) {
+		return fmt.Errorf("local FIX mock shutdown: %w", mockErr)
 	}
 	logger.Info("local FIX mock demo complete", slog.String("protocol", "FIX"), slog.String("orderLinkId", linkID))
 	return writeJSON(output, state.Snapshot())

@@ -3,6 +3,7 @@ package deribitfix
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"bybit/internal/deribit"
@@ -44,6 +45,8 @@ func TestParseSecurityListPreservesGroupsAndValidatesMetadataConversion(t *testi
 		{Tag: 55, Value: "BTC-PERPETUAL"},
 		{Tag: 167, Value: "FUT"},
 		{Tag: 120, Value: "BTC"},
+		{Tag: 479, Value: "BTC"},
+		{Tag: 1524, Value: "USD"},
 		{Tag: 231, Value: "10"},
 		{Tag: 562, Value: "1"},
 		{Tag: 9999, Value: "preserved"},
@@ -76,6 +79,33 @@ func TestParseSecurityListPreservesGroupsAndValidatesMetadataConversion(t *testi
 	}
 	if contracts, err := spec.ContractsForUnits("10"); err != nil || contracts != "1" {
 		t.Fatalf("contracts=%q err=%v", contracts, err)
+	}
+}
+
+func TestQuantityMetadataDistinguishesUSDSettlFromNativeCommissionCurrency(t *testing.T) {
+	instrument := deribit.Instrument{
+		InstrumentName:     "BTC-PERPETUAL",
+		Kind:               "future",
+		CounterCurrency:    "USD",
+		SettlementCurrency: "BTC",
+		ContractSize:       json.Number("10"),
+		MinTradeAmount:     json.Number("10"),
+	}
+	security := Security{
+		Symbol:             "BTC-PERPETUAL",
+		SecurityType:       "FUT",
+		SettlementCurrency: "USD",
+		CommissionCurrency: "BTC",
+		PriceQuoteCurrency: "USD",
+		ContractMultiplier: "10",
+		MinTradeVolume:     "1",
+	}
+	if _, err := QuantitySpecFromMetadata(instrument, security); err != nil {
+		t.Fatalf("valid inverse-future currency semantics rejected: %v", err)
+	}
+	security.CommissionCurrency = "USDC"
+	if _, err := QuantitySpecFromMetadata(instrument, security); err == nil {
+		t.Fatal("non-native commission currency was accepted")
 	}
 }
 
@@ -199,6 +229,33 @@ func TestExecutionReportCorrelatesOrigClOrdIDNotReplacedTag11(t *testing.T) {
 	_, err = ParseExecutionReport(message, "intent-1", "intent-1", "20", testQuantitySpec())
 	if err == nil {
 		t.Fatal("mismatched FIX/JSON amount was accepted")
+	}
+}
+
+func TestCancelledExecutionReportMayOmitOptionalNativeOrderID(t *testing.T) {
+	message := mustMessage(t, []bybitfix.Field{
+		{Tag: 35, Value: "8"},
+		{Tag: 11, Value: "server-1"},
+		{Tag: 41, Value: "intent-1"},
+		{Tag: 100010, Value: "intent-1"},
+		{Tag: 39, Value: "4"},
+		{Tag: 14, Value: "0"},
+		{Tag: 151, Value: "0"},
+		{Tag: 58, Value: "sensitive free text"},
+	})
+	evidence, err := ParseExecutionReport(message, "intent-1", "intent-1", "10", testQuantitySpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if evidence.Status != "4" || evidence.NativeOrderID != "" || evidence.FIXOrderContracts != "" {
+		t.Fatalf("unexpected cancellation evidence: %+v", evidence)
+	}
+	encoded, err := json.Marshal(evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "sensitive free text") || strings.Contains(string(encoded), "RawFields") {
+		t.Fatalf("raw FIX fields leaked into JSON: %s", encoded)
 	}
 }
 

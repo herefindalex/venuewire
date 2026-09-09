@@ -13,6 +13,9 @@ for gate in RUN_MULTI_VENUE_E2E RUN_BYBIT_READ_TESTS RUN_BYBIT_TRADING_TESTS RUN
   require_gate "$gate"
 done
 
+bybit_fix_status=BLOCKED_GATE
+deribit_fix_status=BLOCKED_GATE
+
 binary=${BYBITCTL_BINARY:-./bin/bybitctl}
 if [[ ! -x $binary ]]; then
   echo "build executable first: go build -o ./bin/bybitctl ./cmd/bybitctl" >&2
@@ -20,6 +23,8 @@ if [[ ! -x $binary ]]; then
 fi
 
 e2e_tmp=$(mktemp -d)
+export BYBIT_STATE_FILE="$e2e_tmp/orders.json"
+export MULTI_VENUE_INTENT_FILE="$e2e_tmp/intents.json"
 bybit_cleanup_needed=0
 deribit_cleanup_needed=0
 bybit_qty=
@@ -61,6 +66,31 @@ echo "E2E: shared read surfaces"
 jq -e '.allHealthy == true and ([.results[].ok] | all)' "$e2e_tmp/all-status.json" >/dev/null
 "$binary" --venue all portfolio >"$e2e_tmp/portfolio.json"
 jq -e '.allHealthy == true and (.results | length == 2)' "$e2e_tmp/portfolio.json" >/dev/null
+
+echo "E2E: local and gated live FIX commands"
+"$binary" --venue bybit fix mock-demo >"$e2e_tmp/bybit-fix-mock.json"
+jq -e '(.orders | length) > 0' "$e2e_tmp/bybit-fix-mock.json" >/dev/null
+set +e
+timeout 1s "$binary" --venue bybit fix mock-server --listen 127.0.0.1:19001 >"$e2e_tmp/bybit-fix-server.log" 2>&1
+fix_server_code=$?
+set -e
+[[ $fix_server_code == 124 ]]
+"$binary" --venue deribit fix mock-demo >"$e2e_tmp/deribit-fix-mock.json"
+jq -e '.validationLevel == "LOCAL_TESTED" and .mockFinalOrderStatus == "4" and (.tradingWritePerformed == false)' "$e2e_tmp/deribit-fix-mock.json" >/dev/null
+
+if [[ ${RUN_BYBIT_FIX_TESTS:-0} == 1 ]]; then
+  "$binary" --venue bybit fix connect-testnet >"$e2e_tmp/bybit-fix-live.json"
+  bybit_fix_status=PASS
+else
+  echo "E2E: Bybit live FIX BLOCKED_GATE (RUN_BYBIT_FIX_TESTS != 1)" >&2
+fi
+
+if [[ ${RUN_DERIBIT_FIX_TESTS:-0} == 1 ]]; then
+  "$binary" --venue deribit fix connect-testnet --duration 3s >"$e2e_tmp/deribit-fix-logon.json"
+  jq -e '.validationLevel == "TESTNET_LOGON" and .authenticated and (.tradingWritePerformed == false)' "$e2e_tmp/deribit-fix-logon.json" >/dev/null
+else
+  echo "E2E: Deribit live FIX BLOCKED_GATE (RUN_DERIBIT_FIX_TESTS != 1)" >&2
+fi
 
 echo "E2E: Bybit reads and timed streams"
 "$binary" --venue bybit time >"$e2e_tmp/bybit-time.json"
@@ -154,6 +184,10 @@ deribit_amend=$(awk -v p="$deribit_mark" -v t="$deribit_tick" 'BEGIN { printf "%
 
 deribit_lifecycle() {
   local transport=$1 prefix=$2 plan plan_id execution order_id
+  local mutation_transport=http
+  if [[ $transport == fix ]]; then
+    mutation_transport=fix
+  fi
   plan=$("$binary" --venue deribit order plan --instrument BTC-PERPETUAL --side buy --amount "$deribit_amount" --type limit --price "$deribit_price" --transport "$transport" --post-only)
   jq -e --arg transport "$transport" '.status == "Planned" and .amountUnit == "USD_notional" and .transport == $transport' <<<"$plan" >/dev/null
   plan_id=$(jq -er .id <<<"$plan")
@@ -163,9 +197,9 @@ deribit_lifecycle() {
   deribit_open_order_id=$order_id
   "$binary" --venue deribit order status --order-id "$order_id" >"$e2e_tmp/$prefix-status.json"
   jq -e --arg id "$order_id" '.order_id == $id and .order_state == "open"' "$e2e_tmp/$prefix-status.json" >/dev/null
-  "$binary" --venue deribit order amend --order-id "$order_id" --amount "$deribit_amount" --price "$deribit_amend" --confirm >"$e2e_tmp/$prefix-amend.json"
+  "$binary" --venue deribit order amend --order-id "$order_id" --amount "$deribit_amount" --price "$deribit_amend" --transport "$mutation_transport" --confirm >"$e2e_tmp/$prefix-amend.json"
   jq -e '.verified == true' "$e2e_tmp/$prefix-amend.json" >/dev/null
-  "$binary" --venue deribit order cancel --order-id "$order_id" --confirm >"$e2e_tmp/$prefix-cancel.json"
+  "$binary" --venue deribit order cancel --order-id "$order_id" --transport "$mutation_transport" --confirm >"$e2e_tmp/$prefix-cancel.json"
   jq -e '.verified == true and .readState.order_state == "cancelled"' "$e2e_tmp/$prefix-cancel.json" >/dev/null
   deribit_open_order_id=
   "$binary" --venue deribit order trades --order-id "$order_id" >"$e2e_tmp/$prefix-trades.json"
@@ -175,6 +209,11 @@ deribit_lifecycle() {
 echo "E2E: Deribit HTTP and WS passive lifecycles"
 deribit_lifecycle http deribit-http
 deribit_lifecycle ws deribit-ws
+if [[ ${RUN_DERIBIT_FIX_TESTS:-0} == 1 ]]; then
+  echo "E2E: Deribit FIX passive lifecycle"
+  deribit_lifecycle fix deribit-fix
+  deribit_fix_status=PASS
+fi
 
 echo "E2E: Deribit minimum fill, canonical fee match, reduce-only cleanup"
 deribit_fill_plan=$("$binary" --venue deribit order plan --instrument BTC-PERPETUAL --side buy --amount "$deribit_amount" --type market --transport http)
@@ -219,4 +258,6 @@ jq -n \
   --arg deribit_amount "$deribit_amount" \
   --arg deribit_entry_fee "$read_fee" \
   --arg deribit_exit_fee "$(jq -r '[.[].fee|tonumber]|add' "$e2e_tmp/deribit-cleanup-trades.json")" \
-  '{result:"PASS",independentReads:true,privateEvents:true,positionsZero:true,bybit:{amount:$bybit_qty,unit:"ETH",entryFee:$bybit_entry_fee,exitFee:$bybit_exit_fee},deribit:{amount:$deribit_amount,unit:"USD_notional",settlement:"BTC",entryFee:$deribit_entry_fee,exitFee:$deribit_exit_fee}}'
+  --arg bybit_fix_status "$bybit_fix_status" \
+  --arg deribit_fix_status "$deribit_fix_status" \
+  '{result:"PASS",independentReads:true,privateEvents:true,positionsZero:true,fix:{bybit:$bybit_fix_status,deribit:$deribit_fix_status},bybit:{amount:$bybit_qty,unit:"ETH",entryFee:$bybit_entry_fee,exitFee:$bybit_exit_fee},deribit:{amount:$deribit_amount,unit:"USD_notional",settlement:"BTC",entryFee:$deribit_entry_fee,exitFee:$deribit_exit_fee}}'

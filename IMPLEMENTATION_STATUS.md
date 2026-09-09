@@ -14,8 +14,8 @@ The archived Bybit-only phase history remains in `docs/1_bybit/IMPLEMENTATION_ST
 | 5 — Persistence and recovery | Complete | ambiguity/pagination/restart reconciliation tests; commit `b332b9c` |
 | 6 — Multi-venue CLI/E2E | Complete | failure-isolated aggregation and fully verified non-FIX E2E; commit `3e1d93b` |
 | 7 — R1 acceptance/hardening | Complete | normal/race/vet/build gates and live minimum-size fills with reduce-only cleanup; commit `6e785ea` |
-| 8 — Deribit FIX dialect/mock | Complete in current worktree | distinct SHA-256 Logon, bounded session recovery and resend journal, SecurityList quantity proof, D/F/G/8/9 parsing, local lifecycle mock |
-| 9 — FIX Testnet validation | In progress | real Testnet Logon passed; real FIX order flow and independent JSON-RPC reconciliation not yet run |
+| 8 — Deribit FIX dialect/mock | Complete | distinct SHA-256 Logon, bounded session recovery and resend journal, SecurityList quantity proof, D/F/G/8/9 parsing, local lifecycle mock; commit `22f6044` |
+| 9 — FIX Testnet validation | Complete in current worktree | real Testnet Logon plus metadata-minimum D/G/F lifecycle passed with independent JSON-RPC verification and zero exposure |
 | 10 — Final docs/handoff | Not started | `README.md`, demo and Traditional Chinese handoff remain required |
 
 ## Validation levels
@@ -28,7 +28,7 @@ The archived Bybit-only phase history remains in `docs/1_bybit/IMPLEMENTATION_ST
 | Deribit FIX implemented | PASS |
 | Deribit FIX local mock | PASS (`LOCAL_TESTED`) |
 | Deribit FIX Testnet Logon | PASS (`TESTNET_LOGON`) |
-| Deribit FIX Testnet order flow | NOT_RUN |
+| Deribit FIX Testnet order flow | PASS (`TESTNET_ORDER_FLOW`) |
 
 ## Deviations
 
@@ -42,4 +42,14 @@ The former `RUN_BYBIT_INTEGRATION` and `RUN_BYBIT_WS_INTEGRATION` gates were int
 - Live read-only FIX: `connect-testnet` reached `TESTNET_LOGON` against `fix-test.deribit.com:9883`; it did not submit an order.
 - Security: reject/logout diagnostics omit inbound free text; credentials, password digest, nonce and RawData are never logged or persisted.
 - Deviation: none. Phase 9 remains incomplete until a true FIX order lifecycle is independently verified through canonical JSON-RPC reads.
-- Next: implement gated FIX plan/execute, amend and cancel, then run the metadata-minimum Testnet lifecycle and zero-exposure cleanup.
+- Phase 8 handoff target (gated FIX plan/execute, amend/cancel and zero-exposure Testnet lifecycle) was completed in Phase 9 below.
+
+## Phase 9 verification
+
+- User-visible behavior: `order plan --transport fix`, confirmed `order execute`, and `order amend/cancel --transport fix` use only Deribit FIX for the requested mutation. Every FIX write requires `RUN_MULTI_VENUE_E2E=1`, `RUN_DERIBIT_TRADING_TESTS=1`, and `RUN_DERIBIT_FIX_TESTS=1` plus `DERIBIT_FIX_ENABLED=true`; G/F additionally require a persisted connector-owned label/native-ID match.
+- Before every live write, JSON instrument metadata and FIX SecurityList prove the USD-units/contract multiplier conversion. No unclear conversion can reach D or G.
+- A real BTC-PERPETUAL 10 USD post-only order completed D→G→F on Testnet. Separate JSON-RPC reads proved create `open`, amended price, terminal `cancelled`, zero trades, zero open orders, and `direction=zero` position.
+- Full opt-in E2E passed with Deribit FIX `PASS`; unavailable Bybit live FIX was reported `BLOCKED_GATE`, not skipped. The same run independently verified real minimum-size Bybit/Deribit fills, canonical fees, reduce-only cleanup and zero final positions.
+- Full normal and race suites each passed 212 tests across 16 packages; vet, build and shell syntax checks passed. ShellCheck was unavailable in the installed toolchain and is recorded rather than silently skipped.
+- Live observations added regression coverage: FIX `SettlCurrency` may express USD quote semantics while JSON settlement/commission remain BTC; cancellation reports may omit optional OrderID/OrderQty or first report pending-cancel. The connector uses the independent pre-read identity and waits for JSON terminal state rather than inventing missing values.
+- Next: Phase 10 final documentation, handoff, requirement audit and final verification.

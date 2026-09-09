@@ -514,8 +514,16 @@ func (s *Session) writeRawLocked(raw []byte) error {
 	if s.transport == nil {
 		return errors.New("Deribit FIX transport unavailable")
 	}
-	if _, err := s.transport.Write(raw); err != nil {
-		return err
+	written := 0
+	for written < len(raw) {
+		n, err := s.transport.Write(raw[written:])
+		written += n
+		if err != nil {
+			return err
+		}
+		if n <= 0 {
+			return io.ErrShortWrite
+		}
 	}
 	s.lastWrite = s.config.Now()
 	s.outbound.Add(1)

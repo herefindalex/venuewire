@@ -41,6 +41,7 @@ type Planner struct {
 	NewID          func() (string, error)
 	RiskCurrencies []string
 	WSURL          string
+	FIXPlace       func(context.Context, Plan) (deribit.OrderResult, error)
 }
 type ExecutionResult struct {
 	Plan            Plan                `json:"plan"`
@@ -95,15 +96,21 @@ func (p *Planner) Execute(ctx context.Context, id string, confirm bool) (Executi
 	if validated.SettlementCurrency != stored.SettlementCurrency {
 		return ExecutionResult{}, errors.New("instrument settlement metadata changed")
 	}
+	if stored.Transport == "fix" && p.FIXPlace == nil {
+		return ExecutionResult{}, errors.New("Deribit FIX order executor is not configured")
+	}
 	claimed, err := p.Store.Claim(ctx, id, p.now())
 	if err != nil {
 		return ExecutionResult{}, err
 	}
 	params := deribit.PlaceParams{InstrumentName: claimed.Instrument, Amount: claimed.Amount, Type: claimed.OrderType, Label: claimed.ID, Price: claimed.Price, TimeInForce: claimed.TimeInForce, PostOnly: claimed.PostOnly, ReduceOnly: claimed.ReduceOnly}
 	var ack deribit.OrderResult
-	if claimed.Transport == "ws" {
+	switch claimed.Transport {
+	case "ws":
 		ack, err = p.Market.PlaceWS(ctx, p.WSURL, claimed.Side, params)
-	} else {
+	case "fix":
+		ack, err = p.FIXPlace(ctx, claimed)
+	default:
 		ack, err = p.Market.Place(ctx, claimed.Side, params)
 	}
 	result := ExecutionResult{Plan: claimed, Acknowledgement: ack}
@@ -190,8 +197,8 @@ func (p *Planner) validate(ctx context.Context, request Request) (Plan, error) {
 	if transport == "" {
 		transport = "http"
 	}
-	if transport != "http" && transport != "ws" {
-		return Plan{}, errors.New("transport must be http or ws")
+	if transport != "http" && transport != "ws" && transport != "fix" {
+		return Plan{}, errors.New("transport must be http, ws, or fix")
 	}
 	ticker, err := p.Market.Ticker(ctx, request.Instrument)
 	priceAt := p.now().UTC()

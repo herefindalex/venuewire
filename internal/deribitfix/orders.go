@@ -41,9 +41,11 @@ type Security struct {
 	Symbol             string
 	SecurityType       string
 	SettlementCurrency string
+	CommissionCurrency string
+	PriceQuoteCurrency string
 	ContractMultiplier string
 	MinTradeVolume     string
-	RawFields          []bybitfix.Field
+	RawFields          []bybitfix.Field `json:"-"`
 }
 
 type UnsupportedRepeatingGroupError struct{ Tag int }
@@ -87,6 +89,10 @@ func ParseSecurityList(message bybitfix.Message) ([]Security, error) {
 			current.SecurityType = field.Value
 		case 120:
 			current.SettlementCurrency = field.Value
+		case 479:
+			current.CommissionCurrency = field.Value
+		case 1524:
+			current.PriceQuoteCurrency = field.Value
 		case 231:
 			current.ContractMultiplier = field.Value
 		case 562:
@@ -136,8 +142,14 @@ func QuantitySpecFromMetadata(instrument deribit.Instrument, security Security) 
 	if settlement != "BTC" && settlement != "ETH" {
 		return QuantitySpec{}, errors.New("only native BTC/ETH-settled futures are supported")
 	}
-	if security.SettlementCurrency != "" && !strings.EqualFold(security.SettlementCurrency, settlement) {
-		return QuantitySpec{}, errors.New("JSON-RPC and FIX settlement currencies do not match")
+	if security.SettlementCurrency != "" &&
+		!strings.EqualFold(security.SettlementCurrency, settlement) &&
+		!strings.EqualFold(security.SettlementCurrency, instrument.CounterCurrency) &&
+		!strings.EqualFold(security.SettlementCurrency, instrument.QuoteCurrency) {
+		return QuantitySpec{}, fmt.Errorf("FIX SettlCurrency %q matches neither JSON settlement nor quote currency", security.SettlementCurrency)
+	}
+	if security.CommissionCurrency != "" && !strings.EqualFold(security.CommissionCurrency, settlement) {
+		return QuantitySpec{}, fmt.Errorf("FIX CommCurrency %q does not match native JSON settlement currency %q", security.CommissionCurrency, settlement)
 	}
 	jsonMultiplier, err := positiveDecimal("JSON contract_size", instrument.ContractSize.String())
 	if err != nil {
@@ -363,7 +375,8 @@ type OrderEvidence struct {
 	LastPrice          string
 	Commission         string
 	CommissionCurrency string
-	RawFields          []bybitfix.Field
+	RejectReason       string
+	RawFields          []bybitfix.Field `json:"-"`
 }
 
 func ParseExecutionReport(message bybitfix.Message, expectedClientClOrdID, expectedLabel, expectedAmount string, quantity QuantitySpec) (OrderEvidence, error) {
@@ -387,35 +400,32 @@ func ParseExecutionReport(message bybitfix.Message, expectedClientClOrdID, expec
 	evidence.LastPrice, _ = message.Get(31)
 	evidence.Commission, _ = message.Get(12)
 	evidence.CommissionCurrency, _ = message.Get(479)
+	evidence.RejectReason, _ = message.Get(103)
 	if evidence.ClientClOrdID != expectedClientClOrdID && evidence.Label != expectedLabel {
 		return OrderEvidence{}, errors.New("ExecutionReport cannot be correlated by OrigClOrdID or DeribitLabel")
 	}
 	if evidence.Status == "" {
 		return OrderEvidence{}, errors.New("ExecutionReport missing OrdStatus(39)")
 	}
-	if evidence.Status != "8" && evidence.NativeOrderID == "" {
-		return OrderEvidence{}, errors.New("accepted ExecutionReport missing OrderID(37)")
+	if evidence.FIXOrderContracts != "" {
+		multiplier, err := positiveDecimal("contract multiplier", quantity.ContractMultiplier)
+		if err != nil {
+			return OrderEvidence{}, err
+		}
+		contracts, err := nonNegativeDecimal("ExecutionReport OrderQty", evidence.FIXOrderContracts)
+		if err != nil {
+			return OrderEvidence{}, err
+		}
+		units := new(big.Rat).Mul(contracts, multiplier)
+		expected, err := positiveDecimal("expected JSON amount", expectedAmount)
+		if err != nil {
+			return OrderEvidence{}, err
+		}
+		if units.Cmp(expected) != 0 {
+			return OrderEvidence{}, errors.New("ExecutionReport contract quantity does not match planned JSON amount")
+		}
+		evidence.JSONAmountUnits = expectedAmount
 	}
-	if evidence.FIXOrderContracts == "" {
-		return OrderEvidence{}, errors.New("ExecutionReport missing OrderQty(38)")
-	}
-	multiplier, err := positiveDecimal("contract multiplier", quantity.ContractMultiplier)
-	if err != nil {
-		return OrderEvidence{}, err
-	}
-	contracts, err := nonNegativeDecimal("ExecutionReport OrderQty", evidence.FIXOrderContracts)
-	if err != nil {
-		return OrderEvidence{}, err
-	}
-	units := new(big.Rat).Mul(contracts, multiplier)
-	expected, err := positiveDecimal("expected JSON amount", expectedAmount)
-	if err != nil {
-		return OrderEvidence{}, err
-	}
-	if units.Cmp(expected) != 0 {
-		return OrderEvidence{}, errors.New("ExecutionReport contract quantity does not match planned JSON amount")
-	}
-	evidence.JSONAmountUnits = expectedAmount
 	return evidence, nil
 }
 
@@ -425,7 +435,7 @@ type CancelRejectEvidence struct {
 	ServerClOrdID string
 	Status        string
 	ReasonCode    string
-	RawFields     []bybitfix.Field
+	RawFields     []bybitfix.Field `json:"-"`
 }
 
 func ParseOrderCancelReject(message bybitfix.Message) (CancelRejectEvidence, error) {

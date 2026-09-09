@@ -1,6 +1,7 @@
 package fix
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -102,6 +103,35 @@ func TestSessionSendsHeartbeatOnlyAfterOutboundIdle(t *testing.T) {
 	_, _ = readFIX(serverConn)
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+type cancellationErrorTransport struct {
+	ctx context.Context
+	bytes.Buffer
+}
+
+func (t *cancellationErrorTransport) Read([]byte) (int, error) {
+	<-t.ctx.Done()
+	return 0, t.ctx.Err()
+}
+
+func (*cancellationErrorTransport) Close() error { return nil }
+
+func TestSessionTreatsReaderCancellationAsCleanShutdown(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	transport := &cancellationErrorTransport{ctx: ctx}
+	session := fixtureSession(t, func(context.Context) (Transport, error) { return transport, nil })
+	done := make(chan error, 1)
+	go func() { done <- session.RunOnce(ctx) }()
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("cancellation returned error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("session did not stop after cancellation")
 	}
 }
 

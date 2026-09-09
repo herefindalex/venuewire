@@ -110,3 +110,29 @@ The cleanup orders were connector-owned and reduce-only. The E2E trap now tracks
 - Evidence: sanitized CLI JSON and structured logs; no credential, nonce, RawData or password field retained
 
 `TESTNET_LOGON` is not `TESTNET_ORDER_FLOW`. Phase 9 must still prove a real metadata-minimum FIX create/amend/cancel lifecycle using independent JSON-RPC order/trade/position reads and connector-owned cleanup.
+
+## D-R2-FIX-003 — Real Deribit Testnet order flow
+
+- UTC time: 2026-09-09T18:12Z–18:14Z
+- Build: local `master` worktree after commit `22f6044`
+- Venue/environment/account/transport: Deribit/Testnet/`deribit-test`/TLS FIX 4.4 with canonical HTTP JSON-RPC reads
+- Instrument/amount/unit: BTC-PERPETUAL, 10 USD units, one FIX contract proven by `ContractMultiplier(231)=10`, BTC native collateral
+- Commands: `order plan --transport fix`; confirmed execute (D); `order amend --transport fix` (G); `order cancel --transport fix` (F); independent status/trades/positions/open-order reads
+- Expected: all three mutations require global + trading + FIX gates; no transport fallback; FIX report correlation survives server-replaced tag 11 and optional cancel fields; every mutation is independently visible through JSON-RPC; no trade or exposure remains
+- Actual: D independently read `open` at 78000.0; G independently read `open` at 77999.5; F independently read terminal `cancelled`; trade history and open orders were empty; BTC future position was `direction=zero`, size 0
+- Native IDs: exact IDs retained only in local command evidence; report uses sanitized identity
+- Result: PASS (`TESTNET_ORDER_FLOW`)
+- Evidence: each CLI mutation returned `verified=true`; final separate read commands agreed
+
+Two earlier fail-closed probes caused no exposure and were independently checked: one stopped before D when FIX/JSON currency semantics were too strict; one accepted F but treated its sparse cancellation report as unknown. In both cases the connector did not retry, exact JSON order state was read, and open orders/position were zero before continuing. These observations became regression fixtures.
+
+## MV-E2E-002 — Full command-level E2E including FIX
+
+- UTC time: 2026-09-09T18:21Z–18:23Z
+- Build: local `master` worktree after commit `22f6044`
+- Gates: global Bybit/Deribit read and trading gates plus `RUN_DERIBIT_FIX_TESTS=1`; `RUN_BYBIT_FIX_TESTS=0`
+- Expected: both local FIX command surfaces pass; unavailable Bybit live FIX is explicit; Deribit live Logon and passive D/G/F join the existing fully verified HTTP/WS/fill lifecycle; all cleanup is independently confirmed
+- Actual: result `PASS`, `independentReads=true`, `privateEvents=true`, `positionsZero=true`; Deribit FIX `PASS`; Bybit live FIX `BLOCKED_GATE`
+- Minimum-fill fees: Bybit ETHUSDT 0.01 ETH entry/cleanup fees `0.01364116` and `0.0136411` USDT; Deribit BTC-PERPETUAL 10 USD entry/cleanup fees `0.00000006` and `0.00000006` BTC
+- Result: PASS, with Bybit live FIX separately BLOCKED_GATE
+- Evidence: runner final JSON; canonical trade-history totals matched ACK totals; private correlation IDs observed; final order/position reads were zero

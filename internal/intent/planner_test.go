@@ -79,6 +79,48 @@ func TestPlanExecuteRequiresConfirmationAndIndependentRead(t *testing.T) {
 	}
 }
 
+func TestFIXPlanUsesOnlyFIXExecutorAndStillRequiresIndependentRead(t *testing.T) {
+	planner, market, _ := validPlanner(t)
+	ctx := context.Background()
+	plan, err := planner.Create(ctx, Request{
+		Instrument: "BTC-PERPETUAL",
+		Side:       "buy",
+		OrderType:  "limit",
+		Amount:     "10",
+		Price:      "80000",
+		Transport:  "fix",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := planner.Execute(ctx, plan.ID, true); err == nil {
+		t.Fatal("FIX plan executed without a FIX executor")
+	}
+	stored, err := planner.Store.Get(ctx, plan.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != StatusPlanned || stored.Attempt != 0 {
+		t.Fatalf("missing executor claimed plan: %+v", stored)
+	}
+
+	var fixCalls atomic.Int32
+	planner.FIXPlace = func(_ context.Context, got Plan) (deribit.OrderResult, error) {
+		fixCalls.Add(1)
+		if got.ID != plan.ID || got.Transport != "fix" {
+			t.Fatalf("unexpected FIX plan: %+v", got)
+		}
+		return market.ack, nil
+	}
+	result, err := planner.Execute(ctx, plan.ID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fixCalls.Load() != 1 || market.placeCalls.Load() != 0 || !result.Verified {
+		t.Fatalf("fixCalls=%d fallbackCalls=%d result=%+v", fixCalls.Load(), market.placeCalls.Load(), result)
+	}
+}
+
 func TestPlanRejectsMetadataAndRiskViolations(t *testing.T) {
 	tests := []struct {
 		name   string
