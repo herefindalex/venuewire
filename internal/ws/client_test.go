@@ -101,11 +101,14 @@ func TestBoundedQueueDropsPublicEvents(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	sinkEntered := make(chan struct{}, 1)
 	releaseSink := make(chan struct{})
+	var blockFirstSink sync.Once
 	done := make(chan error, 1)
 	go func() {
 		done <- client.Run(ctx, func(context.Context, Event) error {
-			sinkEntered <- struct{}{}
-			<-releaseSink
+			blockFirstSink.Do(func() {
+				sinkEntered <- struct{}{}
+				<-releaseSink
+			})
 			return nil
 		})
 	}()
