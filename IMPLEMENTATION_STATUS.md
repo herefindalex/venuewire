@@ -18,7 +18,7 @@ The archived Bybit-only phase history remains in `docs/1_bybit/IMPLEMENTATION_ST
 | 7 — R1 acceptance/hardening | Complete | real HTTP/WS minimum-size lifecycles and cleanup; `6e785ea` |
 | 8 — Deribit FIX dialect/mock | Complete | auth/session/recovery/SecurityList/D/F/G/8/9 and local mock; `22f6044` |
 | 9 — FIX Testnet validation | Complete | real Logon and metadata-minimum D/G/F lifecycle with JSON-RPC verification; `735a85a` |
-| 10 — Final hardening/docs/handoff | Complete | COD, segmented ticks, private reducer, full WS edit/cancel, every-command E2E, redirect/allowlist hardening, root docs; `7230921`, `d7f0031`, `d65c1cc`, `5719b37`, `a59a0d8`, `93c1c05`, `14dfb89`, `9de4c45`, and the Phase 10 documentation commit |
+| 10 — Final hardening/docs/handoff | Complete | COD, segmented ticks, private reducer, full WS edit/cancel, every-command E2E, redirect/allowlist hardening, root docs; implementation through `9de4c45`, Phase 10 docs `39044a9` |
 
 ## Final automated verification
 
