@@ -133,6 +133,10 @@ func TestPlanRejectsMetadataAndRiskViolations(t *testing.T) {
 		{"deviation", func(_ *Planner, _ *fakeMarket, r *Request) { r.Price = "82000" }},
 		{"collateral", func(_ *Planner, m *fakeMarket, r *Request) { m.instrument.SettlementCurrency = "USDT" }},
 		{"inactive", func(_ *Planner, m *fakeMarket, r *Request) { m.instrument.IsActive = false }},
+		{"active dated future", func(_ *Planner, m *fakeMarket, r *Request) {
+			m.instrument.InstrumentName = "BTC-10SEP26"
+			r.Instrument = "BTC-10SEP26"
+		}},
 		{"open count", func(p *Planner, m *fakeMarket, r *Request) {
 			m.open["BTC"] = []deribit.Order{{Amount: json.Number("10")}, {Amount: json.Number("10")}, {Amount: json.Number("10")}, {Amount: json.Number("10")}, {Amount: json.Number("10")}}
 		}},

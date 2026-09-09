@@ -162,6 +162,9 @@ func (p *Planner) validate(ctx context.Context, request Request) (Plan, error) {
 	if !instrument.IsActive || instrument.Kind != "future" || instrument.InstrumentName != request.Instrument {
 		return Plan{}, errors.New("only an exact active Deribit future instrument is supported")
 	}
+	if instrument.InstrumentName != "BTC-PERPETUAL" && instrument.InstrumentName != "ETH-PERPETUAL" {
+		return Plan{}, errors.New("only BTC-PERPETUAL and ETH-PERPETUAL are supported for trading")
+	}
 	if instrument.SettlementCurrency != "BTC" && instrument.SettlementCurrency != "ETH" {
 		return Plan{}, errors.New("only native BTC/ETH collateral futures are supported")
 	}
