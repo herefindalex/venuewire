@@ -1,66 +1,94 @@
 # Multi-venue protocol notes
 
-## Identity and storage
+Validated against official Bybit/Deribit Testnet behavior on 2026-09-09. These are connector decisions, not assumptions that one venue's semantics apply to the other.
 
-Native order and trade identifiers are not globally unique. Non-legacy records use escaped compound keys containing venue, environment, account alias, namespace, and native identifier. Market and position identities also include category/instrument. The default archived Bybit account retains its old map keys, but lookup and deduplication are account-scoped so an identical Deribit identifier cannot merge with it.
+## Identity and routing
 
-## Testnet configuration
+- Routing always receives explicit venue/environment/account/instrument/transport. Symbols never imply a venue.
+- Order and execution keys include venue, Testnet environment, stable account alias, native namespace, and native ID.
+- Bybit remains the default only for legacy commands without `--venue`. `--venue all` supports read-only `status` and `portfolio`; writes are rejected.
 
-Deribit endpoints are exact allowlisted values: `https://test.deribit.com/api/v2`, `wss://test.deribit.com/ws/api/v2`, and `fix-test.deribit.com:9883`. Host suffixes, path changes, mainnet, zero risk limits, invalid booleans, and non-positive plan TTL fail closed. Deribit remains disabled by default.
+## Testnet and secrets
 
-## External test gates and evidence
-
-Read tests use venue-specific `RUN_<VENUE>_READ_TESTS=1`. Every write requires both `RUN_MULTI_VENUE_E2E=1` and `RUN_<VENUE>_TRADING_TESTS=1`; FIX has a separate venue-specific gate. The removed legacy Bybit integration flags are not aliases.
-
-A successful write response is only an acknowledgement. HTTP mutations must be checked through private events and an independent read API; WS/FIX mutations must be checked through canonical HTTP JSON-RPC/REST reads. Fees and execution totals come from trade history, and cleanup must independently prove the position is zero. Missing or ambiguous evidence is failure, `OutcomeUnknown`, or `NeedsReview`.
+- Exact allowlists are `api-testnet.bybit.com`, `stream-testnet.bybit.com`, `fix-oe-testnet.bybit.com:9000`, `test.deribit.com/api/v2`, `test.deribit.com/ws/api/v2`, and `fix-test.deribit.com:9883`.
+- Redirects, host/path substitutions, IP fallbacks, plaintext FIX, Mainnet, missing limits, and malformed gates fail before authenticated requests.
+- Server error data and FIX free text are not logged because they may reflect credentials or request data.
 
 ## Deribit HTTP JSON-RPC
 
-Requests use monotonic IDs and require matching `jsonrpc=2.0` response IDs. JSON-RPC errors remain typed even when HTTP status is non-200, while server error data is discarded because it may echo sensitive request material. Client-credentials tokens are cached under a mutex and refreshed with a safety margin; only explicitly read-only `private/get_*` calls retry once after an auth error.
+- Requests are POST JSON with monotonically increasing IDs. Responses require `jsonrpc=2.0`, the expected ID, and exactly a usable result or typed error.
+- HTTP 200 with JSON-RPC error remains failure. A JSON-RPC error on non-200 HTTP remains typed; malformed non-200 bodies report HTTP failure.
+- Client-credential tokens are cached under a mutex with a refresh margin. Concurrent reads produce one refresh. Only explicit `private/get_*` reads retry once after auth failure.
+- Code `10028` uses bounded cooldown for reads. Writes are never retried after an ambiguous transport result.
+- `account balances --currency all` uses account-scoped `private/get_account_summaries`; it does not infer account assets from the public currency catalog.
 
-The CLI `account balances --currency all` uses the account-scoped `private/get_account_summaries` method. It must not enumerate `public/get_currencies`, because that catalog contains currencies that may not be valid account-summary scopes.
+## Amounts, ticks, and fees
 
-## Deribit WebSocket
+- BTC-PERPETUAL/ETH-PERPETUAL HTTP and WebSocket order `amount` is USD notional; settlement and fee currency are native BTC/ETH.
+- `tick_size`, `tick_size_steps`, `min_trade_amount`, and `contract_size` remain distinct. The highest `tick_size_steps.above_price` strictly below the requested price selects the effective tick.
+- Plan validation uses exact rationals. Invalid increments/ticks are rejected with the legal metadata value; the connector never rounds up.
+- HTTP/WS create/edit amounts and prices are encoded as JSON numbers using `json.Number`, not quoted strings or `float64` calculations.
+- Trades retain gross amount, signed fee, fee currency, and canonical native `trade_id`. Rebates are not converted to absolute values. Cross-currency fee totals are not fabricated.
 
-Public unauthenticated subscriptions default to `.100ms`. Testnet returned `13778 raw_subscriptions_not_available_for_unauthorized` for `.raw`; reconnect diagnostics retain that typed cause rather than reporting a successful empty smoke test. The session negotiates heartbeat, answers `test_request` with `public/test`, uses bounded queues, and treats overflow as a connection-recovery condition.
+Final public Testnet metadata observed:
 
-Subscription data is rejected before the subscribe acknowledgement. Every ready generation invokes the recovery callback. Book duplicates are idempotent; a `prev_change_id` gap marks the book stale, and deltas remain blocked until a new snapshot.
+| Instrument | tick | tick steps | minimum amount | contract size | settlement |
+|---|---:|---|---:|---:|---|
+| BTC-PERPETUAL | 0.5 | empty | 10 USD | 10 | BTC |
+| ETH-PERPETUAL | 0.05 | empty | 1 USD | 1 | ETH |
 
-## Deribit plan and order writes
+These values are evidence, not constants; every plan refetches/caches official metadata and records its timestamp.
 
-Plans persist the venue/account, native collateral, explicit USD-notional amount unit, metadata mark/tick/minimum, open-order risk snapshot, transport, and 30-second expiry. Execution revalidates live metadata and risk, atomically claims the intent once, and requires `--confirm`. HTTP and WebSocket writes never fall back to each other. Any failure after a WS write or ambiguous HTTP transport is `OutcomeUnknown` and is not automatically resent.
+## Deribit public/private WebSocket
 
-Create, amend, and cancel commands perform a separate `private/get_order_state` read. A create response must match both native order ID and connector intent label; missing or mismatched evidence becomes `NeedsReview`. Deribit Testnet returned `private/get_user_trades_by_order` as a direct array, so the decoder accepts both the direct and documented wrapped shapes.
+- Public subscriptions default to `.100ms`. Testnet returned `13778 raw_subscriptions_not_available_for_unauthorized` for public `.raw`.
+- Application heartbeat uses `public/set_heartbeat`; `test_request` triggers `public/test`. WebSocket ping/pong does not replace it.
+- Book deltas apply only when `prev_change_id` matches the last trusted change. Duplicates are counted; gaps mark the book stale until a new snapshot on a new generation.
+- Private startup authenticates, optionally enables connection COD, queries connection COD, and subscribes. Responses correlate by request ID and may be reordered.
+- Early subscription events enter a bounded recovery buffer. Reconciliation runs before delivery. Queue/recovery overflow fails the venue connection instead of dropping private data.
+- `user.changes` consumes all order/trade/position array elements. Orders and canonical trades enter the same persistent reducer used by HTTP reconciliation.
 
-## Intent recovery and trade cursors
+## Cancel-on-Disconnect
 
-The state file records `Planned`, `Executing`, `Submitted`, `Rejected`, `OutcomeUnknown`, `Expired`, and `NeedsReview`. Recovery searches open and historical orders by the connector label and deduplicates native order IDs: zero stays unresolved, one is adopted, and more than one requires review. This search is reconciliation evidence, never permission to send again.
+- `doctor` reads account-scope COD. Every private stream reads connection-scope COD without modifying it.
+- `--enable-connection-cod --confirm` requires `RUN_MULTI_VENUE_E2E=1` and `RUN_DERIBIT_TRADING_TESTS=1`; it sends only `scope=connection` and reads the result back on the same socket.
+- Connection COD protects only orders created by that connection. It does not protect HTTP or other sockets, is not a synchronous cancellation guarantee, and does not make Logout proof of cancellation.
+- Shutdown/connection loss always leads to independent order/trade/position reconciliation. Connector-owned explicit cancellation/cleanup is preferred over relying on COD side effects.
 
-Trade pages sort by `(timestamp, trade_id)`, deliberately overlap the cursor timestamp, and rely on canonical trade-ID persistence for deduplication. This preserves late same-millisecond records. Cursors move only forward, pagination is capped, and `has_more` without progress fails visibly.
+## Planned HTTP/WS order lifecycle
 
-## Shared CLI and E2E
+- `plan` records venue/account/instrument, USD amount, mark, effective tick, metadata/price timestamps, limits, transport, and COD protection status. It expires after the configured TTL.
+- A cross-process lock allows one execution claim. The claim is persisted before the write. Crash/timeout after write becomes `OutcomeUnknown`, never an automatic retry.
+- HTTP and WebSocket support create, edit, and cancel. The requested transport is used for every mutation; no fallback occurs.
+- WebSocket write RPC handles heartbeat messages, ignores unrelated IDs/notifications, returns typed business errors, and classifies post-write disconnect/malformed result as `OutcomeUnknown`.
+- Every mutation reads `private/get_order_state` independently. Identity, amount, price, and terminal status must agree or the intent/order becomes reviewable rather than verified.
 
-`--venue bybit` routes to the preserved commands; `--venue deribit` selects the JSON-RPC connector; `--venue all status|portfolio` returns per-venue results without merging native currencies or hiding a failed venue. The E2E runner requires the global write gate plus both venue read/trading gates. It derives quantities and prices from current metadata/tickers and fails unless separate reads, private-event correlation, canonical fee totals, and zero-position cleanup all agree.
+## Intent recovery and pagination
 
-## Operational limits and shutdown
+- Recovery searches by connector label, then deduplicates native order IDs. Zero matches remains unresolved; exactly one is adopted; multiple matches become `NeedsReview`.
+- Labels are reconciliation evidence, not exchange idempotency guarantees. No uncertain intent is submitted again automatically.
+- Trade pages sort by `(timestamp, trade_id)`, overlap the cursor timestamp, deduplicate canonical IDs, and fail when `has_more` makes no progress. This preserves same-millisecond late records.
+- Reconciliation is repeatable and cannot regress newer private-stream/order state with an older ACK or snapshot.
 
-Each Deribit account client bounds concurrent RPC activity. Read-only calls apply a capped cooldown for code `10028`; writes are never retried. Instrument metadata is cached for five minutes, while every plan records metadata/price timestamps and execution still rechecks within its short TTL. WebSocket metrics expose ready generations, reconnects, queue depth, test requests, and sanitized last cause.
+## Deribit FIX 4.4 dialect
 
-Signals cancel root contexts, close sockets, stop new calls, and leave claimed writes durably marked `Executing`/`OutcomeUnknown` for startup recovery. `--venue all` retains each venue result and error separately, so one failure does not falsify the other venue's health.
+- TLS endpoint: `fix-test.deribit.com:9883`; `TargetCompID=DERIBITSERVER`.
+- Logon uses a cryptographically random 32-byte nonce, a strictly increasing Unix-millisecond timestamp, `RawData(96)=timestamp.base64(nonce)`, and `Password(554)=Base64(SHA256(RawData || client_secret))`. It is not Bybit RSA or HMAC.
+- Heartbeat/COD/fill-reporting policies are explicit. Sensitive auth material and free-text rejects are redacted.
+- Deribit has a separate sequence policy. Gaps pause application writes, out-of-order frames use a bounded buffer, server ResendRequest replays a bounded journal with `43=Y` and `122`, and SequenceReset ignores header 34 but requires strictly forward `NewSeqNo(36)`.
+- Recovery resumes only after canonical JSON-RPC reconciliation. Cross-socket permanent replay is never assumed.
+- SecurityList repeating groups preserve unknown fields and reject unsupported nested groups. Live order entry requires JSON `contract_size` to equal FIX multiplier and JSON minimum USD to equal `MinTradeVol × multiplier`.
+- D/G requests use USD `OrderQty(38)` with `QtyType(854)=Units(0)`; ExecutionReport contract quantities are converted with the proven multiplier before JSON comparison.
+- Correlation uses `OrigClOrdID(41)`, label tag `100010`, and native `OrderID(37)`. Server-replaced tag 11 is never assumed to be the original client ID.
+- FIX execution IDs are protocol evidence only. Accounting and fee deduplication use independently read canonical JSON trade IDs.
 
-## Deribit classic FIX 4.4 dialect
+Live observations now covered by fixtures:
 
-Rechecked against Deribit's current `production` (classic) FIX documentation on 2026-09-09; `production` names the protocol branch, while all connections remain pinned to Testnet `fix-test.deribit.com:9883`.
+- BTC-PERPETUAL FIX `SettlCurrency(120)` may describe USD quote/contract semantics while JSON settlement and commission currency remain BTC.
+- Cancel reports may omit optional `OrderID(37)`/`OrderQty(38)` and initially report pending cancel. The connector retains only independently pre-read connector-owned identity and waits for fresh JSON terminal state.
 
-- Logon uses `TargetCompID=DERIBITSERVER`, a strictly increasing millisecond timestamp, 32 random bytes, `RawData(96)=timestamp.base64(nonce)`, and `Password(554)=Base64(SHA256(RawData || client_secret))`. Heartbeat, cancel-on-disconnect and fill-reporting policy tags are explicit.
-- The Deribit session has its own recovery policy. Out-of-order inbound messages enter a bounded buffer and pause application writes. A server ResendRequest is fulfilled from a bounded outbound journal with the original sequence plus `PossDupFlag(43)` and `OrigSendingTime(122)`; an unavailable sequence fails closed. Per official Deribit semantics, `MsgSeqNum(34)` on SequenceReset is ignored and only a strictly forward `NewSeqNo(36)` is accepted. Recovery stays paused until the JSON-RPC reconciliation callback succeeds.
-- `SecurityList(y)` repeating groups preserve all fields. Unsupported nested groups fail explicitly. A live order is eligible only when JSON `contract_size` equals FIX `ContractMultiplier(231)` and JSON minimum USD units equal FIX `MinTradeVol(562) × multiplier`.
-- New/replace requests explicitly set `QtyType(854)=Units(0)`. For an inverse perpetual, request `OrderQty(38)` is USD units, while ExecutionReport quantities are contracts; reports are converted with the proven multiplier before comparison with the JSON amount.
-- ExecutionReport correlation uses `OrigClOrdID(41)` and/or `DeribitLabel(100010)` together with native `OrderID(37)`. It never assumes the server-replaced `ClOrdID(11)` is the original client identifier. FIX execution IDs remain protocol evidence; canonical accounting and deduplication use independently read JSON trade IDs.
+## Observability and shutdown
 
-### Testnet observations
-
-The live Testnet lifecycle on 2026-09-09 confirmed two details that must remain covered by fixtures:
-
-- For BTC-PERPETUAL, FIX `SettlCurrency(120)` can express USD quote/contract settlement semantics while JSON-RPC `settlement_currency` and FIX `CommCurrency(479)` identify native BTC collateral/fees. Validation therefore checks the complete tuple (JSON native settlement, JSON quote/counter currency, FIX settlement, FIX commission currency) instead of requiring tag 120 to equal the collateral code.
-- A cancel ExecutionReport may omit optional `OrderID(37)` and `OrderQty(38)`, and may first report `OrdStatus(39)=6` pending cancel. F/G are restricted to orders whose independent JSON pre-read identity matches a persisted connector-owned FIX intent; this also restores the original post-only/reduce-only policy without guessing. Any conflicting report ID fails closed; missing optional fields are not fabricated in protocol evidence. Completion is determined by a fresh JSON-RPC read reaching `cancelled` or `filled`.
+- Metrics expose RPC success/error/latency, read rate limits/token refresh, WS generation/reconnect/queue/readiness/test requests/COD, reconciliation differences, and FIX validation/sequence status.
+- Signal cancellation stops new calls, closes bounded sockets, joins readers, and leaves claimed writes durably `Executing`/`OutcomeUnknown` for recovery.
+- Local FIX mocks use isolated temporary state and normalize peer EOF only after their context is cancelled. Production/unexpected EOF remains an error.

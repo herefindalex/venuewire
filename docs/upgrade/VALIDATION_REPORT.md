@@ -136,3 +136,96 @@ Two earlier fail-closed probes caused no exposure and were independently checked
 - Minimum-fill fees: Bybit ETHUSDT 0.01 ETH entry/cleanup fees `0.01364116` and `0.0136411` USDT; Deribit BTC-PERPETUAL 10 USD entry/cleanup fees `0.00000006` and `0.00000006` BTC
 - Result: PASS, with Bybit live FIX separately BLOCKED_GATE
 - Evidence: runner final JSON; canonical trade-history totals matched ACK totals; private correlation IDs observed; final order/position reads were zero
+
+## MV-E2E-003 — Final command-level E2E and independent-read audit
+
+- UTC time: 2026-09-09T19:37Z–19:39Z
+- Build: code commit `d7f0031`; migration assertion correction `d65c1cc`
+- Venue/environment/account: Bybit/Testnet/`bybit-test` and Deribit/Testnet/`deribit-test`
+- Transports: Bybit REST/public and private WebSocket/local FIX; Deribit HTTP JSON-RPC/public and private WebSocket/local and live FIX
+- Gates: `RUN_MULTI_VENUE_E2E=1`, both venue read/trading gates, and `RUN_DERIBIT_FIX_TESTS=1`; `RUN_BYBIT_FIX_TESTS=0`
+- Instruments and live metadata: ETHUSDT linear, minimum/step `0.01 ETH`, tick `0.01`; BTC-PERPETUAL, minimum `10 USD`, contract size `10`, tick `0.5`, BTC settlement
+- Expected: every command surface runs; every mutation is verified by a separate business-state read; private events correlate; migration is reversible; cleanup is connector-owned and reduce-only; final orders and positions are zero; unavailable live FIX is explicit
+- Actual: runner returned `PASS`, `independentReads=true`, `privateEvents=true`, and `positionsZero=true`; Deribit FIX returned `PASS`; Bybit live FIX returned `BLOCKED_GATE`
+- HTTP lifecycle: create/edit/cancel reads matched native identity, amended state, and terminal cancellation
+- WebSocket lifecycle: amend independently read `open` at price `77968`; cancel independently read `cancelled`; no HTTP mutation fallback occurred
+- Private recovery: connection COD was queried and enabled on the same connection; generation 1 delivered 10 `user.changes` notifications; the canonical reducer persisted five Deribit orders and two Deribit executions
+- Migration: isolated v1 fixture dry-run reported 1 order, apply changed v1→v2 with a backup, and restore independently read version 1
+- Minimum fills and fees: Bybit entry/cleanup `0.01367245`/`0.01367234 USDT`; Deribit entry/cleanup `0.00000006`/`0.00000006 BTC`
+- Final independent reads: both venues had zero open orders and zero nonzero positions
+- Result: PASS; Bybit live FIX remains separately `BLOCKED_GATE`
+- Evidence: retained sanitized artifacts at `/tmp/tmp.wbIHm8XRRH` for this local run; no credentials, auth frames, account identifiers, or full native IDs are copied into this report
+
+## Mandatory scenario matrix audit
+
+Each row below names the authoritative regression test or external evidence. `MV-E2E-003` means the final Testnet run above, including its separate read artifacts—not merely a successful mutation response.
+
+### Baseline, namespace, and authentication
+
+| ID | Result | Evidence |
+|---|---|---|
+| B01 | PASS | `TestNormalizeVenueArgsPreservesLegacyBybitAndAddsSharedRouting`, `TestRunAllowsDeribitFIXMockWhenVenueIsDisabled`, and the full Bybit regression suite |
+| B02 | PASS | `TestExecutionsDecodeFeeDetails`; MV-E2E-003 separately compares gross fill quantities and native-currency fee totals for entry and cleanup |
+| B03 | PASS | `TestMigrationDryRunDoesNotWrite`, `TestMigrationBacksUpCanRestoreAndIsIdempotent`, `TestMigrationRefusesAmbiguousCategoryAndMissingMapping`, and MV-E2E-003 dry-run/apply/restore |
+| N01 | PASS | `TestServiceIsolatesIdenticalOrderAndExecutionIDsAcrossVenues` and `TestCompoundKeysIsolateVenuesAndAccounts` |
+| N02 | PASS | `TestCompoundKeyEscapesDelimiters`, `TestAccountKeyValidation`, and `TestIndependentServicesDoNotLoseEachOthersOrders` |
+| A01 | PASS | `TestTokenIsCachedAcrossConcurrentPrivateReads` and `TestPrivateReadRefreshesOnceAfterAuthError` |
+| A02 | PASS | `TestLoggerRedactsSensitiveKeysAndKnownSecrets`, `TestLoggerRedactsPEMInMessage`, `TestLoggerRecursivelyRedactsAnyValues`, and `TestServerRejectsWrongSecretWithoutEchoingSensitiveData` |
+| A03 | PASS | `TestDeribitRejectsHostConfusionMainnetAndZeroRisk`, `TestMainnetAndHostConfusionAreRejected`, `TestTLSConfigDialerRejectsWrongHostname`, and both REST/JSON-RPC `TestClientRejectsRedirectWithoutForwardingCredentials` tests |
+
+### RPC, metadata, and WebSocket correctness
+
+| ID | Result | Evidence |
+|---|---|---|
+| R01 | PASS | `TestRPCBusinessAndMalformedErrorsAreTypedAndSanitized` and `TestRPCErrorRemainsTypedOnHTTP400` |
+| R02 | PASS | `TestPrivateWSCODHandlesReorderedResponsesAndEarlyEvent` and `TestPlaceWSUsesPrivateRPCAndReturnsResult` |
+| R03 | PASS | `TestWSReconnectResubscribesAndRunsRecoveryBeforeEvents`; pending requests are scoped to one connection generation |
+| R04 | PASS | `TestPrivateWSCODHandlesReorderedResponsesAndEarlyEvent`, `TestPrivateUserChangesUseCanonicalOrderAndTradeReducer`, and persisted-state counts from MV-E2E-003 |
+| M01 | PASS | `TestPlanRejectsMetadataAndRiskViolations` and `TestQuantityMetadataDistinguishesUSDSettlFromNativeCommissionCurrency` |
+| M02 | PASS | `TestPlanUsesEffectiveSegmentedTick`, `TestEffectiveTickSizeUsesHighestStrictlyLowerStep`, and `TestEffectiveTickSizeRejectsMalformedMetadata` |
+| M03 | PASS | `TestPlaceParamsEncodeDecimalsAsJSONNumbers`; planner and FIX conversions use exact rational/decimal text rather than `float64` arithmetic |
+| M04 | PASS | `TestPlanRejectsMetadataAndRiskViolations` rejects inactive, unsupported-settlement, below-minimum, and invalid-risk plans before transport |
+| W01 | PASS | `TestWSAnswersHeartbeatTestRequest` verifies `test_request` → `public/test` |
+| W02 | PASS | `TestOrderBookSnapshotDeltaDuplicateAndGap` verifies snapshot, delta, and duplicate idempotence |
+| W03 | PASS | `TestOrderBookSnapshotDeltaDuplicateAndGap` verifies a change-ID gap remains stale until a fresh snapshot |
+| W04 | PASS | `TestWSQueueOverflowFailsClosed`, `TestPrivateQueueOverflowFailsConnectionForReconciliation`, and `TestRecoveryBufferOverflowFailsClosed` |
+
+### Order intents, state, and recovery
+
+| ID | Result | Evidence |
+|---|---|---|
+| O01 | PASS | `TestConcurrentExecutionClaimsOnce` and the cross-process locked intent store |
+| O02 | PASS | `TestPlaceWSClassifiesPostWriteDisconnectUnknown` and `TestPrivateWriteDoesNotRetryAmbiguousTransportFailure` |
+| O03 | PASS | `TestRecoveryNeverGuessesZeroOrMultipleMatches` |
+| O04 | PASS | `TestDuplicateExecutionDoesNotDoubleCount`, `TestPrivateUserChangesUseCanonicalOrderAndTradeReducer`, and canonical trade-ID persistence in MV-E2E-003 |
+| O05 | PASS | `TestRequiredStateTransitions` and `TestMockOrderScenarios` preserve cumulative fills when cancellation becomes terminal |
+| O06 | PASS | `TestCancelFillRaceEndsFilled`, `TestCancelledThenConfirmedFullFillEndsFilled`, and `TestMockCancelAcceptedAndCancelFillRace` |
+| O07 | PASS | `TestLateRESTAckCannotRegressWebSocketState` and `TestAmendRejectWithoutIdentifiersUsesSendOrderCorrelationWithoutDisconnectError` |
+| C01 | PASS | `TestRecoveryAdoptsExactlyOneOrderAndDeduplicatesTrades`; the durable `Executing` claim is recovery input and is never automatically resubmitted |
+| C02 | PASS | `TestPaginationSameMillisecondCursorAndNoProgressGuard` and `TestDuplicateExecutionDoesNotDoubleCount` |
+| C03 | PASS | `TestRecoveryNeverGuessesZeroOrMultipleMatches` plus bounded pagination/no-progress handling |
+| C04 | PASS | `TestRestartLoadsSnapshotThenRepairs` and the restart reconciliation fixture in `TestReconciliationRequiredOrderScenarios` |
+| C05 | PASS | `TestLateRESTAckCannotRegressWebSocketState`, `TestWSReconnectResubscribesAndRunsRecoveryBeforeEvents`, and `TestPrivateUserChangesUseCanonicalOrderAndTradeReducer` |
+| C06 | PASS | `TestRepeatedReconciliationProducesSameStateAndNoSecondRepair` and repeated Deribit recovery in D-R5-001 |
+
+### COD, venue isolation, FIX, and shutdown
+
+| ID | Result | Evidence |
+|---|---|---|
+| D01 | PASS | `TestCancelOnDisconnectReadsRequestedScope`, `TestDeribitConnectionCODRequiresGeneralTradingGates`, and MV-E2E-003 explicitly cancels/reads HTTP orders instead of treating connection COD as protection |
+| D02 | PASS | `TestWSReconnectResubscribesAndRunsRecoveryBeforeEvents`, `TestRunCancellationSendsLogoutAndJoinsReader`, and final independent order reads in MV-E2E-003 distinguish configured policy from actual exchange state |
+| V01 | PASS | `TestAllVenueStatusReportsFailuresIndependently`; the healthy venue result remains present beside the failed venue error |
+| V02 | PASS | `TestRequestLimiterHonorsContextCancellation` and per-connector reconnect/rate-limit state in `TestWSReconnectResubscribesAndRunsRecoveryBeforeEvents` |
+| V03 | PASS | `TestAllVenueStatusReportsFailuresIndependently` and the `--venue all portfolio` partial-result assertion in MV-E2E-003 |
+| V04 | PASS | `TestAllVenueStatusReportsFailuresIndependently`; MV-E2E-003 retains BTC, USD-notional, ETH, and USDT in native units without fabricated totals |
+| F01 | PASS | `TestLogonAuthenticationVectorAndExplicitPolicies`, `TestLogonRejectsMissingConfigurationAndRandomFailure`, and `TestLogonSurvivesClockRollbackAndChangesDigestWithSecret` |
+| F02 | PASS | separate `internal/fix` and `internal/deribitfix` suites plus both local FIX demos in MV-E2E-003 |
+| F03 | PASS | FIX codec/framer tests, `FuzzFIXParser`, and `TestParseSecurityListPreservesGroupsAndValidatesMetadataConversion` |
+| F04 | PASS | `TestSessionLogonHeartbeatResendResetAndApplication`, `TestResendRequestReplaysApplicationWithOriginalSequence`, and `TestSequenceResetIgnoresHeaderSequenceAndMovesToNewSequence` |
+| F05 | PASS | `TestExecutionReportCorrelatesOrigClOrdIDNotReplacedTag11` and live D/G/F JSON identity reads in D-R2-FIX-003 |
+| F06 | PASS | `TestSecurityListRejectsUnknownNestedGroupAndMismatchedMultiplier`; live FIX order entry is blocked until JSON/FIX quantity proof succeeds |
+| F07 | PASS | D-R2-FIX-003 and MV-E2E-003 use canonical HTTP JSON-RPC order/trade IDs for independent verification and fee deduplication |
+| S01 | PASS | `TestExpiredClaimPersistsTerminalStatus`, `TestPlaceWSClassifiesPostWriteDisconnectUnknown`, `TestRunCancellationSendsLogoutAndJoinsReader`, and root signal-context shutdown leave a durable recovery state with bounded connection teardown |
+| S02 | PASS | `TestMainnetAndHostConfusionAreRejected`, `TestDeribitFIXTradingRequiresAllIndependentGates`, and CLI routing rejects `--venue all` writes; no transfer/withdrawal commands exist |
+
+All 48 mandatory matrix IDs are covered. The only external capability not enabled is Bybit live FIX; the specification permits its whitelist/RSA-dependent validation to remain explicitly `BLOCKED_GATE`, while its codec/session/order lifecycle remains locally tested.

@@ -4,52 +4,78 @@ Last updated: 2026-09-09
 
 The archived Bybit-only phase history remains in `docs/1_bybit/IMPLEMENTATION_STATUS.md`. This file tracks the incremental Bybit + Deribit upgrade defined by `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md`.
 
+## Phase status
+
 | Phase | Status | Evidence |
 |---|---|---|
-| 0 — Baseline audit | Complete | `docs/upgrade/BASELINE_AUDIT.md`; commit `a52e00f` |
-| 1 — Routing, identity, config, migration | Complete | compound identity and reversible v1→v2 migration; commit `2657a27` |
-| 2 — Deribit HTTP/auth/account | Complete | local tests and Testnet reads; commit `64769d4` |
-| 3 — Deribit WebSocket | Complete | local gap/reconnect tests and public/private Testnet evidence; commit `112b422` |
-| 4 — Planned HTTP/WS orders | Complete | independent read verification after every mutation; commit `6409ca9` |
-| 5 — Persistence and recovery | Complete | ambiguity/pagination/restart reconciliation tests; commit `b332b9c` |
-| 6 — Multi-venue CLI/E2E | Complete | failure-isolated aggregation and fully verified non-FIX E2E; commit `3e1d93b` |
-| 7 — R1 acceptance/hardening | Complete | normal/race/vet/build gates and live minimum-size fills with reduce-only cleanup; commit `6e785ea` |
-| 8 — Deribit FIX dialect/mock | Complete | distinct SHA-256 Logon, bounded session recovery and resend journal, SecurityList quantity proof, D/F/G/8/9 parsing, local lifecycle mock; commit `22f6044` |
-| 9 — FIX Testnet validation | Complete in current worktree | real Testnet Logon plus metadata-minimum D/G/F lifecycle passed with independent JSON-RPC verification and zero exposure |
-| 10 — Final docs/handoff | Not started | `README.md`, demo and Traditional Chinese handoff remain required |
+| 0 — Baseline audit | Complete | `docs/upgrade/BASELINE_AUDIT.md`; `a52e00f` |
+| 1 — Routing, identity, config, migration | Complete | compound identity and reversible v1→v2 migration; `2657a27` |
+| 2 — Deribit HTTP/auth/account | Complete | strict JSON-RPC, token/rate-limit behavior, Testnet reads; `64769d4` |
+| 3 — Deribit WebSocket | Complete | heartbeat, gap/reconnect, public/private recovery; `112b422` |
+| 4 — Planned HTTP/WS orders | Complete | plan→confirm and independent read verification; `6409ca9` |
+| 5 — Persistence and recovery | Complete | ambiguity, pagination, restart reconciliation; `b332b9c` |
+| 6 — Multi-venue CLI/E2E | Complete | failure-isolated aggregation and command runner; `3e1d93b` |
+| 7 — R1 acceptance/hardening | Complete | real HTTP/WS minimum-size lifecycles and cleanup; `6e785ea` |
+| 8 — Deribit FIX dialect/mock | Complete | auth/session/recovery/SecurityList/D/F/G/8/9 and local mock; `22f6044` |
+| 9 — FIX Testnet validation | Complete | real Logon and metadata-minimum D/G/F lifecycle with JSON-RPC verification; `735a85a` |
+| 10 — Final hardening/docs/handoff | Complete | COD, segmented ticks, private reducer, full WS edit/cancel, every-command E2E, redirect/allowlist hardening, root docs; `7230921`, `d7f0031`, `d65c1cc`, `5719b37`, `a59a0d8`, `93c1c05`, `14dfb89`, `9de4c45`, and the Phase 10 documentation commit |
 
-## Validation levels
+## Final automated verification
 
-| Surface | Status |
+Run after the final implementation changes:
+
+| Check | Result |
 |---|---|
-| Existing Bybit regression | PASS |
-| Deribit R1 Testnet reads | PASS — HTTP, public/private WS, account, metadata and positions |
-| Deribit R1 Testnet order lifecycle | PASS — HTTP + WS minimum-size lifecycles and real fill/cleanup independently verified |
-| Deribit FIX implemented | PASS |
-| Deribit FIX local mock | PASS (`LOCAL_TESTED`) |
-| Deribit FIX Testnet Logon | PASS (`TESTNET_LOGON`) |
-| Deribit FIX Testnet order flow | PASS (`TESTNET_ORDER_FLOW`) |
+| `go test ./... -count=1 -timeout=90s` | PASS — 239 tests, 16 packages |
+| `go test -race ./... -count=1 -timeout=120s` | PASS — 239 tests, 16 packages |
+| `go vet ./...` | PASS |
+| `go build -o ./bin/bybitctl ./cmd/bybitctl` | PASS |
+| `bash -n scripts/e2e/run_multi_venue_e2e.sh` | PASS |
+| ShellCheck | `BLOCKED_TOOLING` — executable not installed |
+| repository secret/env checks | PASS — `.env` and key material ignored/untracked |
 
-## Deviations
+The test count includes bounded fuzz seeds for FIX framing/parser and Deribit JSON-RPC envelope decoding. Repeated targeted runs also covered local FIX cancellation/state isolation, reordered WS responses, early private events, COD, segmented ticks, and HTTP/WS JSON-number encoding.
 
-The former `RUN_BYBIT_INTEGRATION` and `RUN_BYBIT_WS_INTEGRATION` gates were intentionally removed without compatibility aliases. Use the symmetric read/trading/FIX gates documented in `.env.example`. No Phase 8 deviation from the Deribit FIX specification is currently known.
+## Final external Testnet verification
 
-## Phase 8 verification
+The final complete run was 2026-09-09T19:37Z–19:39Z using code commit `d7f0031`; its migration assertion correction is commit `d65c1cc`.
 
-- Files: `internal/deribitfix`, `internal/deribitfixmock`, and Deribit FIX CLI routing under `cmd/bybitctl`.
-- Full normal and race suites: 203 tests passed across 16 packages in each mode; `go vet ./...` and the CLI build also passed.
-- Local CLI: `bybitctl --venue deribit fix mock-demo` reached `LOCAL_TESTED`, exercised Logon, TestRequest/Heartbeat, actual resend with `PossDupFlag(43)` and `OrigSendingTime(122)`, SequenceReset, SecurityList multiplier validation, D/G/F and ExecutionReport(8), ending cancelled.
-- Live read-only FIX: `connect-testnet` reached `TESTNET_LOGON` against `fix-test.deribit.com:9883`; it did not submit an order.
-- Security: reject/logout diagnostics omit inbound free text; credentials, password digest, nonce and RawData are never logged or persisted.
-- Deviation: none. Phase 9 remains incomplete until a true FIX order lifecycle is independently verified through canonical JSON-RPC reads.
-- Phase 8 handoff target (gated FIX plan/execute, amend/cancel and zero-exposure Testnet lifecycle) was completed in Phase 9 below.
+| Surface | Result |
+|---|---|
+| Bybit REST and public/private WebSocket | PASS |
+| Bybit minimum-size ETHUSDT fill/fee/reduce-only cleanup | PASS |
+| Deribit HTTP JSON-RPC and public/private WebSocket | PASS |
+| Deribit HTTP create/edit/cancel | PASS |
+| Deribit WS create/edit/cancel, with HTTP independent reads | PASS |
+| Multi-venue aggregation/failure isolation | PASS |
+| v1 migration dry-run/apply/restore in isolated state | PASS |
+| Deribit connection COD enable plus same-connection query | PASS |
+| Deribit FIX `LOCAL_TESTED` | PASS |
+| Deribit FIX `TESTNET_LOGON` | PASS |
+| Deribit FIX `TESTNET_ORDER_FLOW` | PASS |
+| Bybit live FIX | `BLOCKED_GATE` — separate RSA/whitelist access not enabled |
 
-## Phase 9 verification
+Runner result:
 
-- User-visible behavior: `order plan --transport fix`, confirmed `order execute`, and `order amend/cancel --transport fix` use only Deribit FIX for the requested mutation. Every FIX write requires `RUN_MULTI_VENUE_E2E=1`, `RUN_DERIBIT_TRADING_TESTS=1`, and `RUN_DERIBIT_FIX_TESTS=1` plus `DERIBIT_FIX_ENABLED=true`; G/F additionally require a persisted connector-owned label/native-ID match.
-- Before every live write, JSON instrument metadata and FIX SecurityList prove the USD-units/contract multiplier conversion. No unclear conversion can reach D or G.
-- A real BTC-PERPETUAL 10 USD post-only order completed D→G→F on Testnet. Separate JSON-RPC reads proved create `open`, amended price, terminal `cancelled`, zero trades, zero open orders, and `direction=zero` position.
-- Full opt-in E2E passed with Deribit FIX `PASS`; unavailable Bybit live FIX was reported `BLOCKED_GATE`, not skipped. The same run independently verified real minimum-size Bybit/Deribit fills, canonical fees, reduce-only cleanup and zero final positions.
-- Full normal and race suites each passed 212 tests across 16 packages; vet, build and shell syntax checks passed. ShellCheck was unavailable in the installed toolchain and is recorded rather than silently skipped.
-- Live observations added regression coverage: FIX `SettlCurrency` may express USD quote semantics while JSON settlement/commission remain BTC; cancellation reports may omit optional OrderID/OrderQty or first report pending-cancel. The connector uses the independent pre-read identity and waits for JSON terminal state rather than inventing missing values.
-- Next: Phase 10 final documentation, handoff, requirement audit and final verification.
+```json
+{"result":"PASS","independentReads":true,"privateEvents":true,"positionsZero":true,"fix":{"bybit":"BLOCKED_GATE","deribit":"PASS"}}
+```
+
+Latest minimum-fill fees:
+
+| Venue | Instrument | Entry / cleanup | Unit/collateral | Entry fee | Cleanup fee | Final position |
+|---|---|---:|---|---:|---:|---:|
+| Bybit Testnet | ETHUSDT linear | 0.01 / 0.01 | ETH, USDT collateral | 0.01367245 USDT | 0.01367234 USDT | 0 |
+| Deribit Testnet | BTC-PERPETUAL | 10 / 10 | USD notional, BTC settlement | 0.00000006 BTC | 0.00000006 BTC | 0 (`direction=zero`) |
+
+Every write was followed by a distinct read. WS amend independently read `open` at the new price; WS cancel independently read `cancelled`. The private stream observed 10 notifications, reported connection COD enabled, and persisted canonical orders/trades through the reconciliation reducer. A final read after the runner found zero open orders and zero nonzero positions on both venues.
+
+## Intentional deviations and explicit limitations
+
+- Per user direction, credentials are named `DERIBIT_API_KEY` / `DERIBIT_API_SECRET`, rather than the specification draft's `DERIBIT_CLIENT_ID` / `DERIBIT_CLIENT_SECRET` examples.
+- Per user direction, old `RUN_BYBIT_INTEGRATION` / `RUN_BYBIT_WS_INTEGRATION` aliases were removed without compatibility behavior. Symmetric venue read/trading/FIX gates are authoritative.
+- Bybit live FIX remains externally blocked and is never reported as PASS. Deribit R2 is independently complete at `TESTNET_ORDER_FLOW`.
+- No dashboard existed at baseline, so the preserved/extended user surface is the CLI.
+- The supported Deribit product scope remains BTC/ETH perpetuals with native collateral. Options, dated futures, Mainnet, transfers, withdrawals, and smart routing remain out of scope.
+
+Detailed evidence and the mandatory test-matrix audit are in `docs/upgrade/VALIDATION_REPORT.md`.
