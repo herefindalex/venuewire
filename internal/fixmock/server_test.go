@@ -2,7 +2,9 @@ package fixmock
 
 import (
 	"context"
+	"io"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,6 +12,58 @@ import (
 	"bybit/internal/fix"
 	"bybit/internal/orderstate"
 )
+
+type cancellationEOFTransport struct {
+	logon   []byte
+	written chan struct{}
+	release chan struct{}
+	once    sync.Once
+	read    bool
+}
+
+func (t *cancellationEOFTransport) Read(buffer []byte) (int, error) {
+	if !t.read {
+		t.read = true
+		return copy(buffer, t.logon), nil
+	}
+	<-t.release
+	return 0, io.EOF
+}
+
+func (t *cancellationEOFTransport) Write(buffer []byte) (int, error) {
+	t.once.Do(func() { close(t.written) })
+	return len(buffer), nil
+}
+
+func (*cancellationEOFTransport) Close() error { return nil }
+
+func TestServerTreatsPeerEOFAfterCancellationAsClean(t *testing.T) {
+	logon, err := fix.Encode("FIX.4.4", []fix.Field{
+		{Tag: 35, Value: "A"},
+		{Tag: 49, Value: "FIX_CLIENT"},
+		{Tag: 56, Value: "BYBIT_FIX_SERVER"},
+		{Tag: 34, Value: "1"},
+		{Tag: 52, Value: "20260909-18:00:00.000"},
+		{Tag: 553, Value: "fixture-key"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport := &cancellationEOFTransport{
+		logon:   logon,
+		written: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- New(Accepted).Serve(ctx, transport) }()
+	<-transport.written
+	cancel()
+	close(transport.release)
+	if err := <-done; err != nil {
+		t.Fatalf("cancelled mock returned %v", err)
+	}
+}
 
 func TestMockOrderScenarios(t *testing.T) {
 	tests := []struct {

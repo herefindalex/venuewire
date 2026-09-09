@@ -55,6 +55,9 @@ func (s *Server) Serve(ctx context.Context, transport fix.Transport) error {
 	for {
 		message, err := s.read(ctx, transport)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
 			return err
 		}
 		switch typeOf(message) {
