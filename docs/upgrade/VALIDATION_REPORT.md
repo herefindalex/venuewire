@@ -84,3 +84,29 @@ Crash/ambiguity fixture evidence: local tests cover accepted-before-local-ACK re
 | Deribit Testnet | BTC-PERPETUAL | 10 / 10 | USD notional, BTC settlement | 0.00000006 BTC | 0.00000006 BTC | 0 (`direction=zero`) |
 
 The cleanup orders were connector-owned and reduce-only. The E2E trap now tracks both open passive orders and residual filled exposure. An interrupted earlier run exposed an owned post-only order; it was matched to its persisted intent, cancelled by exact native ID, and independently read as `cancelled` before the passing rerun.
+
+## D-R2-FIX-001 — Distinct dialect and local order lifecycle
+
+- UTC time: 2026-09-09T17:41Z
+- Build: local `master` worktree after commit `6e785ea`
+- Venue/environment/account/transport: Deribit/local Testnet fixture/`deribit-test`/FIX 4.4
+- Command: `bybitctl --venue deribit fix mock-demo`
+- Expected: Deribit SHA-256 Logon dialect, heartbeat, actual resend, forward reset, SecurityList multiplier proof, D/G/F and 8 lifecycle all pass without exchange credentials or external writes
+- Actual: `LOCAL_TESTED`; authenticated fixture session; TestRequest echoed; original outbound sequence replayed with `43=Y` and `122`; reset recovered through callback; multiplier 10 converted minimum 10 USD to one contract; mock order accepted, replaced and ended `OrdStatus=4`
+- Native order ID: local fixture `mock-order-1`
+- Result: PASS
+- Evidence: sanitized CLI JSON; `tradingWritePerformed=false`; targeted normal tests passed
+
+## D-R2-FIX-002 — Real Deribit Testnet Logon
+
+- UTC time: 2026-09-09T17:22Z
+- Build: local `master` worktree after commit `6e785ea`
+- Venue/environment/account/transport: Deribit/Testnet/`deribit-test`/TLS FIX 4.4
+- Command: `bybitctl --venue deribit fix connect-testnet --duration 3s`
+- Gates: `DERIBIT_ENABLED=true`, `DERIBIT_FIX_ENABLED=true`, `RUN_DERIBIT_FIX_TESTS=1`; no trading gate enabled
+- Expected: exact Testnet TLS endpoint accepts authenticated Logon and bounded clean Logout; no order message is sent
+- Actual: authenticated Logon succeeded with `TargetCompID=DERIBITSERVER`; command exited 0 after requested duration; `tradingWritePerformed=false`
+- Result: PASS (`TESTNET_LOGON` only)
+- Evidence: sanitized CLI JSON and structured logs; no credential, nonce, RawData or password field retained
+
+`TESTNET_LOGON` is not `TESTNET_ORDER_FLOW`. Phase 9 must still prove a real metadata-minimum FIX create/amend/cancel lifecycle using independent JSON-RPC order/trade/position reads and connector-owned cleanup.

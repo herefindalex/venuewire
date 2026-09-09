@@ -41,6 +41,8 @@ Deribit Testnet JSON-RPC:
   bybitctl venue deribit order cancel --order-id ID --confirm
   bybitctl venue deribit order trades --order-id ID
   bybitctl venue deribit reconcile
+  bybitctl --venue deribit fix mock-demo
+  bybitctl --venue deribit fix connect-testnet [--duration 5s]
   bybitctl --venue all status
   bybitctl --venue all portfolio
 
@@ -144,6 +146,13 @@ func runContext(ctx context.Context, args []string) int {
 		}
 		return 0
 	}
+	if handled, err := executeDeribitFIXCommand(ctx, cfg, logger, args, os.Stdout); handled {
+		if err != nil {
+			logger.Error("Deribit FIX command failed", slog.String("error", err.Error()))
+			return 1
+		}
+		return 0
+	}
 	if handled, err := executeDeribitCommand(ctx, cfg, args, os.Stdout); handled {
 		if err != nil {
 			logger.Error("Deribit command failed", slog.String("error", err.Error()))
@@ -226,5 +235,5 @@ func isDeribitCommand(args []string) bool {
 }
 
 func isDeribitAuthenticatedCommand(args []string) bool {
-	return len(args) >= 3 && isDeribitCommand(args) && (args[2] == "account" || args[2] == "positions" || args[2] == "private-stream" || args[2] == "order" || args[2] == "reconcile")
+	return len(args) >= 3 && isDeribitCommand(args) && (args[2] == "account" || args[2] == "positions" || args[2] == "private-stream" || args[2] == "order" || args[2] == "reconcile" || (args[2] == "fix" && len(args) >= 4 && args[3] == "connect-testnet"))
 }

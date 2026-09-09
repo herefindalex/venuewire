@@ -47,3 +47,13 @@ Trade pages sort by `(timestamp, trade_id)`, deliberately overlap the cursor tim
 Each Deribit account client bounds concurrent RPC activity. Read-only calls apply a capped cooldown for code `10028`; writes are never retried. Instrument metadata is cached for five minutes, while every plan records metadata/price timestamps and execution still rechecks within its short TTL. WebSocket metrics expose ready generations, reconnects, queue depth, test requests, and sanitized last cause.
 
 Signals cancel root contexts, close sockets, stop new calls, and leave claimed writes durably marked `Executing`/`OutcomeUnknown` for startup recovery. `--venue all` retains each venue result and error separately, so one failure does not falsify the other venue's health.
+
+## Deribit classic FIX 4.4 dialect
+
+Rechecked against Deribit's current `production` (classic) FIX documentation on 2026-09-09; `production` names the protocol branch, while all connections remain pinned to Testnet `fix-test.deribit.com:9883`.
+
+- Logon uses `TargetCompID=DERIBITSERVER`, a strictly increasing millisecond timestamp, 32 random bytes, `RawData(96)=timestamp.base64(nonce)`, and `Password(554)=Base64(SHA256(RawData || client_secret))`. Heartbeat, cancel-on-disconnect and fill-reporting policy tags are explicit.
+- The Deribit session has its own recovery policy. Out-of-order inbound messages enter a bounded buffer and pause application writes. A server ResendRequest is fulfilled from a bounded outbound journal with the original sequence plus `PossDupFlag(43)` and `OrigSendingTime(122)`; an unavailable sequence fails closed. Per official Deribit semantics, `MsgSeqNum(34)` on SequenceReset is ignored and only a strictly forward `NewSeqNo(36)` is accepted. Recovery stays paused until the JSON-RPC reconciliation callback succeeds.
+- `SecurityList(y)` repeating groups preserve all fields. Unsupported nested groups fail explicitly. A live order is eligible only when JSON `contract_size` equals FIX `ContractMultiplier(231)` and JSON minimum USD units equal FIX `MinTradeVol(562) × multiplier`.
+- New/replace requests explicitly set `QtyType(854)=Units(0)`. For an inverse perpetual, request `OrderQty(38)` is USD units, while ExecutionReport quantities are contracts; reports are converted with the proven multiplier before comparison with the JSON amount.
+- ExecutionReport correlation uses `OrigClOrdID(41)` and/or `DeribitLabel(100010)` together with native `OrderID(37)`. It never assumes the server-replaced `ClOrdID(11)` is the original client identifier. FIX execution IDs remain protocol evidence; canonical accounting and deduplication use independently read JSON trade IDs.

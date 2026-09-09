@@ -31,6 +31,8 @@ func TestAuthenticatedCommandClassification(t *testing.T) {
 		{args: []string{"reconcile"}, rest: true},
 		{args: []string{"fix", "mock-demo"}},
 		{args: []string{"fix", "connect-testnet"}, fix: true},
+		{args: []string{"venue", "deribit", "fix", "mock-demo"}},
+		{args: []string{"venue", "deribit", "fix", "connect-testnet"}},
 	}
 	for _, tt := range tests {
 		if got := isRESTAuthenticatedCommand(tt.args); got != tt.rest {
@@ -64,6 +66,14 @@ func TestUsageListsEveryImplementedCommand(t *testing.T) {
 	}
 	for _, command := range commands {
 		if !strings.Contains(usage, "bybitctl "+command) {
+			t.Errorf("help does not list %q", command)
+		}
+	}
+	for _, command := range []string{
+		"bybitctl --venue deribit fix mock-demo",
+		"bybitctl --venue deribit fix connect-testnet",
+	} {
+		if !strings.Contains(usage, command) {
 			t.Errorf("help does not list %q", command)
 		}
 	}
