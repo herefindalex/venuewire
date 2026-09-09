@@ -47,6 +47,22 @@ func executeRESTCommand(ctx context.Context, cfg config.Config, logger *slog.Log
 			return true, err
 		}
 		return true, writeJSON(output, instruments)
+	case "ticker":
+		flags := newFlagSet("ticker")
+		category := flags.String("category", "linear", "product category")
+		symbol := flags.String("symbol", "BTCUSDT", "instrument symbol")
+		if err := flags.Parse(args[1:]); err != nil {
+			return true, err
+		}
+		if flags.NArg() != 0 {
+			return true, fmt.Errorf("unexpected ticker arguments: %v", flags.Args())
+		}
+		tickers, meta, err := client.Tickers(ctx, *category, *symbol)
+		logRateLimit(logger, meta)
+		if err != nil {
+			return true, err
+		}
+		return true, writeJSON(output, tickers)
 	case "order":
 		return true, executeOrderCommand(ctx, cfg, logger, client, args[1:], output)
 	case "executions":
@@ -132,6 +148,7 @@ func executeOrderCommand(ctx context.Context, cfg config.Config, logger *slog.Lo
 		price := flags.String("price", "", "decimal limit price")
 		tif := flags.String("time-in-force", "GTC", "time in force")
 		linkID := flags.String("order-link-id", "", "optional unique client identifier")
+		reduceOnly := flags.Bool("reduce-only", false, "reduce an existing position only")
 		if err := flags.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -145,7 +162,7 @@ func executeOrderCommand(ctx context.Context, cfg config.Config, logger *slog.Lo
 			}
 			*linkID = generated
 		}
-		request := rest.PlaceOrderRequest{Category: *category, Symbol: *symbol, Side: *side, OrderType: *orderType, Qty: *qty, Price: *price, TimeInForce: *tif, OrderLinkID: *linkID}
+		request := rest.PlaceOrderRequest{Category: *category, Symbol: *symbol, Side: *side, OrderType: *orderType, Qty: *qty, Price: *price, TimeInForce: *tif, OrderLinkID: *linkID, ReduceOnly: *reduceOnly}
 		store := orderstate.FileStore{Path: cfg.StateFile}
 		now := time.Now().UTC()
 		local := domain.Order{Exchange: "bybit", Category: *category, Symbol: *symbol, OrderLinkID: *linkID, Side: domain.Side(*side), Type: domain.OrderType(*orderType), Qty: *qty, Price: *price, Status: domain.OrderStatusPendingSubmit, RawStatus: "LOCAL_PENDING_SUBMIT", CreatedAt: now, UpdatedAt: now}

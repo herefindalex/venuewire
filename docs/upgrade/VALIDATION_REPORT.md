@@ -66,3 +66,21 @@ Real execution/fee reconciliation remains NOT_RUN here. Zero trades and zero fee
 - Recovery: `./bin/bybitctl state restore-v1` restores the retained backup; it was not invoked because v2 is the active schema
 
 Crash/ambiguity fixture evidence: local tests cover accepted-before-local-ACK recovery, no-match staying `OutcomeUnknown`, multiple label matches becoming `NeedsReview`, duplicate pages, same-millisecond cursor ordering, and pagination no-progress failure. No unresolved intent is automatically resubmitted.
+
+## MV-E2E-001 — Full command-level non-FIX E2E
+
+- UTC time: 2026-09-09T16:46Z
+- Gates: `RUN_MULTI_VENUE_E2E=1`, both venue read gates, and both venue trading gates
+- Build: local worktree after commit `b332b9c`
+- Commands: help; both venue time/doctor/metadata/ticker/account/portfolio/positions/orders; timed public/private streams; plan/execute; HTTP and WS creates; status/amend/cancel; executions/trades; reconciliation
+- Independent evidence: every mutation was queried separately; private stream files contained the same client correlation IDs; ACK trade amount/fee sums matched canonical execution/trade-history reads; final positions were independently queried
+- Result: PASS
+
+### Minimum live fills and fees
+
+| Venue | Instrument | Entry / cleanup | Native unit | Entry fee | Cleanup fee | Final position |
+|---|---|---:|---|---:|---:|---:|
+| Bybit Testnet | ETHUSDT linear | 0.01 / 0.01 | ETH, USDT collateral | 0.01385461 USDT | 0.01385456 USDT | 0 |
+| Deribit Testnet | BTC-PERPETUAL | 10 / 10 | USD notional, BTC settlement | 0.00000006 BTC | 0.00000006 BTC | 0 (`direction=zero`) |
+
+The cleanup orders were connector-owned and reduce-only. The E2E trap now tracks both open passive orders and residual filled exposure. An interrupted earlier run exposed an owned post-only order; it was matched to its persisted intent, cancelled by exact native ID, and independently read as `cancelled` before the passing rerun.

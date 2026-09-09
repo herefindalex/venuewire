@@ -88,6 +88,7 @@ type PlaceOrderRequest struct {
 	Price       string `json:"price,omitempty"`
 	TimeInForce string `json:"timeInForce,omitempty"`
 	OrderLinkID string `json:"orderLinkId"`
+	ReduceOnly  bool   `json:"reduceOnly,omitempty"`
 }
 
 type CancelOrderRequest struct {

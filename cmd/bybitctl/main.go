@@ -17,12 +17,15 @@ const usage = `bybitctl - Bybit Testnet connectivity lab
 
 Usage:
   bybitctl <command> [options]
+  bybitctl --venue bybit|deribit|all <command> [options]
 
 Public REST:
   bybitctl time
   bybitctl instrument [--category linear] [--symbol BTCUSDT]
+  bybitctl ticker [--category linear] [--symbol BTCUSDT]
 
 Deribit Testnet JSON-RPC:
+  bybitctl --venue deribit doctor
   bybitctl venue deribit time
   bybitctl venue deribit instrument --name BTC-PERPETUAL
   bybitctl venue deribit ticker --instrument BTC-PERPETUAL
@@ -38,6 +41,8 @@ Deribit Testnet JSON-RPC:
   bybitctl venue deribit order cancel --order-id ID --confirm
   bybitctl venue deribit order trades --order-id ID
   bybitctl venue deribit reconcile
+  bybitctl --venue all status
+  bybitctl --venue all portfolio
 
 Market WebSocket:
   bybitctl market trades [--symbol BTCUSDT]
@@ -46,7 +51,7 @@ Market WebSocket:
 Authenticated REST:
   bybitctl account info
   bybitctl account balances [--coin BTC,ETH,USDT]
-  bybitctl order place --side Buy|Sell --qty QTY [--category linear] [--symbol BTCUSDT] [--type Limit|Market] [--price PRICE] [--time-in-force GTC]
+  bybitctl order place --side Buy|Sell --qty QTY [--category linear] [--symbol BTCUSDT] [--type Limit|Market] [--price PRICE] [--time-in-force GTC] [--reduce-only]
   bybitctl order cancel [--category linear] [--symbol BTCUSDT] (--order-id ID | --order-link-id ID)
   bybitctl order amend [--category linear] [--symbol BTCUSDT] (--order-id ID | --order-link-id ID) [--qty QTY] [--price PRICE]
   bybitctl order status [--category linear] [--symbol BTCUSDT] [--order-id ID] [--order-link-id ID]
@@ -82,6 +87,7 @@ func run(args []string) int {
 }
 
 func runContext(ctx context.Context, args []string) int {
+	args = normalizeVenueArgs(args)
 	cfg := config.Load()
 	logger := observability.NewJSON(os.Stderr, cfg.APISecret, cfg.Deribit.APISecret)
 
@@ -131,6 +137,13 @@ func runContext(ctx context.Context, args []string) int {
 		}
 		return 0
 	}
+	if handled, err := executeMultiVenueCommand(ctx, cfg, args, os.Stdout); handled {
+		if err != nil {
+			logger.Error("multi-venue command failed", slog.String("error", err.Error()))
+			return 1
+		}
+		return 0
+	}
 	if handled, err := executeDeribitCommand(ctx, cfg, args, os.Stdout); handled {
 		if err != nil {
 			logger.Error("Deribit command failed", slog.String("error", err.Error()))
@@ -176,6 +189,20 @@ func runContext(ctx context.Context, args []string) int {
 
 	logger.Error("command is not implemented in the current phase", slog.String("command", strings.Join(args, " ")))
 	return 1
+}
+
+func normalizeVenueArgs(args []string) []string {
+	if len(args) < 3 || args[0] != "--venue" {
+		return args
+	}
+	switch args[1] {
+	case "bybit":
+		return args[2:]
+	case "deribit", "all":
+		return append([]string{"venue", args[1]}, args[2:]...)
+	default:
+		return args
+	}
 }
 
 func isRESTAuthenticatedCommand(args []string) bool {

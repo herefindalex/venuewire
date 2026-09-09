@@ -31,6 +31,30 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 	}
 	encoder := json.NewEncoder(output)
 	switch args[2] {
+	case "doctor":
+		if len(args) != 3 {
+			return true, errors.New("doctor takes no arguments")
+		}
+		serverTime, err := client.ServerTime(ctx)
+		if err != nil {
+			return true, err
+		}
+		instrument, err := client.Instrument(ctx, "BTC-PERPETUAL")
+		if err != nil {
+			return true, err
+		}
+		result := map[string]any{"venue": "deribit", "environment": "testnet", "accountAlias": cfg.Deribit.AccountAlias, "public": map[string]any{"ok": true, "timeMs": serverTime, "instrument": instrument.InstrumentName, "active": instrument.IsActive}, "tradingWritePerformed": false}
+		if err := cfg.Deribit.RequireCredentials(); err != nil {
+			result["private"] = map[string]any{"ok": false, "error": err.Error()}
+		} else {
+			summaries, err := client.AccountSummaries(ctx)
+			if err != nil {
+				result["private"] = map[string]any{"ok": false, "error": err.Error()}
+			} else {
+				result["private"] = map[string]any{"ok": true, "currencies": len(summaries)}
+			}
+		}
+		return true, encoder.Encode(result)
 	case "time":
 		if len(args) != 3 {
 			return true, errors.New("time takes no arguments")
@@ -175,10 +199,56 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			return true, err
 		}
 		metrics := stream.Metrics()
-		if (!private && metrics.Notifications == 0) || (private && metrics.Ready == 0) {
+		if metrics.Ready == 0 {
 			return true, fmt.Errorf("stream ended without notifications: %s", metrics.LastError)
 		}
 		return true, encoder.Encode(map[string]any{"complete": true, "metrics": metrics})
+	case "market":
+		if len(args) < 4 {
+			return true, errors.New("market requires trades or orderbook")
+		}
+		flags := flag.NewFlagSet("venue deribit market", flag.ContinueOnError)
+		flags.SetOutput(io.Discard)
+		instrumentName := flags.String("instrument", "BTC-PERPETUAL", "instrument")
+		duration := flags.Duration("duration", 30*time.Second, "duration")
+		depth := flags.Int("depth", 10, "order-book depth")
+		if err := flags.Parse(args[4:]); err != nil {
+			return true, err
+		}
+		if flags.NArg() != 0 {
+			return true, fmt.Errorf("unexpected arguments: %v", flags.Args())
+		}
+		var channel string
+		switch args[3] {
+		case "trades":
+			channel = "trades." + *instrumentName + ".100ms"
+		case "orderbook":
+			if *depth <= 0 {
+				return true, errors.New("depth must be positive")
+			}
+			channel = fmt.Sprintf("book.%s.none.%d.100ms", *instrumentName, *depth)
+		default:
+			return true, fmt.Errorf("unknown market command %q", args[3])
+		}
+		return executeDeribitCommand(ctx, cfg, []string{"venue", "deribit", "public-stream", "--channels", channel, "--duration", duration.String()}, output)
+	case "orders":
+		if len(args) < 4 || args[3] != "list" {
+			return true, errors.New("orders requires list")
+		}
+		flags := flag.NewFlagSet("venue deribit orders list", flag.ContinueOnError)
+		flags.SetOutput(io.Discard)
+		instrumentName := flags.String("instrument", "BTC-PERPETUAL", "instrument")
+		if err := flags.Parse(args[4:]); err != nil {
+			return true, err
+		}
+		if flags.NArg() != 0 {
+			return true, fmt.Errorf("unexpected arguments: %v", flags.Args())
+		}
+		orders, err := client.OpenOrders(ctx, *instrumentName)
+		if err != nil {
+			return true, err
+		}
+		return true, encoder.Encode(orders)
 	case "order":
 		if len(args) < 4 {
 			return true, errors.New("order requires plan or execute")
@@ -187,7 +257,7 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 		if err != nil {
 			return true, err
 		}
-		if _, err := reconciler.Run(ctx); err != nil {
+		if _, err := reconciler.RecoverUncertain(ctx); err != nil {
 			return true, fmt.Errorf("pre-trade recovery failed: %w", err)
 		}
 		planner := &intent.Planner{Market: client, Store: intent.Store{Path: cfg.IntentFile}, Limits: intent.Limits{MaxOrderUSD: cfg.Deribit.Risk.MaxOrderUSD, MaxAggregateOpenUSD: cfg.Deribit.Risk.MaxAggregateOpenUSD, MaxPriceDeviationPct: cfg.Deribit.Risk.MaxPriceDeviationPct, MaxOpenOrders: cfg.Deribit.Risk.MaxOpenOrders, TTL: cfg.Deribit.PlanTTL}, AccountAlias: cfg.Deribit.AccountAlias, WSURL: cfg.Deribit.WSURL}

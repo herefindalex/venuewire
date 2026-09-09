@@ -10,7 +10,7 @@ Specification: `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md`
 | 3 — Deribit public/private WS, book, and heartbeat | Complete | 153 normal/race tests; reconnect/resubscribe, recovery callback, bounded queues, book gaps; live public events, private ready, and heartbeat test response |
 | 4 — HTTP/WS plan→execute order lifecycle | Complete | Persisted 30s plans, metadata/risk revalidation, cross-process claim, HTTP+WS writes, private WS event correlation, independent HTTP verification, minimum-size live cancellations |
 | 5 — Intent persistence, recovery, pagination, and reconciliation | Complete | Durable intent states/cursors; zero/one/multiple label recovery; fee/trade-ID dedupe; bounded pagination; startup/private-ready/manual reconciliation; live idempotence |
-| 6 — Multi-venue routing, read aggregation, and CLI E2E | Not started | — |
+| 6 — Multi-venue routing, read aggregation, and CLI E2E | Complete (non-FIX) | Shared `--venue` routing, failure-isolated status/portfolio, metadata-minimum HTTP/WS lifecycles, canonical fee checks, private events, reduce-only zero-position cleanup |
 | 7 — Failure isolation, observability, and shutdown | Not started | — |
 | 8 — Deribit FIX codec/auth/session | Not started | — |
 | 9 — Deribit FIX orders and JSON reconciliation | Not started | — |
@@ -24,7 +24,7 @@ Specification: `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md`
 | Deribit authenticated account-summary probe | PASS — read-only credential/asset check on 2026-09-09 |
 | Deribit R1 local tests | IN_PROGRESS — Phase 1 local tests pass |
 | Deribit R1 Testnet reads | PASS — HTTP time, metadata, 14-currency account aggregate, and positions on 2026-09-09 |
-| Deribit R1 Testnet order lifecycle | NOT_RUN |
+| Deribit R1 Testnet order lifecycle | PASS — HTTP + WS passive flows and 10 USD live fill/cleanup independently verified |
 | Deribit FIX implemented | NOT_RUN |
 | Deribit FIX local mock | NOT_RUN |
 | Deribit FIX Testnet logon | NOT_RUN |

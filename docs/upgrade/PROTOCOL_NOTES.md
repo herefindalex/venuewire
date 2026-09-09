@@ -37,3 +37,7 @@ Create, amend, and cancel commands perform a separate `private/get_order_state` 
 The state file records `Planned`, `Executing`, `Submitted`, `Rejected`, `OutcomeUnknown`, `Expired`, and `NeedsReview`. Recovery searches open and historical orders by the connector label and deduplicates native order IDs: zero stays unresolved, one is adopted, and more than one requires review. This search is reconciliation evidence, never permission to send again.
 
 Trade pages sort by `(timestamp, trade_id)`, deliberately overlap the cursor timestamp, and rely on canonical trade-ID persistence for deduplication. This preserves late same-millisecond records. Cursors move only forward, pagination is capped, and `has_more` without progress fails visibly.
+
+## Shared CLI and E2E
+
+`--venue bybit` routes to the preserved commands; `--venue deribit` selects the JSON-RPC connector; `--venue all status|portfolio` returns per-venue results without merging native currencies or hiding a failed venue. The E2E runner requires the global write gate plus both venue read/trading gates. It derives quantities and prices from current metadata/tickers and fails unless separate reads, private-event correlation, canonical fee totals, and zero-position cleanup all agree.

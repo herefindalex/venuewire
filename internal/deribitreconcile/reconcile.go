@@ -39,6 +39,12 @@ type Report struct {
 }
 
 func (r *Reconciler) Run(ctx context.Context) (Report, error) {
+	return r.run(ctx, false)
+}
+
+func (r *Reconciler) RecoverUncertain(ctx context.Context) (Report, error) { return r.run(ctx, true) }
+
+func (r *Reconciler) run(ctx context.Context, uncertainOnly bool) (Report, error) {
 	var report Report
 	if r.Queries == nil || r.State == nil {
 		return report, errors.New("Deribit reconciler dependencies are required")
@@ -54,6 +60,9 @@ func (r *Reconciler) Run(ctx context.Context) (Report, error) {
 		}
 		instruments[plan.Instrument] = true
 		if plan.Status == intent.StatusPlanned || plan.Status == intent.StatusExpired || plan.Status == intent.StatusRejected {
+			continue
+		}
+		if uncertainOnly && plan.Status != intent.StatusExecuting && plan.Status != intent.StatusOutcomeUnknown && plan.Status != intent.StatusNeedsReview {
 			continue
 		}
 		report.PlansChecked++
@@ -102,6 +111,9 @@ func (r *Reconciler) Run(ctx context.Context) (Report, error) {
 				report.DuplicateOrExternalTrades++
 			}
 		}
+	}
+	if uncertainOnly {
+		return report, nil
 	}
 	for instrument := range instruments {
 		if err := r.reconcilePages(ctx, instrument, &report); err != nil {

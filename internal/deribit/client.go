@@ -95,12 +95,18 @@ func (c *Client) call(ctx context.Context, method string, params any, token stri
 		}
 		return errors.New("malformed Deribit JSON-RPC response")
 	}
-	if decoded.JSONRPC != "2.0" || decoded.ID != id {
+	if decoded.JSONRPC != "2.0" {
 		return errors.New("mismatched Deribit JSON-RPC response")
 	}
 	if decoded.Error != nil {
+		if decoded.ID != 0 && decoded.ID != id {
+			return errors.New("mismatched Deribit JSON-RPC error response")
+		}
 		decoded.Error.Data = nil // server data may echo sensitive request details
 		return decoded.Error
+	}
+	if decoded.ID != id {
+		return errors.New("mismatched Deribit JSON-RPC response")
 	}
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("Deribit HTTP status %d", response.StatusCode)
@@ -121,7 +127,7 @@ func (c *Client) Public(ctx context.Context, method string, params any, result a
 	if !strings.HasPrefix(method, "public/") {
 		return errors.New("public call requires public/ method")
 	}
-	return c.call(ctx, method, params, "", result)
+	return c.readWithRateLimitRetry(ctx, method, params, "", result)
 }
 
 func (c *Client) PrivateRead(ctx context.Context, method string, params any, result any) error {
@@ -132,16 +138,33 @@ func (c *Client) PrivateRead(ctx context.Context, method string, params any, res
 	if err != nil {
 		return err
 	}
-	err = c.call(ctx, method, params, token, result)
+	err = c.readWithRateLimitRetry(ctx, method, params, token, result)
 	var rpcErr *RPCError
 	if errors.As(err, &rpcErr) && isAuthError(rpcErr.Code) {
 		token, refreshErr := c.accessToken(ctx, true)
 		if refreshErr != nil {
 			return refreshErr
 		}
-		return c.call(ctx, method, params, token, result)
+		return c.readWithRateLimitRetry(ctx, method, params, token, result)
 	}
 	return err
+}
+
+func (c *Client) readWithRateLimitRetry(ctx context.Context, method string, params any, token string, result any) error {
+	for attempt := 0; attempt < 3; attempt++ {
+		err := c.call(ctx, method, params, token, result)
+		var rpcErr *RPCError
+		if !errors.As(err, &rpcErr) || rpcErr.Code != 10028 {
+			return err
+		}
+		if attempt == 2 {
+			return err
+		}
+		if err := waitContext(ctx, time.Duration(attempt+1)*200*time.Millisecond); err != nil {
+			return err
+		}
+	}
+	return errors.New("unreachable read retry state")
 }
 
 func isAuthError(code int) bool { return code == 13004 || code == 13009 }
