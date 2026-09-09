@@ -13,7 +13,7 @@ import (
 	"bybit/internal/observability"
 )
 
-const usage = `bybitctl - Bybit Testnet connectivity lab
+const usage = `bybitctl - Bybit + Deribit Testnet connector lab
 
 Usage:
   bybitctl <command> [options]

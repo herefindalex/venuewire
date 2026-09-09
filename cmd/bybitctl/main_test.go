@@ -45,6 +45,9 @@ func TestAuthenticatedCommandClassification(t *testing.T) {
 }
 
 func TestUsageListsEveryImplementedCommand(t *testing.T) {
+	if !strings.Contains(usage, "Bybit + Deribit Testnet connector lab") {
+		t.Fatal("help title does not identify both supported venues")
+	}
 	commands := []string{
 		"time",
 		"instrument",
