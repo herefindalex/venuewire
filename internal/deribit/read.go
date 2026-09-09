@@ -6,18 +6,18 @@ import (
 )
 
 type Instrument struct {
-	InstrumentName      string  `json:"instrument_name"`
-	Kind                string  `json:"kind"`
-	BaseCurrency        string  `json:"base_currency"`
-	CounterCurrency     string  `json:"counter_currency"`
-	SettlementCurrency  string  `json:"settlement_currency"`
-	QuoteCurrency       string  `json:"quote_currency"`
-	TickSize            float64 `json:"tick_size"`
-	MinTradeAmount      float64 `json:"min_trade_amount"`
-	ContractSize        float64 `json:"contract_size"`
-	IsActive            bool    `json:"is_active"`
-	InstrumentID        int64   `json:"instrument_id"`
-	ExpirationTimestamp int64   `json:"expiration_timestamp"`
+	InstrumentName      string      `json:"instrument_name"`
+	Kind                string      `json:"kind"`
+	BaseCurrency        string      `json:"base_currency"`
+	CounterCurrency     string      `json:"counter_currency"`
+	SettlementCurrency  string      `json:"settlement_currency"`
+	QuoteCurrency       string      `json:"quote_currency"`
+	TickSize            json.Number `json:"tick_size"`
+	MinTradeAmount      json.Number `json:"min_trade_amount"`
+	ContractSize        json.Number `json:"contract_size"`
+	IsActive            bool        `json:"is_active"`
+	InstrumentID        int64       `json:"instrument_id"`
+	ExpirationTimestamp int64       `json:"expiration_timestamp"`
 }
 
 type AccountSummary struct {

@@ -25,11 +25,18 @@ Public REST:
 Deribit Testnet JSON-RPC:
   bybitctl venue deribit time
   bybitctl venue deribit instrument --name BTC-PERPETUAL
+  bybitctl venue deribit ticker --instrument BTC-PERPETUAL
   bybitctl venue deribit instruments [--currency BTC] [--kind future]
   bybitctl venue deribit account balances [--currency all|BTC,ETH]
   bybitctl venue deribit positions [--currency BTC] [--kind future]
   bybitctl venue deribit public-stream [--channels trades.BTC-PERPETUAL.100ms,book.BTC-PERPETUAL.100ms] [--duration 30s]
   bybitctl venue deribit private-stream [--channels user.changes.any.any.raw] [--duration 30s]
+  bybitctl venue deribit order plan --instrument BTC-PERPETUAL --side buy --amount 10 --type limit --price PRICE [--transport http|ws] [--post-only]
+  bybitctl venue deribit order execute --plan-id ID --confirm
+  bybitctl venue deribit order status --order-id ID
+  bybitctl venue deribit order amend --order-id ID --amount AMOUNT --price PRICE --confirm
+  bybitctl venue deribit order cancel --order-id ID --confirm
+  bybitctl venue deribit order trades --order-id ID
 
 Market WebSocket:
   bybitctl market trades [--symbol BTCUSDT]
@@ -191,5 +198,5 @@ func isDeribitCommand(args []string) bool {
 }
 
 func isDeribitAuthenticatedCommand(args []string) bool {
-	return len(args) >= 3 && isDeribitCommand(args) && (args[2] == "account" || args[2] == "positions" || args[2] == "private-stream")
+	return len(args) >= 3 && isDeribitCommand(args) && (args[2] == "account" || args[2] == "positions" || args[2] == "private-stream" || args[2] == "order")
 }

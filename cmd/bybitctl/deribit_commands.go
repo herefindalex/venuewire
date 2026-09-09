@@ -7,11 +7,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math/big"
 	"strings"
 	"time"
 
 	"bybit/internal/config"
 	"bybit/internal/deribit"
+	"bybit/internal/intent"
 )
 
 func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string, output io.Writer) (bool, error) {
@@ -47,6 +49,21 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			return true, errors.New("instrument requires --name and no positional arguments")
 		}
 		result, err := client.Instrument(ctx, *name)
+		if err != nil {
+			return true, err
+		}
+		return true, encoder.Encode(result)
+	case "ticker":
+		flags := flag.NewFlagSet("venue deribit ticker", flag.ContinueOnError)
+		flags.SetOutput(io.Discard)
+		instrumentName := flags.String("instrument", "", "instrument")
+		if err := flags.Parse(args[3:]); err != nil {
+			return true, err
+		}
+		if flags.NArg() != 0 || *instrumentName == "" {
+			return true, errors.New("ticker requires --instrument and no positional arguments")
+		}
+		result, err := client.Ticker(ctx, *instrumentName)
 		if err != nil {
 			return true, err
 		}
@@ -152,9 +169,168 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			return true, fmt.Errorf("stream ended without notifications: %s", metrics.LastError)
 		}
 		return true, encoder.Encode(map[string]any{"complete": true, "metrics": metrics})
+	case "order":
+		if len(args) < 4 {
+			return true, errors.New("order requires plan or execute")
+		}
+		planner := &intent.Planner{Market: client, Store: intent.Store{Path: cfg.IntentFile}, Limits: intent.Limits{MaxOrderUSD: cfg.Deribit.Risk.MaxOrderUSD, MaxAggregateOpenUSD: cfg.Deribit.Risk.MaxAggregateOpenUSD, MaxPriceDeviationPct: cfg.Deribit.Risk.MaxPriceDeviationPct, MaxOpenOrders: cfg.Deribit.Risk.MaxOpenOrders, TTL: cfg.Deribit.PlanTTL}, AccountAlias: cfg.Deribit.AccountAlias, WSURL: cfg.Deribit.WSURL}
+		switch args[3] {
+		case "plan":
+			flags := flag.NewFlagSet("venue deribit order plan", flag.ContinueOnError)
+			flags.SetOutput(io.Discard)
+			instrumentName := flags.String("instrument", "", "instrument")
+			side := flags.String("side", "", "buy or sell")
+			amount := flags.String("amount", "", "USD notional amount")
+			orderType := flags.String("type", "limit", "limit or market")
+			transport := flags.String("transport", "http", "http or ws")
+			price := flags.String("price", "", "limit price")
+			tif := flags.String("time-in-force", "good_til_cancelled", "time in force")
+			postOnly := flags.Bool("post-only", false, "post only")
+			reduceOnly := flags.Bool("reduce-only", false, "reduce only")
+			if err := flags.Parse(args[4:]); err != nil {
+				return true, err
+			}
+			if flags.NArg() != 0 {
+				return true, fmt.Errorf("unexpected arguments: %v", flags.Args())
+			}
+			plan, err := planner.Create(ctx, intent.Request{Instrument: *instrumentName, Side: *side, OrderType: *orderType, Transport: *transport, Amount: *amount, Price: *price, TimeInForce: *tif, PostOnly: *postOnly, ReduceOnly: *reduceOnly})
+			if err != nil {
+				return true, err
+			}
+			return true, encoder.Encode(plan)
+		case "execute":
+			flags := flag.NewFlagSet("venue deribit order execute", flag.ContinueOnError)
+			flags.SetOutput(io.Discard)
+			planID := flags.String("plan-id", "", "persisted plan ID")
+			confirm := flags.Bool("confirm", false, "confirm write")
+			if err := flags.Parse(args[4:]); err != nil {
+				return true, err
+			}
+			if flags.NArg() != 0 || *planID == "" {
+				return true, errors.New("execute requires --plan-id and no positional arguments")
+			}
+			result, err := planner.Execute(ctx, *planID, *confirm)
+			if err != nil {
+				return true, err
+			}
+			return true, encoder.Encode(result)
+		case "status":
+			flags := flag.NewFlagSet("venue deribit order status", flag.ContinueOnError)
+			flags.SetOutput(io.Discard)
+			orderID := flags.String("order-id", "", "native order ID")
+			if err := flags.Parse(args[4:]); err != nil {
+				return true, err
+			}
+			if flags.NArg() != 0 || *orderID == "" {
+				return true, errors.New("status requires --order-id")
+			}
+			state, err := client.OrderState(ctx, *orderID)
+			if err != nil {
+				return true, err
+			}
+			return true, encoder.Encode(state)
+		case "trades":
+			flags := flag.NewFlagSet("venue deribit order trades", flag.ContinueOnError)
+			flags.SetOutput(io.Discard)
+			orderID := flags.String("order-id", "", "native order ID")
+			if err := flags.Parse(args[4:]); err != nil {
+				return true, err
+			}
+			if flags.NArg() != 0 || *orderID == "" {
+				return true, errors.New("trades requires --order-id")
+			}
+			trades, err := client.TradesByOrder(ctx, *orderID)
+			if err != nil {
+				return true, err
+			}
+			return true, encoder.Encode(trades)
+		case "amend":
+			flags := flag.NewFlagSet("venue deribit order amend", flag.ContinueOnError)
+			flags.SetOutput(io.Discard)
+			orderID := flags.String("order-id", "", "native order ID")
+			amount := flags.String("amount", "", "new USD amount")
+			price := flags.String("price", "", "new limit price")
+			confirm := flags.Bool("confirm", false, "confirm write")
+			if err := flags.Parse(args[4:]); err != nil {
+				return true, err
+			}
+			if flags.NArg() != 0 || *orderID == "" || *amount == "" || *price == "" {
+				return true, errors.New("amend requires --order-id, --amount, --price, and no positional arguments")
+			}
+			if !*confirm {
+				return true, errors.New("amend requires --confirm")
+			}
+			before, err := client.OrderState(ctx, *orderID)
+			if err != nil {
+				return true, err
+			}
+			if before.OrderState != "open" && before.OrderState != "untriggered" {
+				return true, fmt.Errorf("order is not amendable: %s", before.OrderState)
+			}
+			if _, err := planner.ValidateRequest(ctx, intent.Request{Instrument: before.InstrumentName, Side: before.Direction, OrderType: "limit", Amount: *amount, Price: *price, ReduceOnly: before.ReduceOnly}); err != nil {
+				return true, fmt.Errorf("amend risk validation: %w", err)
+			}
+			ack, err := client.Edit(ctx, *orderID, *amount, *price)
+			if err != nil {
+				return true, err
+			}
+			after, readErr := client.OrderState(ctx, *orderID)
+			if readErr != nil {
+				return true, fmt.Errorf("amend independent verification: %w", readErr)
+			}
+			verified := after.OrderID == *orderID && decimalEqual(after.Amount.String(), *amount) && decimalEqual(after.Price.String(), *price)
+			if !verified {
+				return true, errors.New("amend independent verification mismatch")
+			}
+			return true, encoder.Encode(map[string]any{"acknowledgement": ack, "readState": after, "verified": true})
+		case "cancel":
+			flags := flag.NewFlagSet("venue deribit order cancel", flag.ContinueOnError)
+			flags.SetOutput(io.Discard)
+			orderID := flags.String("order-id", "", "native order ID")
+			confirm := flags.Bool("confirm", false, "confirm write")
+			if err := flags.Parse(args[4:]); err != nil {
+				return true, err
+			}
+			if flags.NArg() != 0 || *orderID == "" {
+				return true, errors.New("cancel requires --order-id and no positional arguments")
+			}
+			if !*confirm {
+				return true, errors.New("cancel requires --confirm")
+			}
+			ack, err := client.Cancel(ctx, *orderID)
+			if err != nil {
+				return true, err
+			}
+			verifyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			var after deribit.Order
+			for {
+				after, err = client.OrderState(verifyCtx, *orderID)
+				if err == nil && (after.OrderState == "cancelled" || after.OrderState == "filled") {
+					break
+				}
+				select {
+				case <-verifyCtx.Done():
+					if err != nil {
+						return true, fmt.Errorf("cancel independent verification: %w", err)
+					}
+					return true, errors.New("cancel independent verification did not reach terminal state")
+				case <-time.After(100 * time.Millisecond):
+				}
+			}
+			return true, encoder.Encode(map[string]any{"acknowledgement": ack, "readState": after, "verified": true})
+		default:
+			return true, fmt.Errorf("unknown Deribit order command %q", args[3])
+		}
 	default:
 		return true, fmt.Errorf("unknown Deribit command %q", args[2])
 	}
+}
+
+func decimalEqual(left, right string) bool {
+	l, lok := new(big.Rat).SetString(left)
+	r, rok := new(big.Rat).SetString(right)
+	return lok && rok && l.Cmp(r) == 0
 }
 
 func splitNonempty(raw string) ([]string, error) {

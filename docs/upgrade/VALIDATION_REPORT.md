@@ -35,3 +35,24 @@ NOT_RUN. A read result does not satisfy any order lifecycle, WebSocket, reconcil
 - Expected: determine whether unauthenticated `.raw` can be a public default
 - Actual: server returned typed code `13778 raw_subscriptions_not_available_for_unauthorized`
 - Result: PASS (behavior identified); public defaults changed to `.100ms`, authenticated callers may request `.raw`
+
+## D-R4-001 — Deribit HTTP minimum-size order lifecycle
+
+- UTC time: 2026-09-09T16:03Z–16:06Z
+- Venue/environment/account/transport: Deribit/Testnet/`deribit-test`/HTTP write + HTTP read + private WS
+- Instrument/amount/unit: `BTC-PERPETUAL`, `10`, USD notional (metadata minimum), BTC settlement
+- Expected: plan passes nonzero risk limits; execute requires confirmation; independent HTTP state is open; amend is independently visible; cancel is independently terminal; private events correlate by order ID/label; no residual position
+- Actual: two connector-owned post-only orders were created within the 2% price band. Create and amend returned `verified=true`; cancel read returned `cancelled`; private `user.changes.any.any.raw` emitted matching `open` then `cancelled`; trade count and fee were 0; BTC future position count was 0
+- Native IDs: sanitized in this report; retained only in local command evidence
+- Result: PASS
+
+## D-R4-002 — Deribit WebSocket minimum-size order lifecycle
+
+- UTC time: 2026-09-09T16:12Z
+- Venue/environment/account/transport: Deribit/Testnet/`deribit-test`/WebSocket write + canonical HTTP read
+- Instrument/amount/unit: `BTC-PERPETUAL`, `10`, USD notional, BTC settlement
+- Expected: no transport fallback/retry; HTTP read matches WS order ID and intent label; connector-owned cancel reaches terminal state
+- Actual: WebSocket create was independently HTTP-verified, then HTTP cancel was independently read as `cancelled`; no fill was targeted
+- Result: PASS
+
+Real execution/fee reconciliation remains NOT_RUN here. Zero trades and zero fee are correct for the post-only cancellation lifecycle but do not satisfy the required live-fill evidence.

@@ -73,6 +73,7 @@ func TestEnvironmentExampleIsEmptyAndSecretsAreIgnored(t *testing.T) {
 		"BYBIT_FIX_PRIVATE_KEY_PATH":      "",
 		"BYBIT_STATE_FILE":                "state/orders.json",
 		"BYBIT_WS_TEST_DURATION":          "5m",
+		"MULTI_VENUE_INTENT_FILE":         "state/intents.json",
 		"DERIBIT_ENV":                     "testnet",
 		"DERIBIT_ENABLED":                 "false",
 		"DERIBIT_ACCOUNT_ALIAS":           "deribit-test",

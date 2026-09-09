@@ -34,6 +34,7 @@ type Client struct {
 	authMu         sync.Mutex
 	token          string
 	tokenExpiresAt time.Time
+	orderWSDial    WSDialFunc
 }
 
 type envelope struct {

@@ -25,3 +25,9 @@ The CLI `account balances --currency all` uses the account-scoped `private/get_a
 Public unauthenticated subscriptions default to `.100ms`. Testnet returned `13778 raw_subscriptions_not_available_for_unauthorized` for `.raw`; reconnect diagnostics retain that typed cause rather than reporting a successful empty smoke test. The session negotiates heartbeat, answers `test_request` with `public/test`, uses bounded queues, and treats overflow as a connection-recovery condition.
 
 Subscription data is rejected before the subscribe acknowledgement. Every ready generation invokes the recovery callback. Book duplicates are idempotent; a `prev_change_id` gap marks the book stale, and deltas remain blocked until a new snapshot.
+
+## Deribit plan and order writes
+
+Plans persist the venue/account, native collateral, explicit USD-notional amount unit, metadata mark/tick/minimum, open-order risk snapshot, transport, and 30-second expiry. Execution revalidates live metadata and risk, atomically claims the intent once, and requires `--confirm`. HTTP and WebSocket writes never fall back to each other. Any failure after a WS write or ambiguous HTTP transport is `OutcomeUnknown` and is not automatically resent.
+
+Create, amend, and cancel commands perform a separate `private/get_order_state` read. A create response must match both native order ID and connector intent label; missing or mismatched evidence becomes `NeedsReview`. Deribit Testnet returned `private/get_user_trades_by_order` as a direct array, so the decoder accepts both the direct and documented wrapped shapes.

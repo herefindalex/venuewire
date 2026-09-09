@@ -58,6 +58,7 @@ type Config struct {
 	WSTradeURL        string
 	FIXAddress        string
 	StateFile         string
+	IntentFile        string
 	AccountAlias      string
 	Deribit           DeribitConfig
 }
@@ -79,6 +80,7 @@ func Load() Config {
 		WSTradeURL:        envOrDefault("BYBIT_WS_TRADE_URL", TestnetWSTradeURL),
 		FIXAddress:        envOrDefault("BYBIT_FIX_ADDRESS", TestnetFIXAddress),
 		StateFile:         envOrDefault("BYBIT_STATE_FILE", "state/orders.json"),
+		IntentFile:        envOrDefault("MULTI_VENUE_INTENT_FILE", "state/intents.json"),
 		AccountAlias:      envOrDefault("BYBIT_ACCOUNT_ALIAS", "bybit-test"),
 		Deribit:           deribit,
 	}

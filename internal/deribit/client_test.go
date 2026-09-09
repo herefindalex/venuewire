@@ -3,6 +3,7 @@ package deribit
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -209,5 +210,50 @@ func TestAccountSummariesUsesAccountScopedAggregateResponse(t *testing.T) {
 	}
 	if len(got) != 2 || got[0].Currency != "BTC" || got[1].Currency != "USDT" {
 		t.Fatalf("unexpected summaries: %+v", got)
+	}
+}
+
+func TestPrivateWriteDoesNotRetryAmbiguousTransportFailure(t *testing.T) {
+	var writes atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+		var got capturedRequest
+		_ = json.NewDecoder(req.Body).Decode(&got)
+		if got.Method == "public/auth" {
+			respond(t, writer, got.ID, map[string]any{"access_token": "token", "expires_in": 300}, nil)
+			return
+		}
+		writes.Add(1)
+		_, _ = writer.Write([]byte(`not-json`))
+	}))
+	defer server.Close()
+	client, _ := NewClient(server.URL, "key", "secret", server.Client())
+	_, err := client.Place(context.Background(), "buy", PlaceParams{InstrumentName: "BTC-PERPETUAL", Amount: "10", Type: "limit", Price: "80000", Label: "one"})
+	var unknown *OutcomeUnknownError
+	if !errors.As(err, &unknown) {
+		t.Fatalf("err=%T %v", err, err)
+	}
+	if writes.Load() != 1 {
+		t.Fatalf("write attempts=%d", writes.Load())
+	}
+}
+
+func TestTradesByOrderAcceptsDirectArray(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+		var got capturedRequest
+		_ = json.NewDecoder(req.Body).Decode(&got)
+		if got.Method == "public/auth" {
+			respond(t, writer, got.ID, map[string]any{"access_token": "token", "expires_in": 300}, nil)
+			return
+		}
+		respond(t, writer, got.ID, []any{map[string]any{"trade_id": "trade-1", "order_id": "order-1", "fee": 0.0001}}, nil)
+	}))
+	defer server.Close()
+	client, _ := NewClient(server.URL, "key", "secret", server.Client())
+	trades, err := client.TradesByOrder(context.Background(), "order-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trades) != 1 || trades[0].TradeID != "trade-1" {
+		t.Fatalf("trades=%+v", trades)
 	}
 }
