@@ -58,6 +58,14 @@ func NewClient(baseURL, apiKey, apiSecret string, options ...Option) *Client {
 	for _, option := range options {
 		option(c)
 	}
+	if c.httpClient == nil {
+		c.httpClient = &http.Client{Timeout: 15 * time.Second}
+	}
+	httpClientCopy := *c.httpClient
+	httpClientCopy.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return errors.New("Bybit HTTP redirects are disabled")
+	}
+	c.httpClient = &httpClientCopy
 	return c
 }
 

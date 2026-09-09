@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -41,6 +42,28 @@ func TestPrivateGETUsesCanonicalQueryAndHeaders(t *testing.T) {
 	}
 	if got := meta.RateLimit.ResetAt.UnixMilli(); got != 1700000000999 {
 		t.Fatalf("reset = %d", got)
+	}
+}
+
+func TestClientRejectsRedirectWithoutForwardingCredentials(t *testing.T) {
+	var redirected atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/capture" {
+			redirected.Add(1)
+			_, _ = io.WriteString(writer, `{"retCode":0,"retMsg":"OK","result":{"list":[]}}`)
+			return
+		}
+		http.Redirect(writer, req, "/capture", http.StatusTemporaryRedirect)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "fixture-api-key", "fixture-secret")
+	_, _, err := client.Orders(context.Background(), "linear", "BTCUSDT", "", "fixture-link", nil)
+	if err == nil || !strings.Contains(err.Error(), "redirects are disabled") {
+		t.Fatalf("expected explicit redirect refusal, got %v", err)
+	}
+	if redirected.Load() != 0 {
+		t.Fatal("redirect target received a signed request")
 	}
 }
 
