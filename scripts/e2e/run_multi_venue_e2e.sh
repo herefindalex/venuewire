@@ -70,10 +70,11 @@ jq -e '.allHealthy == true and (.results | length == 2)' "$e2e_tmp/portfolio.jso
 echo "E2E: local and gated live FIX commands"
 "$binary" --venue bybit fix mock-demo >"$e2e_tmp/bybit-fix-mock.json"
 jq -e '(.orders | length) > 0' "$e2e_tmp/bybit-fix-mock.json" >/dev/null
-set +e
-timeout 1s "$binary" --venue bybit fix mock-server --listen 127.0.0.1:19001 >"$e2e_tmp/bybit-fix-server.log" 2>&1
-fix_server_code=$?
-set -e
+if timeout 1s "$binary" --venue bybit fix mock-server --listen 127.0.0.1:19001 >"$e2e_tmp/bybit-fix-server.log" 2>&1; then
+  fix_server_code=0
+else
+  fix_server_code=$?
+fi
 [[ $fix_server_code == 124 ]]
 "$binary" --venue deribit fix mock-demo >"$e2e_tmp/deribit-fix-mock.json"
 jq -e '.validationLevel == "LOCAL_TESTED" and .mockFinalOrderStatus == "4" and (.tradingWritePerformed == false)' "$e2e_tmp/deribit-fix-mock.json" >/dev/null
@@ -106,15 +107,17 @@ bybit_bid=$(jq -er '.[0].bid1Price' "$e2e_tmp/bybit-ticker.json")
 bybit_passive_price=$(awk -v p="$bybit_bid" -v t="$bybit_tick" 'BEGIN { printf "%.8f", int((p*0.99)/t)*t }')
 bybit_amend_price=$(awk -v p="$bybit_bid" -v t="$bybit_tick" 'BEGIN { printf "%.8f", int((p*0.995)/t)*t }')
 
-set +e
-timeout 5s "$binary" --venue bybit market trades --symbol ETHUSDT >"$e2e_tmp/bybit-trades-stream.jsonl" 2>&1
-stream_code=$?
-set -e
+if timeout 5s "$binary" --venue bybit market trades --symbol ETHUSDT >"$e2e_tmp/bybit-trades-stream.jsonl" 2>&1; then
+  stream_code=0
+else
+  stream_code=$?
+fi
 [[ $stream_code == 0 || $stream_code == 124 ]] && [[ -s $e2e_tmp/bybit-trades-stream.jsonl ]]
-set +e
-timeout 5s "$binary" --venue bybit market orderbook --symbol ETHUSDT --depth 50 >"$e2e_tmp/bybit-book-stream.jsonl" 2>&1
-stream_code=$?
-set -e
+if timeout 5s "$binary" --venue bybit market orderbook --symbol ETHUSDT --depth 50 >"$e2e_tmp/bybit-book-stream.jsonl" 2>&1; then
+  stream_code=0
+else
+  stream_code=$?
+fi
 [[ $stream_code == 0 || $stream_code == 124 ]] && [[ -s $e2e_tmp/bybit-book-stream.jsonl ]]
 timeout 35s "$binary" --venue bybit private-stream --symbol ETHUSDT >"$e2e_tmp/bybit-private.jsonl" 2>&1 &
 bybit_private_pid=$!
