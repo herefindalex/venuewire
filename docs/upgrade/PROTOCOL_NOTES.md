@@ -19,3 +19,9 @@ A successful write response is only an acknowledgement. HTTP mutations must be c
 Requests use monotonic IDs and require matching `jsonrpc=2.0` response IDs. JSON-RPC errors remain typed even when HTTP status is non-200, while server error data is discarded because it may echo sensitive request material. Client-credentials tokens are cached under a mutex and refreshed with a safety margin; only explicitly read-only `private/get_*` calls retry once after an auth error.
 
 The CLI `account balances --currency all` uses the account-scoped `private/get_account_summaries` method. It must not enumerate `public/get_currencies`, because that catalog contains currencies that may not be valid account-summary scopes.
+
+## Deribit WebSocket
+
+Public unauthenticated subscriptions default to `.100ms`. Testnet returned `13778 raw_subscriptions_not_available_for_unauthorized` for `.raw`; reconnect diagnostics retain that typed cause rather than reporting a successful empty smoke test. The session negotiates heartbeat, answers `test_request` with `public/test`, uses bounded queues, and treats overflow as a connection-recovery condition.
+
+Subscription data is rejected before the subscribe acknowledgement. Every ready generation invokes the recovery callback. Book duplicates are idempotent; a `prev_change_id` gap marks the book stale, and deltas remain blocked until a new snapshot.

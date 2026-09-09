@@ -7,7 +7,7 @@ Specification: `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md`
 | 0 — Baseline audit and safety scaffold | Complete | `docs/upgrade/BASELINE_AUDIT.md`; 115 tests pass normally and with `-race`; vet/build pass |
 | 1 — Venue model, configuration, and migration | Complete | Compound identity/collision tests; exact Deribit Testnet guards; nonzero risk validation; explicit dry-run/backup/restore v1→v2 migration; 138 tests pass |
 | 2 — Deribit JSON-RPC, auth, metadata, and account reads | Complete | Strict envelope/ID and typed-error tests; synchronized token refresh; metadata/account/position CLI; 14 account currencies confirmed on Testnet |
-| 3 — Deribit public/private WS, book, and heartbeat | Not started | — |
+| 3 — Deribit public/private WS, book, and heartbeat | Complete | 153 normal/race tests; reconnect/resubscribe, recovery callback, bounded queues, book gaps; live public events, private ready, and heartbeat test response |
 | 4 — HTTP/WS plan→execute order lifecycle | Not started | — |
 | 5 — Intent persistence, recovery, pagination, and reconciliation | Not started | — |
 | 6 — Multi-venue routing, read aggregation, and CLI E2E | Not started | — |

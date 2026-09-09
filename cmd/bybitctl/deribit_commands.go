@@ -117,9 +117,57 @@ func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string
 			return true, err
 		}
 		return true, encoder.Encode(result)
+	case "public-stream", "private-stream":
+		flags := flag.NewFlagSet("venue deribit "+args[2], flag.ContinueOnError)
+		flags.SetOutput(io.Discard)
+		defaultChannels := "trades.BTC-PERPETUAL.100ms,book.BTC-PERPETUAL.100ms"
+		private := args[2] == "private-stream"
+		if private {
+			defaultChannels = "user.changes.any.any.raw"
+		}
+		channelsRaw := flags.String("channels", defaultChannels, "comma-separated channels")
+		duration := flags.Duration("duration", 30*time.Second, "bounded stream duration")
+		if err := flags.Parse(args[3:]); err != nil {
+			return true, err
+		}
+		if flags.NArg() != 0 || *duration <= 0 {
+			return true, errors.New("stream requires a positive duration and no positional arguments")
+		}
+		channels, err := splitNonempty(*channelsRaw)
+		if err != nil {
+			return true, err
+		}
+		stream, err := deribit.NewWSClient(client, deribit.WSConfig{URL: cfg.Deribit.WSURL, Channels: channels, Private: private})
+		if err != nil {
+			return true, err
+		}
+		streamCtx, cancel := context.WithTimeout(ctx, *duration)
+		defer cancel()
+		err = stream.Run(streamCtx, func(_ context.Context, event deribit.WSNotification) error { return encoder.Encode(event) })
+		if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+			return true, err
+		}
+		metrics := stream.Metrics()
+		if (!private && metrics.Notifications == 0) || (private && metrics.Ready == 0) {
+			return true, fmt.Errorf("stream ended without notifications: %s", metrics.LastError)
+		}
+		return true, encoder.Encode(map[string]any{"complete": true, "metrics": metrics})
 	default:
 		return true, fmt.Errorf("unknown Deribit command %q", args[2])
 	}
+}
+
+func splitNonempty(raw string) ([]string, error) {
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return nil, errors.New("list contains an empty value")
+		}
+		result = append(result, part)
+	}
+	return result, nil
 }
 
 func deribitCurrencies(ctx context.Context, client *deribit.Client, requested string) ([]string, error) {

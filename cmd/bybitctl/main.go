@@ -28,6 +28,8 @@ Deribit Testnet JSON-RPC:
   bybitctl venue deribit instruments [--currency BTC] [--kind future]
   bybitctl venue deribit account balances [--currency all|BTC,ETH]
   bybitctl venue deribit positions [--currency BTC] [--kind future]
+  bybitctl venue deribit public-stream [--channels trades.BTC-PERPETUAL.100ms,book.BTC-PERPETUAL.100ms] [--duration 30s]
+  bybitctl venue deribit private-stream [--channels user.changes.any.any.raw] [--duration 30s]
 
 Market WebSocket:
   bybitctl market trades [--symbol BTCUSDT]
@@ -189,5 +191,5 @@ func isDeribitCommand(args []string) bool {
 }
 
 func isDeribitAuthenticatedCommand(args []string) bool {
-	return len(args) >= 3 && isDeribitCommand(args) && (args[2] == "account" || args[2] == "positions")
+	return len(args) >= 3 && isDeribitCommand(args) && (args[2] == "account" || args[2] == "positions" || args[2] == "private-stream")
 }
