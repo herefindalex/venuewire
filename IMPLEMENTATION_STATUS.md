@@ -11,7 +11,7 @@ Specification: `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md`
 | 4 — HTTP/WS plan→execute order lifecycle | Complete | Persisted 30s plans, metadata/risk revalidation, cross-process claim, HTTP+WS writes, private WS event correlation, independent HTTP verification, minimum-size live cancellations |
 | 5 — Intent persistence, recovery, pagination, and reconciliation | Complete | Durable intent states/cursors; zero/one/multiple label recovery; fee/trade-ID dedupe; bounded pagination; startup/private-ready/manual reconciliation; live idempotence |
 | 6 — Multi-venue routing, read aggregation, and CLI E2E | Complete (non-FIX) | Shared `--venue` routing, failure-isolated status/portfolio, metadata-minimum HTTP/WS lifecycles, canonical fee checks, private events, reduce-only zero-position cleanup |
-| 7 — Failure isolation, observability, and shutdown | Not started | — |
+| 7 — Failure isolation, observability, and shutdown | Complete | Per-account bounded RPC slots, safe read cooldown, metadata cache, WS metrics/causes, failure-isolated aggregation, signal-bounded stream shutdown, durable in-flight intents |
 | 8 — Deribit FIX codec/auth/session | Not started | — |
 | 9 — Deribit FIX orders and JSON reconciliation | Not started | — |
 | 10 — Final documentation and validation | Not started | — |

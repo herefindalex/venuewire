@@ -35,6 +35,14 @@ type Client struct {
 	token          string
 	tokenExpiresAt time.Time
 	orderWSDial    WSDialFunc
+	requestSlots   chan struct{}
+	metadataMu     sync.Mutex
+	metadata       map[string]cachedInstrument
+}
+
+type cachedInstrument struct {
+	Value     Instrument
+	ExpiresAt time.Time
 }
 
 type envelope struct {
@@ -59,12 +67,16 @@ func NewClient(baseURL, key, secret string, httpClient *http.Client) (*Client, e
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 10 * time.Second}
 	}
-	c := &Client{baseURL: strings.TrimRight(baseURL, "/"), key: key, secret: secret, http: httpClient, now: time.Now}
+	c := &Client{baseURL: strings.TrimRight(baseURL, "/"), key: key, secret: secret, http: httpClient, now: time.Now, requestSlots: make(chan struct{}, 8), metadata: map[string]cachedInstrument{}}
 	c.nextID.Store(0)
 	return c, nil
 }
 
 func (c *Client) call(ctx context.Context, method string, params any, token string, result any) error {
+	if err := c.acquire(ctx); err != nil {
+		return err
+	}
+	defer c.release()
 	id := c.nextID.Add(1)
 	body, err := json.Marshal(request{JSONRPC: "2.0", ID: id, Method: method, Params: params})
 	if err != nil {
@@ -122,6 +134,19 @@ func (c *Client) call(ctx context.Context, method string, params any, token stri
 	}
 	return nil
 }
+
+func (c *Client) acquire(ctx context.Context) error {
+	if c.requestSlots == nil {
+		c.requestSlots = make(chan struct{}, 8)
+	}
+	select {
+	case c.requestSlots <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func (c *Client) release() { <-c.requestSlots }
 
 func (c *Client) Public(ctx context.Context, method string, params any, result any) error {
 	if !strings.HasPrefix(method, "public/") {

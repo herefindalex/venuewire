@@ -257,3 +257,35 @@ func TestTradesByOrderAcceptsDirectArray(t *testing.T) {
 		t.Fatalf("trades=%+v", trades)
 	}
 }
+
+func TestInstrumentMetadataIsCached(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+		var got capturedRequest
+		_ = json.NewDecoder(req.Body).Decode(&got)
+		calls.Add(1)
+		respond(t, writer, got.ID, map[string]any{"instrument_name": "BTC-PERPETUAL", "kind": "future", "is_active": true, "tick_size": 0.5, "min_trade_amount": 10}, nil)
+	}))
+	defer server.Close()
+	client, _ := NewClient(server.URL, "", "", server.Client())
+	for range 2 {
+		instrument, err := client.Instrument(context.Background(), "BTC-PERPETUAL")
+		if err != nil || instrument.InstrumentName != "BTC-PERPETUAL" {
+			t.Fatalf("instrument=%+v err=%v", instrument, err)
+		}
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("metadata calls=%d", calls.Load())
+	}
+}
+
+func TestRequestLimiterHonorsContextCancellation(t *testing.T) {
+	client, _ := NewClient("https://test.deribit.com/api/v2", "", "", nil)
+	client.requestSlots = make(chan struct{}, 1)
+	client.requestSlots <- struct{}{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := client.ServerTime(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err=%v", err)
+	}
+}

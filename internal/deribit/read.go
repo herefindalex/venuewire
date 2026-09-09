@@ -3,6 +3,7 @@ package deribit
 import (
 	"context"
 	"encoding/json"
+	"time"
 )
 
 type Instrument struct {
@@ -67,8 +68,24 @@ func (c *Client) Instruments(ctx context.Context, currency, kind string, expired
 }
 
 func (c *Client) Instrument(ctx context.Context, name string) (Instrument, error) {
+	c.metadataMu.Lock()
+	cached, ok := c.metadata[name]
+	now := c.now()
+	if ok && now.Before(cached.ExpiresAt) {
+		c.metadataMu.Unlock()
+		return cached.Value, nil
+	}
+	c.metadataMu.Unlock()
 	var result Instrument
 	err := c.Public(ctx, "public/get_instrument", map[string]string{"instrument_name": name}, &result)
+	if err == nil {
+		c.metadataMu.Lock()
+		if c.metadata == nil {
+			c.metadata = map[string]cachedInstrument{}
+		}
+		c.metadata[name] = cachedInstrument{Value: result, ExpiresAt: now.Add(5 * time.Minute)}
+		c.metadataMu.Unlock()
+	}
 	return result, err
 }
 

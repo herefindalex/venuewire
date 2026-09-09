@@ -41,3 +41,9 @@ Trade pages sort by `(timestamp, trade_id)`, deliberately overlap the cursor tim
 ## Shared CLI and E2E
 
 `--venue bybit` routes to the preserved commands; `--venue deribit` selects the JSON-RPC connector; `--venue all status|portfolio` returns per-venue results without merging native currencies or hiding a failed venue. The E2E runner requires the global write gate plus both venue read/trading gates. It derives quantities and prices from current metadata/tickers and fails unless separate reads, private-event correlation, canonical fee totals, and zero-position cleanup all agree.
+
+## Operational limits and shutdown
+
+Each Deribit account client bounds concurrent RPC activity. Read-only calls apply a capped cooldown for code `10028`; writes are never retried. Instrument metadata is cached for five minutes, while every plan records metadata/price timestamps and execution still rechecks within its short TTL. WebSocket metrics expose ready generations, reconnects, queue depth, test requests, and sanitized last cause.
+
+Signals cancel root contexts, close sockets, stop new calls, and leave claimed writes durably marked `Executing`/`OutcomeUnknown` for startup recovery. `--venue all` retains each venue result and error separately, so one failure does not falsify the other venue's health.

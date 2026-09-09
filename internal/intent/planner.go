@@ -147,6 +147,7 @@ func (p *Planner) validate(ctx context.Context, request Request) (Plan, error) {
 		return Plan{}, errors.New("risk limits and TTL must be positive")
 	}
 	instrument, err := p.Market.Instrument(ctx, request.Instrument)
+	metadataAt := p.now().UTC()
 	if err != nil {
 		return Plan{}, err
 	}
@@ -193,6 +194,7 @@ func (p *Planner) validate(ctx context.Context, request Request) (Plan, error) {
 		return Plan{}, errors.New("transport must be http or ws")
 	}
 	ticker, err := p.Market.Ticker(ctx, request.Instrument)
+	priceAt := p.now().UTC()
 	if err != nil {
 		return Plan{}, err
 	}
@@ -260,7 +262,7 @@ func (p *Planner) validate(ctx context.Context, request Request) (Plan, error) {
 	if aggregate.Cmp(maxAggregate) > 0 {
 		return Plan{}, errors.New("aggregate open USD risk limit exceeded")
 	}
-	return Plan{Venue: "deribit", Environment: "testnet", AccountAlias: p.AccountAlias, Instrument: request.Instrument, SettlementCurrency: instrument.SettlementCurrency, Side: side, OrderType: orderType, Transport: transport, Amount: request.Amount, AmountUnit: "USD_notional", Price: priceText, TimeInForce: request.TimeInForce, PostOnly: request.PostOnly, ReduceOnly: request.ReduceOnly, MarkPrice: ticker.MarkPrice.String(), OpenOrderCount: openCount, AggregateOpenUSD: aggregate.FloatString(8)}, nil
+	return Plan{Venue: "deribit", Environment: "testnet", AccountAlias: p.AccountAlias, Instrument: request.Instrument, SettlementCurrency: instrument.SettlementCurrency, Side: side, OrderType: orderType, Transport: transport, Amount: request.Amount, AmountUnit: "USD_notional", Price: priceText, TimeInForce: request.TimeInForce, PostOnly: request.PostOnly, ReduceOnly: request.ReduceOnly, MarkPrice: ticker.MarkPrice.String(), ValidTick: instrument.TickSize.String(), EstimatedNotionalUSD: request.Amount, MetadataAt: metadataAt, PriceAt: priceAt, CODProtected: false, OpenOrderCount: openCount, AggregateOpenUSD: aggregate.FloatString(8)}, nil
 }
 
 func (p *Planner) now() time.Time {

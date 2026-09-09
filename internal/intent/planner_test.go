@@ -60,6 +60,9 @@ func TestPlanExecuteRequiresConfirmationAndIndependentRead(t *testing.T) {
 	if plan.AmountUnit != "USD_notional" || plan.Status != StatusPlanned {
 		t.Fatalf("plan=%+v", plan)
 	}
+	if plan.ValidTick != "0.5" || plan.EstimatedNotionalUSD != "10" || plan.MetadataAt.IsZero() || plan.PriceAt.IsZero() || plan.CODProtected {
+		t.Fatalf("incomplete plan evidence: %+v", plan)
+	}
 	if _, err := planner.Execute(ctx, plan.ID, false); err == nil {
 		t.Fatal("execution without confirm accepted")
 	}

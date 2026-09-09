@@ -26,6 +26,10 @@ func (c *Client) PlaceWS(ctx context.Context, wsURL, side string, params PlacePa
 	if err != nil {
 		return OrderResult{}, err
 	}
+	if err := c.acquire(ctx); err != nil {
+		return OrderResult{}, err
+	}
+	defer c.release()
 	dial := c.orderWSDial
 	if dial == nil {
 		dial = func(ctx context.Context, rawURL string) (WSConnection, error) {
