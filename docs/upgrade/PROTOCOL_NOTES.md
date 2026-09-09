@@ -13,3 +13,9 @@ Deribit endpoints are exact allowlisted values: `https://test.deribit.com/api/v2
 Read tests use venue-specific `RUN_<VENUE>_READ_TESTS=1`. Every write requires both `RUN_MULTI_VENUE_E2E=1` and `RUN_<VENUE>_TRADING_TESTS=1`; FIX has a separate venue-specific gate. The removed legacy Bybit integration flags are not aliases.
 
 A successful write response is only an acknowledgement. HTTP mutations must be checked through private events and an independent read API; WS/FIX mutations must be checked through canonical HTTP JSON-RPC/REST reads. Fees and execution totals come from trade history, and cleanup must independently prove the position is zero. Missing or ambiguous evidence is failure, `OutcomeUnknown`, or `NeedsReview`.
+
+## Deribit HTTP JSON-RPC
+
+Requests use monotonic IDs and require matching `jsonrpc=2.0` response IDs. JSON-RPC errors remain typed even when HTTP status is non-200, while server error data is discarded because it may echo sensitive request material. Client-credentials tokens are cached under a mutex and refreshed with a safety margin; only explicitly read-only `private/get_*` calls retry once after an auth error.
+
+The CLI `account balances --currency all` uses the account-scoped `private/get_account_summaries` method. It must not enumerate `public/get_currencies`, because that catalog contains currencies that may not be valid account-summary scopes.

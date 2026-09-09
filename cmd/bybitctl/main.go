@@ -22,6 +22,13 @@ Public REST:
   bybitctl time
   bybitctl instrument [--category linear] [--symbol BTCUSDT]
 
+Deribit Testnet JSON-RPC:
+  bybitctl venue deribit time
+  bybitctl venue deribit instrument --name BTC-PERPETUAL
+  bybitctl venue deribit instruments [--currency BTC] [--kind future]
+  bybitctl venue deribit account balances [--currency all|BTC,ETH]
+  bybitctl venue deribit positions [--currency BTC] [--kind future]
+
 Market WebSocket:
   bybitctl market trades [--symbol BTCUSDT]
   bybitctl market orderbook [--symbol BTCUSDT] [--depth 50]
@@ -66,7 +73,7 @@ func run(args []string) int {
 
 func runContext(ctx context.Context, args []string) int {
 	cfg := config.Load()
-	logger := observability.NewJSON(os.Stderr, cfg.APISecret)
+	logger := observability.NewJSON(os.Stderr, cfg.APISecret, cfg.Deribit.APISecret)
 
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprintln(os.Stdout, usage)
@@ -76,6 +83,22 @@ func runContext(ctx context.Context, args []string) int {
 	if err := cfg.ValidateTestnet(); err != nil {
 		logger.Error("configuration rejected", slog.String("error", err.Error()))
 		return 2
+	}
+	if isDeribitCommand(args) {
+		if !cfg.Deribit.Enabled {
+			logger.Error("Deribit command refused", slog.String("error", "DERIBIT_ENABLED must be true"))
+			return 2
+		}
+		if err := cfg.Deribit.ValidateTestnet(); err != nil {
+			logger.Error("Deribit configuration rejected", slog.String("error", err.Error()))
+			return 2
+		}
+		if isDeribitAuthenticatedCommand(args) {
+			if err := cfg.Deribit.RequireCredentials(); err != nil {
+				logger.Error("Deribit authenticated command refused", slog.String("error", err.Error()))
+				return 2
+			}
+		}
 	}
 
 	if isRESTAuthenticatedCommand(args) {
@@ -94,6 +117,13 @@ func runContext(ctx context.Context, args []string) int {
 	if handled, err := executeRESTCommand(ctx, cfg, logger, args, os.Stdout); handled {
 		if err != nil {
 			logger.Error("command failed", slog.String("error", err.Error()))
+			return 1
+		}
+		return 0
+	}
+	if handled, err := executeDeribitCommand(ctx, cfg, args, os.Stdout); handled {
+		if err != nil {
+			logger.Error("Deribit command failed", slog.String("error", err.Error()))
 			return 1
 		}
 		return 0
@@ -152,4 +182,12 @@ func isRESTAuthenticatedCommand(args []string) bool {
 
 func isFIXAuthenticatedCommand(args []string) bool {
 	return len(args) >= 2 && args[0] == "fix" && args[1] == "connect-testnet"
+}
+
+func isDeribitCommand(args []string) bool {
+	return len(args) >= 2 && args[0] == "venue" && args[1] == "deribit"
+}
+
+func isDeribitAuthenticatedCommand(args []string) bool {
+	return len(args) >= 3 && isDeribitCommand(args) && (args[2] == "account" || args[2] == "positions")
 }
