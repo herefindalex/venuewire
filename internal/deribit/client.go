@@ -67,6 +67,11 @@ func NewClient(baseURL, key, secret string, httpClient *http.Client) (*Client, e
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 10 * time.Second}
 	}
+	httpClientCopy := *httpClient
+	httpClientCopy.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return errors.New("Deribit HTTP redirects are disabled")
+	}
+	httpClient = &httpClientCopy
 	c := &Client{baseURL: strings.TrimRight(baseURL, "/"), key: key, secret: secret, http: httpClient, now: time.Now, requestSlots: make(chan struct{}, 8), metadata: map[string]cachedInstrument{}}
 	c.nextID.Store(0)
 	return c, nil

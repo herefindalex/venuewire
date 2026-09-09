@@ -63,6 +63,32 @@ func TestPublicCallValidatesEnvelopeAndUsesMonotonicIDs(t *testing.T) {
 	}
 }
 
+func TestClientRejectsRedirectWithoutForwardingCredentials(t *testing.T) {
+	var redirected atomic.Int64
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/capture" {
+			redirected.Add(1)
+			respond(t, writer, 1, true, nil)
+			return
+		}
+		http.Redirect(writer, req, "/capture", http.StatusTemporaryRedirect)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL+"/api/v2", "", "", server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result bool
+	err = client.call(context.Background(), "public/test", nil, "fixture-sensitive-token", &result)
+	if err == nil || !strings.Contains(err.Error(), "redirects are disabled") {
+		t.Fatalf("expected explicit redirect refusal, got %v", err)
+	}
+	if redirected.Load() != 0 {
+		t.Fatal("redirect target received an authenticated request")
+	}
+}
+
 func TestRPCBusinessAndMalformedErrorsAreTypedAndSanitized(t *testing.T) {
 	secret := "do-not-leak-this-secret"
 	for _, tc := range []struct {
