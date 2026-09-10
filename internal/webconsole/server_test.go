@@ -19,6 +19,7 @@ import (
 	"venuewire/internal/domain"
 	"venuewire/internal/intent"
 	"venuewire/internal/quicktrade"
+	"venuewire/internal/runtimeevent"
 )
 
 func TestAuthenticationSessionCSRFAndLogout(t *testing.T) {
@@ -192,6 +193,26 @@ func TestBrowserWebSocketRequiresSessionAndClosesOnLogout(t *testing.T) {
 	if err := conn.ReadJSON(&ready); err != nil || ready["type"] != "session.ready" {
 		t.Fatalf("ready event = %#v err=%v", ready, err)
 	}
+	var snapshot map[string]any
+	if err := conn.ReadJSON(&snapshot); err != nil || snapshot["type"] != "snapshot" || snapshot["seq"] != float64(1) {
+		t.Fatalf("snapshot event = %#v err=%v", snapshot, err)
+	}
+	if snapshot["instanceId"] == "" || snapshot["instanceId"] != ready["instanceId"] {
+		t.Fatalf("snapshot instance = %#v, ready instance = %#v", snapshot["instanceId"], ready["instanceId"])
+	}
+
+	server.events.Publish(runtimeevent.Event{Type: "venue.health.updated", Venue: domain.VenueBybit, At: time.Now()})
+	var update map[string]any
+	if err := conn.ReadJSON(&update); err != nil || update["type"] != "venue.health.updated" || update["seq"] != float64(2) {
+		t.Fatalf("runtime event = %#v err=%v", update, err)
+	}
+	if err := conn.WriteJSON(map[string]any{"type": "resync"}); err != nil {
+		t.Fatal(err)
+	}
+	var resnapshot map[string]any
+	if err := conn.ReadJSON(&resnapshot); err != nil || resnapshot["type"] != "snapshot" || resnapshot["seq"] != float64(3) {
+		t.Fatalf("resync snapshot = %#v err=%v", resnapshot, err)
+	}
 
 	logout := performRequest(server, http.MethodPost, "/api/auth/logout", "", cookie, loginBody.CSRFToken)
 	if logout.Code != http.StatusNoContent {
@@ -200,6 +221,24 @@ func TestBrowserWebSocketRequiresSessionAndClosesOnLogout(t *testing.T) {
 	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatal("WebSocket remained open after logout")
+	}
+}
+
+func TestBrowserWebSocketGlobalConnectionLimit(t *testing.T) {
+	store := &sessionStore{
+		sessions:      map[string]*session{"session": {ID: "session", conns: make(map[*websocket.Conn]struct{})}},
+		maxTotalConns: 2,
+	}
+	first, second, third := &websocket.Conn{}, &websocket.Conn{}, &websocket.Conn{}
+	if !store.addConn("session", first, 5) || !store.addConn("session", second, 5) {
+		t.Fatal("connections within the global limit were rejected")
+	}
+	if store.addConn("session", third, 5) {
+		t.Fatal("connection over the global limit was accepted")
+	}
+	store.removeConn("session", first)
+	if !store.addConn("session", third, 5) {
+		t.Fatal("connection was not accepted after capacity was released")
 	}
 }
 

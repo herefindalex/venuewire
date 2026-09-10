@@ -47,6 +47,7 @@ type Stats struct {
 
 type Client struct {
 	config        Config
+	connected     atomic.Bool
 	reconnects    atomic.Uint64
 	messages      atomic.Uint64
 	dropped       atomic.Uint64
@@ -89,6 +90,8 @@ func (c *Client) Stats() Stats {
 	return Stats{Reconnects: c.reconnects.Load(), Messages: c.messages.Load(), Dropped: c.dropped.Load(), DecodeErrors: c.decodeErrors.Load(), Subscriptions: c.subscriptions.Load()}
 }
 
+func (c *Client) Connected() bool { return c.connected.Load() }
+
 func (c *Client) Run(ctx context.Context, sink Sink) error {
 	if sink == nil {
 		return errors.New("WebSocket sink is nil")
@@ -130,6 +133,8 @@ func (c *Client) Run(ctx context.Context, sink Sink) error {
 }
 
 func (c *Client) serve(parent context.Context, conn Connection, sink Sink) error {
+	c.connected.Store(true)
+	defer c.connected.Store(false)
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	defer conn.Close()

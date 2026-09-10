@@ -81,6 +81,9 @@ func TestContextCancellationClosesConnection(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- client.Run(ctx, func(context.Context, Event) error { return nil }) }()
 	waitFor(t, func() bool { return len(connection.subscriptions()) == 1 })
+	if !client.Connected() {
+		t.Fatal("Connected() = false while connection is serving")
+	}
 	cancel()
 	select {
 	case err := <-done:
@@ -92,6 +95,9 @@ func TestContextCancellationClosesConnection(t *testing.T) {
 	}
 	if !connection.isClosed() {
 		t.Fatal("connection was not closed")
+	}
+	if client.Connected() {
+		t.Fatal("Connected() = true after connection stopped")
 	}
 }
 

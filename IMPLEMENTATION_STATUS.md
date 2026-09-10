@@ -4,17 +4,17 @@ Last updated: 2026-09-10
 
 The archived Bybit-only phase history remains in `docs/1_bybit/IMPLEMENTATION_STATUS.md`. This file tracks the incremental Bybit + Deribit upgrade defined by `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md`.
 
-## V3 / V3.1 pre-implementation status
+## V3 / V3.1 implementation status
 
-The V2 phase history below remains historical evidence. V3/V3.1 runtime implementation has not started.
+The V2 phase history below remains historical evidence. V3/V3.1 implementation is active; completed local phases and remaining external verification are recorded below.
 
 | Work | Status | Evidence |
 |---|---|---|
 | V3 Phase 0 baseline inspection | Complete; baseline failure recorded | `docs/v3/BASELINE_AUDIT.md`: 238 pass, 1 security-example failure, 2 skipped; same failure under race detector |
 | V3.1 gap analysis and product decisions | Documented | `docs/v3/V3_1_GAP_ANALYSIS.md`; `docs/3_web/VENUEWIRE_V3_1_PUBLIC_DEMO_SUPPLEMENT.md` section 26 |
-| Canonical configuration examples | Updated specification only | V3 names, `QUOTE_TTL=5s`, V3.1 Demo caps, existing Deribit credential names and VenueWire commands |
-| Web / Spot / Demo hardening | Not implemented | Auth, frontend, browser intents/quotas, Spot validation and UI observability remain pending |
-| V3/V3.1 frontend and external validation | Not run | No frontend exists yet; no new Testnet orders or deployment operations performed |
+| Canonical configuration examples | Implemented and documented | V3 names, `QUOTE_TTL=5s`, V3.1 Demo caps, existing Deribit credential names and VenueWire commands |
+| Web / Spot / Demo hardening | In progress | Auth, frontend, durable browser intents/quotas, Spot adapters, reconciliation and runtime WS delivery are locally verified; valuation and final failure fixtures remain |
+| V3/V3.1 frontend and external validation | Local checks pass; external not run | Vue typecheck/tests/build pass; no new Testnet orders or deployment operations performed |
 
 ### V3.1 Phase A — configuration and public Web boundary
 
@@ -116,6 +116,28 @@ Status: `LOCAL_VERIFIED`; private WebSocket event fusion remains pending, but ev
 | `go vet ./...` | PASS |
 | `go build -tags webui -o /tmp/venuewire-web-reconcile ./cmd/venuewire` | PASS |
 | External Testnet reconciliation/order operations | `NOT_RUN` |
+
+### V3.1 Phase C4 — exchange streams and Browser WebSocket state contract
+
+Status: `LOCAL_VERIFIED`; live valuation and the remaining observability/failure-fixture work continue in later phases.
+
+- Added one shared Bybit Spot public order-book stream, Bybit wallet/order/execution private streams, Deribit `ETH_BTC` public book and Deribit portfolio/order/trade private streams. Browser sessions do not create exchange connections.
+- Private reconnect and relevant private events trigger coalesced authoritative account refresh or trade reconciliation. They never submit or resubmit orders.
+- Added runtime-derived public/private stream state, event timestamps and independent reconnect counters. Initial connection, live, stale and reconnecting states are covered without treating TCP connected as data freshness.
+- Added a non-blocking ordered runtime broker. Slow subscribers receive `resync.required`; exchange event loops do not wait for Browser clients.
+- Browser WS registers before snapshot creation, sends a normalized initial `snapshot`, then continuous per-connection `seq` envelopes with stable process `instanceId`, `stateRevision`, venue and account alias. Bounded `subscribe`, `unsubscribe`, `resync` and `ping` controls never accept orders.
+- Browser clients detect sequence/instance discontinuity, request a new snapshot and reject older account revisions. Session expiration remains absolute; session logout closes its sockets. Limits are five sockets per session and 500 globally.
+- Bybit wallet events are decoded only as safe refresh triggers; raw private payloads and credentials are never forwarded to Browser clients.
+
+| Check | Result |
+|---|---|
+| `go test -race ./internal/runtimeevent ./internal/accountstate ./internal/ws ./internal/deribit ./internal/tradereconcile ./internal/webconsole ./cmd/venuewire` | PASS — targeted packages |
+| `go test ./...` | PASS — 362 tests, 23 packages |
+| `go vet ./...` | PASS |
+| `npm --prefix web run typecheck` | PASS |
+| `npm --prefix web test` | PASS — 3 tests |
+| `npm --prefix web run build` | PASS |
+| External Testnet WebSocket/order/deployment operations | `NOT_RUN` |
 
 ## Phase status
 

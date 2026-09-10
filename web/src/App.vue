@@ -28,7 +28,28 @@ const refreshingAccount = ref(false);
 const buildInfo = ref<Record<string, string>>({});
 let quoteTimer: number | undefined;
 let pollTimer: number | undefined;
+let eventRefreshTimer: number | undefined;
+let reconnectTimer: number | undefined;
 let socket: WebSocket | undefined;
+let socketGeneration = 0;
+let socketInstanceId = '';
+let socketSequence = 0;
+
+interface SocketEnvelope {
+  schemaVersion: number;
+  instanceId: string;
+  seq: number;
+  type: string;
+  venue?: 'bybit' | 'deribit';
+  stateRevision: number;
+  payload?: {
+    accounts?: Partial<Record<'bybit' | 'deribit', AccountView>>;
+    account?: AccountView;
+    trades?: TradeView[];
+    trade?: TradeView;
+    health?: VenueStatus[];
+  };
+}
 
 const routeOptions = computed(() => selectedVenue.value === 'bybit'
   ? [{ label: 'USDT → BTC', value: 'bybit-usdt-btc' }, { label: 'BTC → USDT', value: 'bybit-btc-usdt' }]
@@ -40,6 +61,10 @@ const selectedStatus = computed(() => statuses.value.find((item) => item.venue =
 function readableError(error: unknown) {
   if (error instanceof APIError) return error.requestId ? `${error.message} (${error.requestId})` : error.message;
   return 'The request could not be completed.';
+}
+
+function acceptAccount(nextAccount: AccountView) {
+  if (!account.value || nextAccount.revision >= account.value.revision) account.value = nextAccount;
 }
 
 async function signIn() {
@@ -59,6 +84,8 @@ async function signIn() {
 
 async function logout() {
   try { await api.logout(); } catch { /* local state still clears */ }
+  socketGeneration++;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   socket?.close();
   session.value = undefined;
   venues.value = [];
@@ -84,7 +111,7 @@ async function bootstrap() {
 
 async function refreshAll() {
   const results = await Promise.allSettled([api.account(selectedVenue.value), api.status(), api.trades()]);
-  if (results[0].status === 'fulfilled') account.value = results[0].value.account;
+  if (results[0].status === 'fulfilled') acceptAccount(results[0].value.account);
   if (results[1].status === 'fulfilled') {
     statuses.value = results[1].value.venues;
     buildInfo.value = results[1].value.build;
@@ -95,7 +122,8 @@ async function refreshAll() {
 async function refreshAccount() {
   refreshingAccount.value = true;
   try {
-    account.value = (await api.refreshAccount(selectedVenue.value)).account;
+    const refreshed = (await api.refreshAccount(selectedVenue.value)).account;
+    acceptAccount(refreshed);
     const runtime = await api.status();
     statuses.value = runtime.venues;
     buildInfo.value = runtime.build;
@@ -107,11 +135,62 @@ async function refreshAccount() {
 }
 
 function connectSocket() {
+  const generation = ++socketGeneration;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   socket?.close();
-  socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/ws`);
-  socket.onmessage = () => void refreshAll();
-  socket.onclose = () => {
-    if (session.value) window.setTimeout(connectSocket, 2000);
+  const nextSocket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/ws`);
+  socket = nextSocket;
+  socketInstanceId = '';
+  socketSequence = 0;
+  nextSocket.onmessage = (messageEvent) => {
+    let event: SocketEnvelope;
+    try {
+      event = JSON.parse(String(messageEvent.data)) as SocketEnvelope;
+    } catch {
+      nextSocket.send(JSON.stringify({ type: 'resync' }));
+      return;
+    }
+    if (event.schemaVersion !== 1 || !event.instanceId) {
+      nextSocket.send(JSON.stringify({ type: 'resync' }));
+      return;
+    }
+    if (event.type === 'session.ready') {
+      socketInstanceId = event.instanceId;
+      socketSequence = 0;
+      return;
+    }
+    if (event.type === 'snapshot') {
+      socketInstanceId = event.instanceId;
+      socketSequence = event.seq;
+      const nextAccount = event.payload?.accounts?.[selectedVenue.value];
+      if (nextAccount) acceptAccount(nextAccount);
+      if (event.payload?.trades) trades.value = event.payload.trades;
+      if (event.payload?.health) statuses.value = event.payload.health;
+      return;
+    }
+    if (event.instanceId !== socketInstanceId || event.seq !== socketSequence + 1) {
+      socketInstanceId = event.instanceId;
+      socketSequence = 0;
+      nextSocket.send(JSON.stringify({ type: 'resync' }));
+      return;
+    }
+    socketSequence = event.seq;
+    if (event.type === 'account.updated' && event.venue === selectedVenue.value && event.payload?.account) {
+      acceptAccount(event.payload.account);
+    } else if (event.type === 'trade.updated' && event.payload?.trade) {
+      trades.value = [event.payload.trade, ...trades.value.filter((trade) => trade.intentId !== event.payload?.trade?.intentId)].slice(0, 50);
+    } else if (event.type === 'venue.health.updated' && event.payload?.health) {
+      statuses.value = event.payload.health;
+    } else if (event.type === 'resync.required') {
+      nextSocket.send(JSON.stringify({ type: 'resync' }));
+    }
+    if (event.type === 'valuation.updated' || event.type === 'resync.required') {
+      if (eventRefreshTimer) clearTimeout(eventRefreshTimer);
+      eventRefreshTimer = window.setTimeout(() => void refreshAll(), 100);
+    }
+  };
+  nextSocket.onclose = () => {
+    if (session.value && generation === socketGeneration) reconnectTimer = window.setTimeout(connectSocket, 2000);
   };
 }
 
@@ -121,7 +200,7 @@ watch(selectedVenue, async (venue) => {
   account.value = undefined;
   if (session.value) {
     const response = await api.account(venue).catch(() => undefined);
-    account.value = response?.account;
+    if (response?.account) acceptAccount(response.account);
   }
 });
 
@@ -187,6 +266,9 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (quoteTimer) clearInterval(quoteTimer);
   if (pollTimer) clearInterval(pollTimer);
+  if (eventRefreshTimer) clearTimeout(eventRefreshTimer);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  socketGeneration++;
   socket?.close();
 });
 </script>

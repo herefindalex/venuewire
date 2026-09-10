@@ -14,6 +14,7 @@ import (
 	"venuewire/internal/intent"
 	"venuewire/internal/quicktrade"
 	"venuewire/internal/rest"
+	"venuewire/internal/runtimeevent"
 	"venuewire/internal/spotadapter"
 	"venuewire/internal/tradereconcile"
 	"venuewire/internal/webassets"
@@ -57,6 +58,10 @@ func executeWebCommand(ctx context.Context, cfg config.Config, logger *slog.Logg
 	if err != nil {
 		return true, fmt.Errorf("create account manager: %w", err)
 	}
+	events := runtimeevent.NewBroker()
+	accounts.OnEvent = func(eventType string, venue domain.Venue, at time.Time) {
+		events.Publish(runtimeevent.Event{Type: eventType, Venue: venue, At: at})
+	}
 	accountContext, stopAccounts := context.WithCancel(ctx)
 	defer stopAccounts()
 	go accounts.Run(accountContext)
@@ -94,12 +99,16 @@ func executeWebCommand(ctx context.Context, cfg config.Config, logger *slog.Logg
 		},
 	}
 	rechecker := &tradereconcile.Service{Store: tradeStore, Accounts: accounts}
+	rechecker.OnEvent = func(eventType string, venue domain.Venue, intentID string, at time.Time) {
+		events.Publish(runtimeevent.Event{Type: eventType, Venue: venue, IntentID: intentID, At: at})
+	}
 	if bybitClient != nil {
 		rechecker.Bybit = bybitClient
 	}
 	if deribitClient != nil {
 		rechecker.Deribit = deribitClient
 	}
+	runWebVenueStreams(accountContext, cfg, webConfig, accounts, rechecker, deribitClient, logger)
 	go runQuickTradeRecovery(accountContext, webConfig.AccountReconcileInterval, rechecker, logger)
 	logger.Info("web console starting", slog.String("listen", webConfig.ListenAddress()), slog.String("environment", "testnet"), slog.Bool("tradingEnabled", webConfig.TradingEnabled))
 	return true, webconsole.New(webConfig, cfg, logger,
@@ -107,6 +116,7 @@ func executeWebCommand(ctx context.Context, cfg config.Config, logger *slog.Logg
 		webconsole.WithAccountService(accounts),
 		webconsole.WithTradeApplication(tradeApplication),
 		webconsole.WithTradeRechecker(rechecker),
+		webconsole.WithEventBroker(events),
 	).ListenAndServe(ctx)
 }
 

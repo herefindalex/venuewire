@@ -99,3 +99,33 @@ func TestPrivateAuthenticationFailureNeverSubscribes(t *testing.T) {
 		t.Fatalf("writes = %d, want only auth", got)
 	}
 }
+
+func TestPrivateConnectedLifecycle(t *testing.T) {
+	connection := newFakeConnection()
+	connection.reads <- readResult{payload: []byte(`{"success":true,"ret_msg":"","op":"auth"}`)}
+	client := NewPrivateClient(PrivateConfig{
+		URL: "fixture", APIKey: "key", APISecret: "secret",
+		Topics:       []string{"wallet"},
+		Dial:         func(context.Context, string) (Connection, error) { return connection, nil },
+		PingInterval: time.Hour, StaleAfter: time.Hour,
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- client.Run(ctx, func(context.Context, PrivateEvent) error { return nil }) }()
+	waitFor(t, func() bool { return len(connection.subscriptions()) == 2 })
+	if !client.Connected() {
+		t.Fatal("Connected() = false while private connection is serving")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run did not terminate")
+	}
+	if client.Connected() {
+		t.Fatal("Connected() = true after private connection stopped")
+	}
+}

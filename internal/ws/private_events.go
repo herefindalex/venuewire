@@ -15,6 +15,7 @@ const (
 	PrivateOrder     PrivateEventKind = "order"
 	PrivateExecution PrivateEventKind = "execution"
 	PrivatePosition  PrivateEventKind = "position"
+	PrivateWallet    PrivateEventKind = "wallet"
 )
 
 type PrivateEvent struct {
@@ -43,6 +44,16 @@ func DecodePrivate(payload []byte, receivedAt time.Time) ([]PrivateEvent, error)
 	}
 	exchangeTime := time.UnixMilli(message.CreationTime).UTC()
 	switch {
+	case hasPrefix(message.Topic, "wallet"):
+		var rows []json.RawMessage
+		if err := json.Unmarshal(message.Data, &rows); err != nil {
+			return nil, fmt.Errorf("decode private wallet: %w", err)
+		}
+		events := make([]PrivateEvent, 0, len(rows))
+		for i := range rows {
+			events = append(events, PrivateEvent{Kind: PrivateWallet, EventID: fmt.Sprintf("%s:%d", message.ID, i), Topic: message.Topic, ExchangeTime: exchangeTime, ReceivedAt: receivedAt})
+		}
+		return events, nil
 	case hasPrefix(message.Topic, "order"):
 		var rows []struct {
 			Category    string `json:"category"`

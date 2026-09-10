@@ -38,6 +38,7 @@ type Service struct {
 	Bybit    BybitReader
 	Deribit  DeribitReader
 	Accounts AccountRefresher
+	OnEvent  func(string, domain.Venue, string, time.Time)
 }
 
 type resolution struct {
@@ -114,6 +115,9 @@ func (s *Service) RecheckTrade(ctx context.Context, intentID string, now time.Ti
 			balanceStatus = "STALE"
 		}
 		updated, err = s.Store.UpdateQuickTrade(ctx, intentID, intent.QuickTradeUpdate{BalanceSyncStatus: balanceStatus, Checked: true}, now)
+	}
+	if err == nil && s.OnEvent != nil {
+		s.OnEvent("trade.updated", domain.Venue(trade.Quote.Venue), intentID, now)
 	}
 	return updated, err
 }

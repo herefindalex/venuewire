@@ -12,6 +12,7 @@ import (
 	"venuewire/internal/domain"
 	"venuewire/internal/intent"
 	"venuewire/internal/quicktrade"
+	"venuewire/internal/runtimeevent"
 )
 
 type TradeApplication interface {
@@ -113,6 +114,7 @@ func (s *Server) handleConfirmTrade(w http.ResponseWriter, r *http.Request) {
 	if result.Created {
 		status = http.StatusAccepted
 	}
+	s.events.Publish(runtimeevent.Event{Type: "trade.updated", Venue: domain.Venue(result.Trade.Quote.Venue), IntentID: result.Trade.ID, At: s.now()})
 	writeJSON(w, status, map[string]any{"trade": toPublicTrade(result.Trade)})
 }
 

@@ -214,3 +214,57 @@ func TestNewManagerRejectsInvalidConfiguration(t *testing.T) {
 		})
 	}
 }
+
+func TestManagerStreamHealthPublishesOnlyChanges(t *testing.T) {
+	provider := &fakeProvider{venue: domain.VenueBybit}
+	manager, err := NewManager([]Provider{provider}, time.Second, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var events atomic.Int64
+	manager.OnEvent = func(eventType string, venue domain.Venue, _ time.Time) {
+		if eventType != "venue.health.updated" || venue != domain.VenueBybit {
+			t.Fatalf("event = (%q, %q)", eventType, venue)
+		}
+		events.Add(1)
+	}
+	eventAt := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+
+	manager.UpdatePublicWS(domain.VenueBybit, "LIVE", eventAt, 1)
+	manager.UpdatePublicWS(domain.VenueBybit, "LIVE", eventAt, 1)
+	manager.UpdatePublicWS(domain.VenueBybit, "LIVE", eventAt.Add(time.Second), 1)
+	manager.UpdatePrivateWS(domain.VenueBybit, "LIVE", eventAt, 2)
+	manager.UpdatePrivateWS(domain.VenueBybit, "LIVE", eventAt, 2)
+	manager.UpdatePrivateWS(domain.VenueBybit, "LIVE", eventAt.Add(time.Second), 2)
+	manager.UpdatePublicWS(domain.VenueBybit, "LIVE", eventAt.Add(-time.Second), 1)
+
+	if got := events.Load(); got != 2 {
+		t.Fatalf("published health events = %d, want 2", got)
+	}
+	health := manager.Health()[0]
+	if health.PublicWS != "LIVE" || health.PrivateWS != "LIVE" || health.Reconnects != 3 {
+		t.Fatalf("health = %+v", health)
+	}
+	if !health.MarketEventAt.Equal(eventAt.Add(time.Second)) || !health.LastEventAt.Equal(eventAt.Add(time.Second)) {
+		t.Fatalf("health event timestamps were not updated: %+v", health)
+	}
+}
+
+func TestManagerRefreshCallbackCanReadManager(t *testing.T) {
+	provider := &fakeProvider{venue: domain.VenueBybit, snapshot: Snapshot{SnapshotAsOf: time.Now().UTC()}}
+	manager, err := NewManager([]Provider{provider}, time.Second, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.OnEvent = func(string, domain.Venue, time.Time) { _ = manager.Health() }
+	done := make(chan error, 1)
+	go func() { done <- manager.Refresh(context.Background(), domain.VenueBybit) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Refresh deadlocked while publishing an event")
+	}
+}

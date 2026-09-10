@@ -50,3 +50,22 @@ func TestDecodePosition(t *testing.T) {
 		t.Fatalf("unexpected position: %+v", events)
 	}
 }
+
+func TestDecodeWalletEvent(t *testing.T) {
+	received := time.UnixMilli(1700000000300).UTC()
+	payload := []byte(`{"id":"wallet-1","topic":"wallet","creationTime":1700000000200,"data":[{"accountType":"UNIFIED","coin":[{"coin":"BTC","walletBalance":"0.1"}]}]}`)
+
+	events, err := DecodePrivate(payload, received)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("event count = %d, want 1", len(events))
+	}
+	if events[0].Kind != PrivateWallet || events[0].EventID != "wallet-1:0" || events[0].Topic != "wallet" {
+		t.Fatalf("wallet event = %+v", events[0])
+	}
+	if !events[0].ReceivedAt.Equal(received) || !events[0].ExchangeTime.Equal(time.UnixMilli(1700000000200).UTC()) {
+		t.Fatalf("wallet event timestamps = %+v", events[0])
+	}
+}

@@ -38,6 +38,7 @@ type PrivateConfig struct {
 
 type PrivateClient struct {
 	config       PrivateConfig
+	connected    atomic.Bool
 	reconnects   atomic.Uint64
 	messages     atomic.Uint64
 	queueDepth   atomic.Int64
@@ -144,6 +145,8 @@ func (c *PrivateClient) authenticate(conn Connection) error {
 }
 
 func (c *PrivateClient) serve(parent context.Context, conn Connection, sink PrivateSink) error {
+	c.connected.Store(true)
+	defer c.connected.Store(false)
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	defer conn.Close()
@@ -238,3 +241,5 @@ func (c *PrivateClient) serve(parent context.Context, conn Connection, sink Priv
 func (c *PrivateClient) Stats() (reconnects, messages uint64, queueDepth int64) {
 	return c.reconnects.Load(), c.messages.Load(), c.queueDepth.Load()
 }
+
+func (c *PrivateClient) Connected() bool { return c.connected.Load() }

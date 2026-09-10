@@ -148,6 +148,50 @@ func TestWSQueueOverflowFailsClosed(t *testing.T) {
 	}
 }
 
+func TestWSConnectedLifecycle(t *testing.T) {
+	conn := newFakeWS()
+	conn.reads <- fakeWSRead{payload: wsPayload(`{"jsonrpc":"2.0","id":2,"result":[]}`)}
+	client, err := NewWSClient(nil, WSConfig{
+		URL: "wss://test.deribit.com/ws/api/v2", Channels: []string{"book.ETH_BTC.none.50.100ms"},
+		Dial:         func(context.Context, string) (WSConnection, error) { return conn, nil },
+		ReconnectMin: time.Millisecond, ReconnectMax: time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- client.Run(ctx, func(context.Context, WSNotification) error { return nil }) }()
+	waitForWS(t, func() bool { return len(conn.methods()) >= 2 })
+	if !client.Connected() {
+		t.Fatal("Connected() = false while Deribit connection is serving")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run did not terminate")
+	}
+	if client.Connected() {
+		t.Fatal("Connected() = true after Deribit connection stopped")
+	}
+}
+
+func waitForWS(t *testing.T, condition func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("condition was not met before timeout")
+}
+
 func TestPrivateWSUsesTokenAndPrivateSubscribe(t *testing.T) {
 	conn := newFakeWS()
 	conn.reads <- fakeWSRead{payload: wsPayload(`{"jsonrpc":"2.0","id":2,"result":{"scope":"connection","enabled":false}}`)}

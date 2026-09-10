@@ -25,26 +25,29 @@ import (
 	"venuewire/internal/config"
 	"venuewire/internal/domain"
 	"venuewire/internal/intent"
+	"venuewire/internal/runtimeevent"
 )
 
 const sessionCookieName = "__Host-trading_session"
 
 type Server struct {
-	config    config.WebConfig
-	base      config.Config
-	logger    *slog.Logger
-	handler   http.Handler
-	now       func() time.Time
-	sessions  *sessionStore
-	limiter   *loginLimiter
-	trades    intent.Store
-	rechecker TradeRechecker
-	rechecks  *recheckCoordinator
-	tradeApp  TradeApplication
-	accounts  AccountService
-	build     BuildMetadata
-	startedAt time.Time
-	assets    fs.FS
+	config     config.WebConfig
+	base       config.Config
+	logger     *slog.Logger
+	handler    http.Handler
+	now        func() time.Time
+	sessions   *sessionStore
+	limiter    *loginLimiter
+	trades     intent.Store
+	rechecker  TradeRechecker
+	rechecks   *recheckCoordinator
+	tradeApp   TradeApplication
+	accounts   AccountService
+	build      BuildMetadata
+	startedAt  time.Time
+	instanceID string
+	events     *runtimeevent.Broker
+	assets     fs.FS
 }
 
 type session struct {
@@ -56,9 +59,11 @@ type session struct {
 }
 
 type sessionStore struct {
-	mu       sync.Mutex
-	secret   []byte
-	sessions map[string]*session
+	mu            sync.Mutex
+	secret        []byte
+	sessions      map[string]*session
+	totalConns    int
+	maxTotalConns int
 }
 
 type loginAttempt struct {
@@ -106,6 +111,14 @@ func WithBuildMetadata(metadata BuildMetadata) Option {
 	return func(server *Server) { server.build = metadata }
 }
 
+func WithEventBroker(events *runtimeevent.Broker) Option {
+	return func(server *Server) {
+		if events != nil {
+			server.events = events
+		}
+	}
+}
+
 func WithAssets(assets fs.FS) Option {
 	return func(server *Server) { server.assets = assets }
 }
@@ -116,15 +129,18 @@ func New(cfg config.WebConfig, base config.Config, logger *slog.Logger, options 
 	}
 	startedAt := time.Now()
 	s := &Server{
-		config:    cfg,
-		base:      base,
-		logger:    logger,
-		now:       time.Now,
-		build:     runtimeBuildMetadata(),
-		startedAt: startedAt,
+		config:     cfg,
+		base:       base,
+		logger:     logger,
+		now:        time.Now,
+		build:      runtimeBuildMetadata(),
+		startedAt:  startedAt,
+		instanceID: browserInstanceID(cfg.SessionSecret, startedAt),
+		events:     runtimeevent.NewBroker(),
 		sessions: &sessionStore{
-			secret:   append([]byte(nil), cfg.SessionSecret...),
-			sessions: make(map[string]*session),
+			secret:        append([]byte(nil), cfg.SessionSecret...),
+			sessions:      make(map[string]*session),
+			maxTotalConns: 500,
 		},
 		limiter:  &loginLimiter{clients: make(map[string]*loginAttempt), maxClients: 10_000},
 		trades:   intent.Store{Path: base.IntentFile},
@@ -410,17 +426,26 @@ func (s *sessionStore) get(cookieValue string, now time.Time) (*session, bool) {
 		return nil, false
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	sess, ok := s.sessions[id]
 	if !ok || !now.Before(sess.ExpiresAt) {
+		var conns []*websocket.Conn
 		if ok {
 			delete(s.sessions, id)
 			for conn := range sess.conns {
-				_ = conn.Close()
+				conns = append(conns, conn)
 			}
+			s.totalConns -= len(sess.conns)
+			if s.totalConns < 0 {
+				s.totalConns = 0
+			}
+		}
+		s.mu.Unlock()
+		for _, conn := range conns {
+			_ = conn.Close()
 		}
 		return nil, false
 	}
+	s.mu.Unlock()
 	return sess, true
 }
 
@@ -441,6 +466,10 @@ func (s *sessionStore) delete(id string, code int, reason string) {
 			conns = append(conns, conn)
 		}
 		sess.conns = make(map[*websocket.Conn]struct{})
+		s.totalConns -= len(conns)
+		if s.totalConns < 0 {
+			s.totalConns = 0
+		}
 	}
 	s.mu.Unlock()
 	for _, conn := range conns {
@@ -465,10 +494,14 @@ func (s *sessionStore) addConn(id string, conn *websocket.Conn, maxConnections i
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sess := s.sessions[id]
-	if sess == nil || len(sess.conns) >= maxConnections {
+	if sess == nil || len(sess.conns) >= maxConnections || (s.maxTotalConns > 0 && s.totalConns >= s.maxTotalConns) {
 		return false
 	}
+	if _, exists := sess.conns[conn]; exists {
+		return true
+	}
 	sess.conns[conn] = struct{}{}
+	s.totalConns++
 	return true
 }
 
@@ -476,7 +509,13 @@ func (s *sessionStore) removeConn(id string, conn *websocket.Conn) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if sess := s.sessions[id]; sess != nil {
-		delete(sess.conns, conn)
+		if _, exists := sess.conns[conn]; exists {
+			delete(sess.conns, conn)
+			s.totalConns--
+			if s.totalConns < 0 {
+				s.totalConns = 0
+			}
+		}
 	}
 }
 

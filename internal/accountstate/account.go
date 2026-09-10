@@ -48,20 +48,22 @@ type Provider interface {
 }
 
 type VenueHealth struct {
-	Venue           domain.Venue  `json:"venue"`
-	REST            string        `json:"rest"`
-	PublicWS        string        `json:"publicWs"`
-	PrivateWS       string        `json:"privateWs"`
-	AccountSync     string        `json:"accountSync"`
-	LastRESTAt      time.Time     `json:"lastRestAt,omitempty"`
-	LastEventAt     time.Time     `json:"lastEventAt,omitempty"`
-	MarketEventAt   time.Time     `json:"marketEventAt,omitempty"`
-	Reconnects      uint64        `json:"reconnects"`
-	LastReconcileAt time.Time     `json:"lastReconcileAt,omitempty"`
-	RequestErrors   uint64        `json:"requestErrors"`
-	Discrepancies   uint64        `json:"reconciliationDiscrepancies"`
-	LastRequestRTT  time.Duration `json:"-"`
-	LastPublicError string        `json:"-"`
+	Venue             domain.Venue  `json:"venue"`
+	REST              string        `json:"rest"`
+	PublicWS          string        `json:"publicWs"`
+	PrivateWS         string        `json:"privateWs"`
+	AccountSync       string        `json:"accountSync"`
+	LastRESTAt        time.Time     `json:"lastRestAt,omitempty"`
+	LastEventAt       time.Time     `json:"lastEventAt,omitempty"`
+	MarketEventAt     time.Time     `json:"marketEventAt,omitempty"`
+	Reconnects        uint64        `json:"reconnects"`
+	PublicReconnects  uint64        `json:"-"`
+	PrivateReconnects uint64        `json:"-"`
+	LastReconcileAt   time.Time     `json:"lastReconcileAt,omitempty"`
+	RequestErrors     uint64        `json:"requestErrors"`
+	Discrepancies     uint64        `json:"reconciliationDiscrepancies"`
+	LastRequestRTT    time.Duration `json:"-"`
+	LastPublicError   string        `json:"-"`
 }
 
 type Manager struct {
@@ -75,6 +77,7 @@ type Manager struct {
 	interval  time.Duration
 	staleAge  time.Duration
 	now       func() time.Time
+	OnEvent   func(string, domain.Venue, time.Time)
 }
 
 type refreshCall struct {
@@ -160,7 +163,6 @@ func (m *Manager) refresh(ctx context.Context, venue domain.Venue) error {
 	snapshot, err := provider.Snapshot(ctx)
 	finished := m.now()
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	health := m.health[venue]
 	health.LastRequestRTT = time.Since(started)
 	if err != nil {
@@ -173,6 +175,10 @@ func (m *Manager) refresh(ctx context.Context, venue domain.Venue) error {
 			health.AccountSync = "ERROR"
 		}
 		m.health[venue] = health
+		m.mu.Unlock()
+		if m.OnEvent != nil {
+			m.OnEvent("venue.health.updated", venue, finished)
+		}
 		return err
 	}
 	m.revision++
@@ -190,6 +196,11 @@ func (m *Manager) refresh(ctx context.Context, venue domain.Venue) error {
 	health.LastReconcileAt = finished
 	health.LastPublicError = ""
 	m.health[venue] = health
+	m.mu.Unlock()
+	if m.OnEvent != nil {
+		m.OnEvent("account.updated", venue, finished)
+		m.OnEvent("venue.health.updated", venue, finished)
+	}
 	return nil
 }
 
@@ -235,6 +246,51 @@ func (m *Manager) Health() []VenueHealth {
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Venue < result[j].Venue })
 	return result
+}
+
+func (m *Manager) UpdatePublicWS(venue domain.Venue, state string, eventAt time.Time, reconnects uint64) {
+	m.mu.Lock()
+	health, exists := m.health[venue]
+	changed := false
+	if exists {
+		changed = health.PublicWS != state || health.PublicReconnects != reconnects
+		health.PublicWS = state
+		health.PublicReconnects = reconnects
+		health.Reconnects = health.PublicReconnects + health.PrivateReconnects
+		if !eventAt.IsZero() {
+			if health.LastEventAt.IsZero() || eventAt.After(health.LastEventAt) {
+				health.LastEventAt = eventAt
+			}
+			if health.MarketEventAt.IsZero() || eventAt.After(health.MarketEventAt) {
+				health.MarketEventAt = eventAt
+			}
+		}
+		m.health[venue] = health
+	}
+	m.mu.Unlock()
+	if exists && changed && m.OnEvent != nil {
+		m.OnEvent("venue.health.updated", venue, m.now())
+	}
+}
+
+func (m *Manager) UpdatePrivateWS(venue domain.Venue, state string, eventAt time.Time, reconnects uint64) {
+	m.mu.Lock()
+	health, exists := m.health[venue]
+	changed := false
+	if exists {
+		changed = health.PrivateWS != state || health.PrivateReconnects != reconnects
+		health.PrivateWS = state
+		health.PrivateReconnects = reconnects
+		health.Reconnects = health.PublicReconnects + health.PrivateReconnects
+		if !eventAt.IsZero() && (health.LastEventAt.IsZero() || eventAt.After(health.LastEventAt)) {
+			health.LastEventAt = eventAt
+		}
+		m.health[venue] = health
+	}
+	m.mu.Unlock()
+	if exists && changed && m.OnEvent != nil {
+		m.OnEvent("venue.health.updated", venue, m.now())
+	}
 }
 
 func cloneSnapshot(source Snapshot) Snapshot {

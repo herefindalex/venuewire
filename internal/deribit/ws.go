@@ -76,6 +76,7 @@ type WSClient struct {
 	codScope      string
 	codEnabled    bool
 	ready         atomic.Uint64
+	connected     atomic.Bool
 }
 
 type wsEnvelope struct {
@@ -171,6 +172,8 @@ func (c *WSClient) Run(ctx context.Context, sink func(context.Context, WSNotific
 }
 
 func (c *WSClient) runConnection(ctx context.Context, conn WSConnection, generation uint64, sink func(context.Context, WSNotification) error) error {
+	c.connected.Store(true)
+	defer c.connected.Store(false)
 	done := make(chan struct{})
 	go func() {
 		select {
@@ -366,6 +369,8 @@ func (c *WSClient) Metrics() WSMetrics {
 	c.errorMu.Unlock()
 	return WSMetrics{Connections: c.connections.Load(), Reconnects: c.reconnects.Load(), Messages: c.messages.Load(), Notifications: c.notifications.Load(), TestRequests: c.testRequests.Load(), QueueDepth: c.queueDepth.Load(), LastError: lastError, Ready: c.ready.Load(), CODQueried: codQueried, CODScope: codScope, CODEnabled: codEnabled}
 }
+
+func (c *WSClient) Connected() bool { return c.connected.Load() }
 
 func waitContext(ctx context.Context, duration time.Duration) error {
 	timer := time.NewTimer(duration)

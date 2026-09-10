@@ -83,6 +83,25 @@ func (s *Server) handleAccountRefresh(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSystemStatus(w http.ResponseWriter, _ *http.Request) {
 	now := s.now()
+	statuses := s.publicStatuses(now)
+	uptime := now.Sub(s.startedAt)
+	if uptime < 0 {
+		uptime = 0
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"venues": statuses,
+		"build": map[string]string{
+			"environment":    "Testnet",
+			"backend":        "Go " + runtime.Version(),
+			"frontend":       "Vue 3",
+			"buildTimestamp": displayMetadata(s.build.Timestamp),
+			"gitCommit":      displayMetadata(s.build.Commit),
+			"uptime":         uptime.Truncate(time.Second).String(),
+		},
+	})
+}
+
+func (s *Server) publicStatuses(now time.Time) []publicVenueStatus {
 	health := s.configuredHealth()
 	statuses := make([]publicVenueStatus, 0, len(health))
 	for _, item := range health {
@@ -110,22 +129,7 @@ func (s *Server) handleSystemStatus(w http.ResponseWriter, _ *http.Request) {
 		}
 		statuses = append(statuses, status)
 	}
-
-	uptime := now.Sub(s.startedAt)
-	if uptime < 0 {
-		uptime = 0
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"venues": statuses,
-		"build": map[string]string{
-			"environment":    "Testnet",
-			"backend":        "Go " + runtime.Version(),
-			"frontend":       "Vue 3",
-			"buildTimestamp": displayMetadata(s.build.Timestamp),
-			"gitCommit":      displayMetadata(s.build.Commit),
-			"uptime":         uptime.Truncate(time.Second).String(),
-		},
-	})
+	return statuses
 }
 
 func (s *Server) configuredHealth() []accountstate.VenueHealth {
