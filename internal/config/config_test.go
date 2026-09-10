@@ -6,11 +6,11 @@ import (
 )
 
 func TestLoadDefaultsToTestnet(t *testing.T) {
-	for _, key := range []string{"BYBIT_ENV", "BYBIT_REST_BASE_URL", "BYBIT_WS_PUBLIC_URL", "BYBIT_WS_PRIVATE_URL", "BYBIT_WS_TRADE_URL", "BYBIT_FIX_ADDRESS"} {
+	for _, key := range []string{"BYBIT_ENV", "BYBIT_REST_BASE_URL", "BYBIT_WS_PUBLIC_URL", "BYBIT_WS_SPOT_URL", "BYBIT_WS_PRIVATE_URL", "BYBIT_WS_TRADE_URL", "BYBIT_FIX_ADDRESS"} {
 		t.Setenv(key, "")
 	}
 	cfg := Load()
-	if cfg.Environment != "testnet" || cfg.RESTBaseURL != TestnetRESTBaseURL || cfg.WSPublicURL != TestnetWSPublicURL || cfg.WSPrivateURL != TestnetWSPrivateURL || cfg.FIXAddress != TestnetFIXAddress {
+	if cfg.Environment != "testnet" || cfg.RESTBaseURL != TestnetRESTBaseURL || cfg.WSPublicURL != TestnetWSPublicURL || cfg.WSPublicSpotURL != TestnetWSPublicSpotURL || cfg.WSPrivateURL != TestnetWSPrivateURL || cfg.FIXAddress != TestnetFIXAddress {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 	if err := cfg.ValidateTestnet(); err != nil {
@@ -107,6 +107,7 @@ func TestMainnetAndHostConfusionAreRejected(t *testing.T) {
 		{"REST mainnet", func(c *Config) { c.RESTBaseURL = "https://api.bybit.com" }},
 		{"REST suffix attack", func(c *Config) { c.RESTBaseURL = "https://api-testnet.bybit.com.attacker.invalid" }},
 		{"public WS mainnet", func(c *Config) { c.WSPublicURL = "wss://stream.bybit.com/v5/public/linear" }},
+		{"public Spot WS mainnet", func(c *Config) { c.WSPublicSpotURL = "wss://stream.bybit.com/v5/public/spot" }},
 		{"private WS mainnet", func(c *Config) { c.WSPrivateURL = "wss://stream.bybit.com/v5/private" }},
 		{"FIX mainnet", func(c *Config) { c.FIXAddress = "fix-oe.bybit.com:9000" }},
 	}
@@ -123,11 +124,12 @@ func TestMainnetAndHostConfusionAreRejected(t *testing.T) {
 
 func validConfig() Config {
 	return Config{
-		Environment:  "testnet",
-		RESTBaseURL:  TestnetRESTBaseURL,
-		WSPublicURL:  TestnetWSPublicURL,
-		WSPrivateURL: TestnetWSPrivateURL,
-		WSTradeURL:   TestnetWSTradeURL,
-		FIXAddress:   TestnetFIXAddress,
+		Environment:     "testnet",
+		RESTBaseURL:     TestnetRESTBaseURL,
+		WSPublicURL:     TestnetWSPublicURL,
+		WSPublicSpotURL: TestnetWSPublicSpotURL,
+		WSPrivateURL:    TestnetWSPrivateURL,
+		WSTradeURL:      TestnetWSTradeURL,
+		FIXAddress:      TestnetFIXAddress,
 	}
 }

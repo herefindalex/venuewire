@@ -51,4 +51,4 @@ Run relevant backend checks per phase; run frontend checks once the frontend exi
 
 ## Current verification and remaining work
 
-This update changes specifications and configuration examples only. No runtime feature, test fixture, recording, deployment or live exchange validation has been completed by this update. The baseline security-example failure still needs implementation work. Completion must be tracked in `../../IMPLEMENTATION_STATUS.md` without replacing historical V2 evidence.
+Phase A now provides locally verified dotenv/Web configuration and the authenticated HTTP/WebSocket boundary. The prior security-example failure is fixed. Persistent Demo quota enforcement, account/trade runtime features, frontend, recordings, deployment and new live exchange validation remain incomplete. Current evidence and exact checks are tracked in `../../IMPLEMENTATION_STATUS.md` without replacing historical V2 evidence.

@@ -16,9 +16,13 @@ import (
 const usage = `VenueWire - Bybit + Deribit Testnet connector
 
 Usage:
+  venuewire [--env-file PATH] web
   venuewire --venue bybit <command> [options]
   venuewire --venue deribit <command> [options]
   venuewire --venue all <command> [options]
+
+Global options:
+  --env-file PATH  Load dotenv values without overriding the OS environment
 
 Public REST:
   venuewire --venue bybit time
@@ -94,12 +98,25 @@ func run(args []string) int {
 }
 
 func runContext(ctx context.Context, args []string) int {
+	loadedArgs, err := config.LoadEnvironment(args)
+	if err != nil {
+		observability.NewJSON(os.Stderr).Error("dotenv rejected", slog.String("error", err.Error()))
+		return 2
+	}
+	args = loadedArgs
 	args = normalizeVenueArgs(args)
 	cfg := config.Load()
 	logger := observability.NewJSON(os.Stderr, cfg.APISecret, cfg.Deribit.APISecret)
 
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprintln(os.Stdout, usage)
+		return 0
+	}
+	if handled, err := executeWebCommand(ctx, cfg, logger, args); handled {
+		if err != nil {
+			logger.Error("web command failed", slog.String("error", err.Error()))
+			return 2
+		}
 		return 0
 	}
 

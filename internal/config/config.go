@@ -15,6 +15,7 @@ import (
 const (
 	TestnetRESTBaseURL        = "https://api-testnet.bybit.com"
 	TestnetWSPublicURL        = "wss://stream-testnet.bybit.com/v5/public/linear"
+	TestnetWSPublicSpotURL    = "wss://stream-testnet.bybit.com/v5/public/spot"
 	TestnetWSPrivateURL       = "wss://stream-testnet.bybit.com/v5/private"
 	TestnetWSTradeURL         = "wss://stream-testnet.bybit.com/v5/trade"
 	TestnetFIXAddress         = "fix-oe-testnet.bybit.com:9000"
@@ -54,6 +55,7 @@ type Config struct {
 	FIXPrivateKeyPath string
 	RESTBaseURL       string
 	WSPublicURL       string
+	WSPublicSpotURL   string
 	WSPrivateURL      string
 	WSTradeURL        string
 	FIXAddress        string
@@ -76,6 +78,7 @@ func Load() Config {
 		FIXPrivateKeyPath: os.Getenv("BYBIT_FIX_PRIVATE_KEY_PATH"),
 		RESTBaseURL:       envOrDefault("BYBIT_REST_BASE_URL", TestnetRESTBaseURL),
 		WSPublicURL:       envOrDefault("BYBIT_WS_PUBLIC_URL", TestnetWSPublicURL),
+		WSPublicSpotURL:   envOrDefault("BYBIT_WS_SPOT_URL", TestnetWSPublicSpotURL),
 		WSPrivateURL:      envOrDefault("BYBIT_WS_PRIVATE_URL", TestnetWSPrivateURL),
 		WSTradeURL:        envOrDefault("BYBIT_WS_TRADE_URL", TestnetWSTradeURL),
 		FIXAddress:        envOrDefault("BYBIT_FIX_ADDRESS", TestnetFIXAddress),
@@ -217,6 +220,7 @@ func (c Config) ValidateTestnet() error {
 	}{
 		{"REST", c.RESTBaseURL, TestnetRESTBaseURL},
 		{"public WebSocket", c.WSPublicURL, TestnetWSPublicURL},
+		{"public Spot WebSocket", c.WSPublicSpotURL, TestnetWSPublicSpotURL},
 		{"private WebSocket", c.WSPrivateURL, TestnetWSPrivateURL},
 		{"trade WebSocket", c.WSTradeURL, TestnetWSTradeURL},
 	}

@@ -1,6 +1,6 @@
 # Multi-venue implementation status
 
-Last updated: 2026-09-09
+Last updated: 2026-09-10
 
 The archived Bybit-only phase history remains in `docs/1_bybit/IMPLEMENTATION_STATUS.md`. This file tracks the incremental Bybit + Deribit upgrade defined by `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md`.
 
@@ -15,6 +15,28 @@ The V2 phase history below remains historical evidence. V3/V3.1 runtime implemen
 | Canonical configuration examples | Updated specification only | V3 names, `QUOTE_TTL=5s`, V3.1 Demo caps, existing Deribit credential names and VenueWire commands |
 | Web / Spot / Demo hardening | Not implemented | Auth, frontend, browser intents/quotas, Spot validation and UI observability remain pending |
 | V3/V3.1 frontend and external validation | Not run | No frontend exists yet; no new Testnet orders or deployment operations performed |
+
+### V3.1 Phase A — configuration and public Web boundary
+
+Status: `LOCAL_VERIFIED` (trade quota enforcement continues with the persistent intent work in Phase B).
+
+- Added dotenv loading with `--env-file`; existing OS values, including explicitly empty values, take precedence.
+- Added strict Web configuration for private bind, HTTPS origin, trusted single-IP proxies, session credentials, enabled venues, 5-second quotes, exact decimal caps and Demo limits.
+- Added a separate allowlisted Bybit Spot public WebSocket endpoint while retaining the existing linear endpoint used by CLI flows.
+- Added the `web` command and backend boundary with fixed-env login, constant-time credential comparison, server-side signed opaque sessions, absolute expiry, Secure/HttpOnly/SameSite cookie, CSRF, exact Origin/Host checks, trusted forwarding headers, safe correlated errors and login rate limiting.
+- Protected venue discovery and Browser WebSocket upgrade with the same session/proxy boundary; logout revokes the session and closes its active WebSockets.
+- Demo limit configuration is validated. Durable global/session counting and unresolved-trade occupancy must be committed atomically with Phase B intents and are not yet marked implemented.
+
+Verification after Phase A:
+
+| Check | Result |
+|---|---|
+| `go test ./... -count=1 -timeout=90s` | PASS — 273 tests, 17 packages |
+| `go test -race ./... -count=1 -timeout=120s` | PASS — 273 tests, 17 packages |
+| `go vet ./...` | PASS |
+| `go build -o /tmp/venuewire-phase-a ./cmd/venuewire` | PASS |
+| Frontend test/build | NOT_APPLICABLE — frontend has not been created |
+| External Testnet/deployment operations | NOT_RUN |
 
 ## Phase status
 
