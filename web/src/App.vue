@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
 import { api, APIError, setCSRF, type AccountView, type QuoteView, type SessionView, type TradeView, type VenueStatus, type VenueView } from './api';
+import { displayDecimal } from './decimal';
 
 const session = ref<SessionView>();
 const checkingSession = ref(true);
@@ -336,8 +337,8 @@ onBeforeUnmount(() => {
           <p v-if="account" class="muted">{{ account.accountType }} · liabilities {{ account.liabilityStatus }} · derivatives {{ account.hasDerivativePositions == null ? 'unknown' : account.hasDerivativePositions ? 'present' : 'none' }}</p>
         </div>
         <div class="hero-actions">
-        <div class="account-value"><span>Local USD mark</span><strong>{{ account?.totalUsd || account?.pricedSubtotalUsd ? `$${account.totalUsd || account.pricedSubtotalUsd}` : '—' }}</strong><small>{{ account?.completeness ?? 'Unavailable' }}{{ account?.pricedSubtotalUsd && !account?.totalUsd ? ' · priced subtotal' : '' }}</small></div>
-        <div class="account-value"><span>Exchange-reported total</span><strong>{{ account?.exchangeReportedTotalUsd ? `$${account.exchangeReportedTotalUsd}` : '—' }}</strong><small>Venue snapshot · not locally recalculated</small></div>
+        <div class="account-value"><span>Local USD mark</span><strong>{{ account?.totalUsd || account?.pricedSubtotalUsd ? `$${displayDecimal(account.totalUsd || account.pricedSubtotalUsd)}` : '—' }}</strong><small>{{ account?.completeness ?? 'Unavailable' }}{{ account?.pricedSubtotalUsd && !account?.totalUsd ? ' · priced subtotal' : '' }}</small></div>
+        <div class="account-value"><span>Exchange-reported total</span><strong>{{ account?.exchangeReportedTotalUsd ? `$${displayDecimal(account.exchangeReportedTotalUsd)}` : '—' }}</strong><small>Venue snapshot · not locally recalculated</small></div>
           <a-button type="primary" size="large" :disabled="!account" @click="openQuickTrade">Quick Trade</a-button>
         </div>
       </div>
@@ -350,11 +351,11 @@ onBeforeUnmount(() => {
         <div class="section-heading"><div><p class="eyebrow">BALANCES</p><h3>Assets</h3></div><a-button :loading="refreshingAccount" @click="refreshAccount">Refresh from venue</a-button></div>
         <a-table :data-source="account?.assets ?? []" :pagination="false" row-key="asset" size="middle">
           <a-table-column title="Asset" data-index="asset"><template #default="{ text }"><strong>{{ text }}</strong></template></a-table-column>
-          <a-table-column title="Balance" data-index="balance" />
-          <a-table-column title="Equity" data-index="equity"><template #default="{ text }">{{ text || '—' }}</template></a-table-column>
-          <a-table-column title="Available to trade" data-index="availableToTrade"><template #default="{ text }">{{ text || '—' }}</template></a-table-column>
-          <a-table-column title="Local USD mark" data-index="usdValue"><template #default="{ text }">{{ text ? `$${text}` : '—' }}</template></a-table-column>
-          <a-table-column title="Exchange-reported USD" data-index="exchangeReportedUsdValue"><template #default="{ text }">{{ text ? `$${text}` : '—' }}</template></a-table-column>
+          <a-table-column title="Balance" data-index="balance"><template #default="{ text }">{{ displayDecimal(text) || '—' }}</template></a-table-column>
+          <a-table-column title="Equity" data-index="equity"><template #default="{ text }">{{ displayDecimal(text) || '—' }}</template></a-table-column>
+          <a-table-column title="Available to trade" data-index="availableToTrade"><template #default="{ text }">{{ displayDecimal(text) || '—' }}</template></a-table-column>
+          <a-table-column title="Local USD mark" data-index="usdValue"><template #default="{ text }">{{ text ? `$${displayDecimal(text)}` : '—' }}</template></a-table-column>
+          <a-table-column title="Exchange-reported USD" data-index="exchangeReportedUsdValue"><template #default="{ text }">{{ text ? `$${displayDecimal(text)}` : '—' }}</template></a-table-column>
           <a-table-column title="Price source" data-index="priceSource"><template #default="{ text }">{{ text || '—' }}</template></a-table-column>
           <a-table-column title="Quality" data-index="quality"><template #default="{ text }"><a-tag :color="text === 'fresh' ? 'green' : text === 'stale' ? 'orange' : 'default'">{{ text }}</a-tag></template></a-table-column>
         </a-table>
@@ -414,13 +415,13 @@ onBeforeUnmount(() => {
       </a-form>
     </div>
     <div v-else-if="tradeStep === 'review' && quote" class="modal-body">
-      <div class="review-heading"><span>{{ quote.fromAsset }} → {{ quote.toAsset }}</span><strong>{{ quote.spendBudget }} {{ quote.fromAsset }}</strong></div>
+      <div class="review-heading"><span>{{ quote.fromAsset }} → {{ quote.toAsset }}</span><strong>{{ displayDecimal(quote.spendBudget) }} {{ quote.fromAsset }}</strong></div>
       <a-descriptions bordered :column="1" size="small">
-        <a-descriptions-item label="Reference bid / ask">{{ quote.referenceBid || '—' }} / {{ quote.referenceAsk || '—' }}</a-descriptions-item>
-        <a-descriptions-item label="Submitted base quantity">{{ quote.baseQty }}</a-descriptions-item>
-        <a-descriptions-item label="Worst acceptable price">{{ quote.limitPrice }}</a-descriptions-item>
+        <a-descriptions-item label="Reference bid / ask">{{ displayDecimal(quote.referenceBid) || '—' }} / {{ displayDecimal(quote.referenceAsk) || '—' }}</a-descriptions-item>
+        <a-descriptions-item label="Submitted base quantity">{{ displayDecimal(quote.baseQty) }}</a-descriptions-item>
+        <a-descriptions-item label="Worst acceptable price">{{ displayDecimal(quote.limitPrice) }}</a-descriptions-item>
         <a-descriptions-item label="Protection">{{ quote.priceProtectionBps / 100 }}%</a-descriptions-item>
-        <a-descriptions-item label="Estimated net received">{{ quote.netReceiveEstimate || '—' }} {{ quote.toAsset }}</a-descriptions-item>
+        <a-descriptions-item label="Estimated net received">{{ displayDecimal(quote.netReceiveEstimate) || '—' }} {{ quote.toAsset }}</a-descriptions-item>
         <a-descriptions-item label="Quote expires"><a-tag :color="quoteRemaining > 1 ? 'green' : 'red'">{{ quoteRemaining }}s</a-tag></a-descriptions-item>
       </a-descriptions>
       <a-alert v-for="warning in quote.warnings" :key="warning" :message="warning" type="warning" show-icon class="review-warning" />
@@ -434,7 +435,7 @@ onBeforeUnmount(() => {
         <p class="muted">Same {{ account?.accountAlias || selectedTrade.venue }} store as the page · revision {{ account?.revision ?? 'unavailable' }}</p>
         <dl v-if="resultAccountAssets.length">
           <template v-for="asset in resultAccountAssets" :key="asset.asset">
-            <dt>{{ asset.asset }}</dt><dd>{{ asset.balance }} <span class="muted">available {{ asset.availableToTrade || '—' }}</span></dd>
+            <dt>{{ asset.asset }}</dt><dd>{{ displayDecimal(asset.balance) }} <span class="muted">available {{ displayDecimal(asset.availableToTrade) || '—' }}</span></dd>
           </template>
         </dl>
         <p v-else class="muted">The matching venue account snapshot is still synchronizing.</p>
@@ -445,7 +446,7 @@ onBeforeUnmount(() => {
   <a-drawer v-model:open="tradeDrawerOpen" title="Trade lifecycle" width="520px">
     <template v-if="selectedTrade">
       <div class="drawer-title"><div><p class="eyebrow">{{ selectedTrade.venue }} · TESTNET</p><h3>{{ selectedTrade.fromAsset }} → {{ selectedTrade.toAsset }}</h3></div><a-tag>{{ selectedTrade.status }}</a-tag></div>
-      <a-descriptions :column="1" size="small" bordered><a-descriptions-item label="VenueWire Trade ID">{{ selectedTrade.intentId }}</a-descriptions-item><a-descriptions-item label="Client Order ID">{{ selectedTrade.clientOrderId }}</a-descriptions-item><a-descriptions-item label="Venue Order ID">{{ selectedTrade.venueOrderId || 'Pending' }}</a-descriptions-item><a-descriptions-item label="Filled quantity">{{ selectedTrade.filledBaseQty || 'Pending' }}</a-descriptions-item><a-descriptions-item label="Average price">{{ selectedTrade.averagePrice || 'Pending' }}</a-descriptions-item><a-descriptions-item label="Net received">{{ selectedTrade.netDestinationReceived || 'Pending' }}</a-descriptions-item></a-descriptions>
+      <a-descriptions :column="1" size="small" bordered><a-descriptions-item label="VenueWire Trade ID">{{ selectedTrade.intentId }}</a-descriptions-item><a-descriptions-item label="Client Order ID">{{ selectedTrade.clientOrderId }}</a-descriptions-item><a-descriptions-item label="Venue Order ID">{{ selectedTrade.venueOrderId || 'Pending' }}</a-descriptions-item><a-descriptions-item label="Filled quantity">{{ displayDecimal(selectedTrade.filledBaseQty) || 'Pending' }}</a-descriptions-item><a-descriptions-item label="Average price">{{ displayDecimal(selectedTrade.averagePrice) || 'Pending' }}</a-descriptions-item><a-descriptions-item label="Net received">{{ displayDecimal(selectedTrade.netDestinationReceived) || 'Pending' }}</a-descriptions-item></a-descriptions>
       <a-button block class="recheck-button" :loading="rechecking" @click="recheckTrade">Recheck with venue</a-button>
       <a-timeline class="trade-timeline"><a-timeline-item v-for="event in selectedTrade.lifecycle" :key="`${event.at}-${event.status}`"><strong>{{ event.status }}</strong><br><span class="muted">{{ new Date(event.at).toLocaleString() }}</span><p v-if="event.detail">{{ event.detail }}</p></a-timeline-item></a-timeline>
     </template>
