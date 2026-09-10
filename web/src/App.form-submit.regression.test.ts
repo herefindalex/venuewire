@@ -42,6 +42,7 @@ const account: AccountView = {
   accountType: 'UNIFIED',
   revision: 1,
   snapshotAsOf: '2026-09-10T20:00:00Z',
+  valuationBasis: 'test fixture',
   completeness: 'complete',
   unpricedAssets: [],
   liabilityStatus: 'none',
