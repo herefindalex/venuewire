@@ -16,7 +16,7 @@ BYBIT_FIX_API_KEY=
 BYBIT_FIX_PRIVATE_KEY_PATH=
 ```
 
-REST HMAC credentials and FIX self-generated RSA credentials are different. The FIX key must be 2048 or 4096-bit RSA. Keep the host clock synchronized with NTP: authenticated requests use UTC timestamps, and `bybitctl time` reports material skew.
+REST HMAC credentials and FIX self-generated RSA credentials are different. The FIX key must be 2048 or 4096-bit RSA. Keep the host clock synchronized with NTP: authenticated requests use UTC timestamps, and `venuewire time` reports material skew.
 
 ## Build and test
 
@@ -37,25 +37,25 @@ The REST integration test fetches current instrument metadata and ticker data, t
 ## CLI examples
 
 ```bash
-go run ./cmd/bybitctl time
-go run ./cmd/bybitctl instrument --category linear --symbol BTCUSDT
-go run ./cmd/bybitctl account info
-go run ./cmd/bybitctl account balances
-go run ./cmd/bybitctl account balances --coin BTC,ETH,USDT
-go run ./cmd/bybitctl market trades --symbol BTCUSDT
-go run ./cmd/bybitctl market orderbook --symbol BTCUSDT --depth 50
+go run ./cmd/venuewire time
+go run ./cmd/venuewire instrument --category linear --symbol BTCUSDT
+go run ./cmd/venuewire account info
+go run ./cmd/venuewire account balances
+go run ./cmd/venuewire account balances --coin BTC,ETH,USDT
+go run ./cmd/venuewire market trades --symbol BTCUSDT
+go run ./cmd/venuewire market orderbook --symbol BTCUSDT --depth 50
 
-go run ./cmd/bybitctl order place --category linear --symbol BTCUSDT --side Buy --type Limit --qty <derived-qty> --price <safe-price>
-go run ./cmd/bybitctl order status --category linear --symbol BTCUSDT --order-link-id <id>
-go run ./cmd/bybitctl order cancel --category linear --symbol BTCUSDT --order-link-id <id>
-go run ./cmd/bybitctl executions --category linear --symbol BTCUSDT
-go run ./cmd/bybitctl positions --category linear --symbol BTCUSDT
-go run ./cmd/bybitctl private-stream
-go run ./cmd/bybitctl reconcile --category linear --symbol BTCUSDT
+go run ./cmd/venuewire order place --category linear --symbol BTCUSDT --side Buy --type Limit --qty <derived-qty> --price <safe-price>
+go run ./cmd/venuewire order status --category linear --symbol BTCUSDT --order-link-id <id>
+go run ./cmd/venuewire order cancel --category linear --symbol BTCUSDT --order-link-id <id>
+go run ./cmd/venuewire executions --category linear --symbol BTCUSDT
+go run ./cmd/venuewire positions --category linear --symbol BTCUSDT
+go run ./cmd/venuewire private-stream
+go run ./cmd/venuewire reconcile --category linear --symbol BTCUSDT
 
-go run ./cmd/bybitctl fix mock-demo
-go run ./cmd/bybitctl fix mock-server --listen 127.0.0.1:9001 --scenario accepted
-go run ./cmd/bybitctl fix connect-testnet
+go run ./cmd/venuewire fix mock-demo
+go run ./cmd/venuewire fix mock-server --listen 127.0.0.1:9001 --scenario accepted
+go run ./cmd/venuewire fix connect-testnet
 ```
 
 Local state uses an atomic, permission-restricted JSON snapshot at `../../state/orders.json` by default. Set `BYBIT_STATE_FILE` to use another path.

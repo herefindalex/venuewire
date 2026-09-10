@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"bybit/internal/deribitfix"
-	bybitfix "bybit/internal/fix"
+	"venuewire/internal/deribitfix"
+	bybitfix "venuewire/internal/fix"
 )
 
 func TestServerExercisesDeribitSessionDialect(t *testing.T) {

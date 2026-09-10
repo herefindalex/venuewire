@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"bybit/internal/domain"
-	"bybit/internal/orderstate"
+	"venuewire/internal/domain"
+	"venuewire/internal/orderstate"
 )
 
 func TestReconciliationRequiredOrderScenarios(t *testing.T) {

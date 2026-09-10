@@ -16,9 +16,16 @@ done
 bybit_fix_status=BLOCKED_GATE
 deribit_fix_status=BLOCKED_GATE
 
-binary=${BYBITCTL_BINARY:-./bin/bybitctl}
+if [[ -n ${VENUEWIRE_BINARY:-} ]]; then
+  binary=$VENUEWIRE_BINARY
+elif [[ -n ${BYBITCTL_BINARY:-} ]]; then
+  echo "warning: BYBITCTL_BINARY is deprecated; use VENUEWIRE_BINARY" >&2
+  binary=$BYBITCTL_BINARY
+else
+  binary=./bin/venuewire
+fi
 if [[ ! -x $binary ]]; then
-  echo "build executable first: go build -o ./bin/bybitctl ./cmd/bybitctl" >&2
+  echo "build executable first: go build -o ./bin/venuewire ./cmd/venuewire" >&2
   exit 2
 fi
 

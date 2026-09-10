@@ -106,7 +106,7 @@ Logon -> Heartbeat/TestRequest -> NewOrderSingle
 
 ## 1. Project Name
 
-`bybit-connector-lab`
+`venuewire`
 
 ## 2. Objective
 
@@ -307,29 +307,29 @@ Do **not** build:
 
 Recommended executable:
 
-`../../cmd/bybitctl`
+`../../cmd/venuewire`
 
 Recommended commands:
 
 ```text
-bybitctl time
-bybitctl instrument --category linear --symbol BTCUSDT
+venuewire time
+venuewire instrument --category linear --symbol BTCUSDT
 
-bybitctl market trades --symbol BTCUSDT
-bybitctl market orderbook --symbol BTCUSDT --depth 50
+venuewire market trades --symbol BTCUSDT
+venuewire market orderbook --symbol BTCUSDT --depth 50
 
-bybitctl order place --category linear --symbol BTCUSDT --side Buy --type Limit ...
-bybitctl order cancel --category linear --symbol BTCUSDT --order-link-id ...
-bybitctl order status --category linear --symbol BTCUSDT --order-link-id ...
-bybitctl executions --category linear --symbol BTCUSDT
-bybitctl positions --category linear --symbol BTCUSDT
+venuewire order place --category linear --symbol BTCUSDT --side Buy --type Limit ...
+venuewire order cancel --category linear --symbol BTCUSDT --order-link-id ...
+venuewire order status --category linear --symbol BTCUSDT --order-link-id ...
+venuewire executions --category linear --symbol BTCUSDT
+venuewire positions --category linear --symbol BTCUSDT
 
-bybitctl private-stream
-bybitctl reconcile
+venuewire private-stream
+venuewire reconcile
 
-bybitctl fix mock-server
-bybitctl fix mock-demo
-bybitctl fix connect-testnet
+venuewire fix mock-server
+venuewire fix mock-demo
+venuewire fix connect-testnet
 ```
 
 Exact flags may be adjusted if documented.
@@ -369,7 +369,7 @@ go.mod
 .env.example
 .gitignore
 
-cmd/bybitctl/
+cmd/venuewire/
 
 internal/domain/
 internal/rest/
@@ -409,7 +409,7 @@ Do not claim production FIX connectivity unless it was actually achieved.
 
 ```text
                          +------------------+
-                         |    bybitctl CLI   |
+                         |    venuewire CLI   |
                          +--------+---------+
                                   |
                      explicit user commands only

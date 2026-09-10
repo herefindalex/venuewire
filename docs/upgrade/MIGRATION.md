@@ -5,13 +5,13 @@ Snapshot v2 adds explicit venue, Testnet environment, and stable account alias i
 Preview without writing:
 
 ```bash
-./bin/bybitctl state migrate-v1 --bybit-account-alias bybit-test --dry-run
+./bin/venuewire state migrate-v1 --bybit-account-alias bybit-test --dry-run
 ```
 
 Apply after reviewing the report:
 
 ```bash
-./bin/bybitctl state migrate-v1 --bybit-account-alias bybit-test
+./bin/venuewire state migrate-v1 --bybit-account-alias bybit-test
 ```
 
 The apply operation creates `state/orders.json.v1.bak` with mode `0600` before replacing the snapshot. An existing backup is never overwritten. A record with no reliable category or stable identifier aborts the entire migration.
@@ -19,7 +19,7 @@ The apply operation creates `state/orders.json.v1.bak` with mode `0600` before r
 Rollback:
 
 ```bash
-./bin/bybitctl state restore-v1
+./bin/venuewire state restore-v1
 ```
 
 Rollback validates the backup as v1 and atomically restores its exact bytes. The backup is retained. A non-default Bybit account alias uses compound storage keys; `bybit-test` retains legacy map keys for compatibility while the values carry full account identity.

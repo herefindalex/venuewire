@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"bybit/internal/domain"
+	"venuewire/internal/domain"
 )
 
 func TestRequiredStateTransitions(t *testing.T) {

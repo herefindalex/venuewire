@@ -6,11 +6,11 @@ import (
 	"io"
 	"log/slog"
 
-	"bybit/internal/config"
-	"bybit/internal/orderstate"
-	"bybit/internal/reconcile"
-	"bybit/internal/rest"
-	bybitws "bybit/internal/ws"
+	"venuewire/internal/config"
+	"venuewire/internal/orderstate"
+	"venuewire/internal/reconcile"
+	"venuewire/internal/rest"
+	bybitws "venuewire/internal/ws"
 )
 
 func executePrivateStreamCommand(ctx context.Context, cfg config.Config, logger *slog.Logger, args []string, output io.Writer) (bool, error) {

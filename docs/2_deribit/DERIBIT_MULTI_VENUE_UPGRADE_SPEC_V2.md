@@ -77,7 +77,7 @@ Bybit 保留現有已支援商品，不把現有 Spot 功能改成 Linear，也�
 |---|---|
 | 工作樹 | 目前 commit／分支、未提交修改；不可覆蓋使用者工作 |
 | Go | module 名稱、Go 版本、相依套件、實際 main packages |
-| CLI | `bybitctl` 或其他入口、旗標、預設交易所及輸出格式 |
+| CLI | `venuewire` 或其他入口、旗標、預設交易所及輸出格式 |
 | Bybit | 哪些 REST／WS／FIX 功能有程式、哪些有真實 Testnet 證據 |
 | 商品 | Spot／Linear／Inverse 等實際範圍、數量單位、手續費處理 |
 | 訂單 | ID、狀態更新、成交去重、取消／成交競爭的處理方式 |
@@ -103,7 +103,7 @@ go test -race ./...
 
 ```bash
 mkdir -p bin
-go build -o ./bin/bybitctl ./cmd/bybitctl
+go build -o ./bin/venuewire ./cmd/venuewire
 ```
 
 以上 main package 只在儲存庫確實有該入口時使用；否則改為實際路徑並更新文件。
@@ -191,7 +191,7 @@ DERIBIT_ACCOUNT_ALIAS=deribit-test
 DERIBIT_CLIENT_ID=
 DERIBIT_CLIENT_SECRET=
 DERIBIT_FIX_ENABLED=false
-DERIBIT_FIX_SENDER_COMP_ID=connector-lab
+DERIBIT_FIX_SENDER_COMP_ID=venuewire
 ```
 
 本機建議預設（本專案政策，不是交易所規定）：
@@ -602,16 +602,16 @@ Deribit 有近期與 `historical=true` 查詢路徑；歷史索引可能延後�
 下列為目標能力範例，不代表目前已有這些子命令：
 
 ```bash
-./bin/bybitctl --venue deribit doctor
-./bin/bybitctl --venue deribit instruments --currency BTC --kind future
-./bin/bybitctl --venue deribit market trades --instrument BTC-PERPETUAL
-./bin/bybitctl --venue deribit market orderbook --instrument BTC-PERPETUAL
-./bin/bybitctl --venue deribit private-stream --instrument BTC-PERPETUAL
-./bin/bybitctl --venue deribit orders list --instrument BTC-PERPETUAL
-./bin/bybitctl --venue deribit positions --currency BTC
-./bin/bybitctl --venue deribit reconcile
-./bin/bybitctl --venue all status
-./bin/bybitctl --venue all portfolio
+./bin/venuewire --venue deribit doctor
+./bin/venuewire --venue deribit instruments --currency BTC --kind future
+./bin/venuewire --venue deribit market trades --instrument BTC-PERPETUAL
+./bin/venuewire --venue deribit market orderbook --instrument BTC-PERPETUAL
+./bin/venuewire --venue deribit private-stream --instrument BTC-PERPETUAL
+./bin/venuewire --venue deribit orders list --instrument BTC-PERPETUAL
+./bin/venuewire --venue deribit positions --currency BTC
+./bin/venuewire --venue deribit reconcile
+./bin/venuewire --venue all status
+./bin/venuewire --venue all portfolio
 ```
 
 `doctor` 可做讀取／連線驗證，但不可下單、改設定、改 COD、取消或平倉。

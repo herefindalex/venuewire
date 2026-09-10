@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	bybitfix "bybit/internal/fix"
+	bybitfix "venuewire/internal/fix"
 )
 
 func TestLogonAuthenticationVectorAndExplicitPolicies(t *testing.T) {

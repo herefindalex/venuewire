@@ -7,9 +7,9 @@ import (
 	"io"
 	"time"
 
-	"bybit/internal/config"
-	"bybit/internal/deribit"
-	"bybit/internal/rest"
+	"venuewire/internal/config"
+	"venuewire/internal/deribit"
+	"venuewire/internal/rest"
 )
 
 type venueResult struct {

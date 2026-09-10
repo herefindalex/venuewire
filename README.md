@@ -1,6 +1,6 @@
-# Bybit + Deribit Testnet connector lab
+# VenueWire
 
-This Go project demonstrates real multi-venue connectivity and order-lifecycle correctness on Bybit and Deribit Testnet. It includes authenticated REST/HTTP JSON-RPC, public and private WebSocket streams, durable intent/reconciliation state, and separate Bybit and Deribit FIX 4.4 dialects.
+VenueWire demonstrates real multi-venue connectivity and order-lifecycle correctness on Bybit and Deribit Testnet. It includes authenticated REST/HTTP JSON-RPC, public and private WebSocket streams, durable intent/reconciliation state, and separate Bybit and Deribit FIX 4.4 dialects.
 
 It is not a trading strategy, dashboard, Mainnet client, wallet-transfer tool, or withdrawal tool. Every order is initiated explicitly from the CLI. Remote endpoints are restricted to exact Testnet allowlist entries.
 
@@ -19,8 +19,8 @@ It is not a trading strategy, dashboard, Mainnet client, wallet-transfer tool, o
 Go 1.26.3 was used for the final verification.
 
 ```bash
-go build -o ./bin/bybitctl ./cmd/bybitctl
-./bin/bybitctl help
+go build -o ./bin/venuewire ./cmd/venuewire
+./bin/venuewire help
 
 go test ./...
 go test -race ./...
@@ -66,39 +66,39 @@ The removed `RUN_BYBIT_INTEGRATION` and `RUN_BYBIT_WS_INTEGRATION` names are int
 Bybit remains the default when `--venue` is omitted:
 
 ```bash
-./bin/bybitctl time
-./bin/bybitctl account balances --coin BTC,ETH,USDT
-./bin/bybitctl positions --category linear --symbol ETHUSDT
+./bin/venuewire time
+./bin/venuewire account balances --coin BTC,ETH,USDT
+./bin/venuewire positions --category linear --symbol ETHUSDT
 ```
 
 Deribit reads:
 
 ```bash
-./bin/bybitctl --venue deribit doctor
-./bin/bybitctl --venue deribit account balances --currency all
-./bin/bybitctl --venue deribit positions --currency BTC --kind future
-./bin/bybitctl --venue deribit orders list --instrument BTC-PERPETUAL
+./bin/venuewire --venue deribit doctor
+./bin/venuewire --venue deribit account balances --currency all
+./bin/venuewire --venue deribit positions --currency BTC --kind future
+./bin/venuewire --venue deribit orders list --instrument BTC-PERPETUAL
 ```
 
 `doctor` reports public health, authenticated account access, and the account-scope Cancel-on-Disconnect setting. Aggregation keeps venue failures and native currencies separate:
 
 ```bash
-./bin/bybitctl --venue all status
-./bin/bybitctl --venue all portfolio
+./bin/venuewire --venue all status
+./bin/venuewire --venue all portfolio
 ```
 
 ## Streams and connection-scoped COD
 
 ```bash
-./bin/bybitctl --venue deribit market orderbook --instrument BTC-PERPETUAL --depth 10 --duration 5s
-./bin/bybitctl --venue deribit private-stream --duration 10s
+./bin/venuewire --venue deribit market orderbook --instrument BTC-PERPETUAL --depth 10 --duration 5s
+./bin/venuewire --venue deribit private-stream --duration 10s
 ```
 
 Private streams query and report the effective connection-scope COD state without changing it. To enable COD only for that private connection, all write gates and explicit confirmation are required:
 
 ```bash
 RUN_MULTI_VENUE_E2E=1 RUN_DERIBIT_TRADING_TESTS=1 \
-  ./bin/bybitctl --venue deribit private-stream \
+  ./bin/venuewire --venue deribit private-stream \
   --duration 10s --enable-connection-cod --confirm
 ```
 
@@ -109,21 +109,21 @@ This does not alter account-scope COD and does not imply synchronous cancellatio
 Create a plan with live metadata and a current price, then execute it before its configured TTL expires:
 
 ```bash
-./bin/bybitctl --venue deribit order plan \
+./bin/venuewire --venue deribit order plan \
   --instrument BTC-PERPETUAL --side buy --amount 10 \
   --type limit --price <valid-passive-price> --transport ws --post-only
 
-./bin/bybitctl --venue deribit order execute --plan-id <plan-id> --confirm
+./bin/venuewire --venue deribit order execute --plan-id <plan-id> --confirm
 ```
 
 Use `--transport http`, `ws`, or `fix` deliberately. Amend and cancel support all three and independently verify the result through canonical HTTP JSON-RPC reads:
 
 ```bash
-./bin/bybitctl --venue deribit order amend \
+./bin/venuewire --venue deribit order amend \
   --order-id <native-id> --amount 10 --price <valid-price> \
   --transport ws --confirm
 
-./bin/bybitctl --venue deribit order cancel \
+./bin/venuewire --venue deribit order cancel \
   --order-id <native-id> --transport ws --confirm
 ```
 
@@ -134,14 +134,14 @@ FIX amend/cancel additionally require persisted connector-owned label/native-ID/
 Local mocks do not need exchange credentials or `DERIBIT_ENABLED=true`, and do not write configured persistent order state:
 
 ```bash
-./bin/bybitctl --venue bybit fix mock-demo
-./bin/bybitctl --venue deribit fix mock-demo
+./bin/venuewire --venue bybit fix mock-demo
+./bin/venuewire --venue deribit fix mock-demo
 ```
 
 Live Deribit FIX Logon requires `DERIBIT_FIX_ENABLED=true` and `RUN_DERIBIT_FIX_TESTS=1`:
 
 ```bash
-./bin/bybitctl --venue deribit fix connect-testnet --duration 3s
+./bin/venuewire --venue deribit fix connect-testnet --duration 3s
 ```
 
 Deribit reached `TESTNET_ORDER_FLOW`: a metadata-minimum BTC-PERPETUAL D/G/F lifecycle was sent through FIX and independently reconciled over JSON-RPC. Bybit FIX is `LOCAL_TESTED`; live Bybit FIX remains `BLOCKED_GATE` because its separate RSA credentials and exchange whitelist access were not enabled.
@@ -162,6 +162,7 @@ The runner uses isolated state, tests migration dry-run/apply/restore, derives c
 
 ## Documentation
 
+- `docs/PROJECT_IDENTITY.md` — canonical project, module, CLI, and compatibility identifiers
 - `IMPLEMENTATION_STATUS.md` — phase and verification status
 - `docs/upgrade/DEMO.md` — reproducible demonstration
 - `docs/upgrade/VALIDATION_REPORT.md` — sanitized external evidence and requirement audit

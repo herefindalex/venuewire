@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"bybit/internal/deribit"
+	"venuewire/internal/deribit"
 )
 
 type fakeMarket struct {

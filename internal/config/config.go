@@ -94,7 +94,7 @@ func loadDeribit() DeribitConfig {
 		HTTPBaseURL:     envOrDefault("DERIBIT_HTTP_BASE_URL", DeribitTestnetHTTPBaseURL),
 		WSURL:           envOrDefault("DERIBIT_WS_URL", DeribitTestnetWSURL),
 		FIXAddress:      envOrDefault("DERIBIT_FIX_ADDRESS", DeribitTestnetFIXAddress),
-		FIXSenderCompID: envOrDefault("DERIBIT_FIX_SENDER_COMP_ID", "connector-lab"),
+		FIXSenderCompID: envOrDefault("DERIBIT_FIX_SENDER_COMP_ID", "venuewire"),
 		Risk: RiskLimits{
 			MaxOrderUSD:          envOrDefault("DERIBIT_MAX_ORDER_USD", "100"),
 			MaxAggregateOpenUSD:  envOrDefault("DERIBIT_MAX_OPEN_USD", "500"),

@@ -83,7 +83,7 @@ func TestEnvironmentExampleIsEmptyAndSecretsAreIgnored(t *testing.T) {
 		"DERIBIT_WS_URL":                  "wss://test.deribit.com/ws/api/v2",
 		"DERIBIT_FIX_ENABLED":             "false",
 		"DERIBIT_FIX_ADDRESS":             "fix-test.deribit.com:9883",
-		"DERIBIT_FIX_SENDER_COMP_ID":      "connector-lab",
+		"DERIBIT_FIX_SENDER_COMP_ID":      "venuewire",
 		"DERIBIT_MAX_ORDER_USD":           "100",
 		"DERIBIT_MAX_OPEN_USD":            "500",
 		"DERIBIT_MAX_PRICE_DEVIATION_PCT": "2",

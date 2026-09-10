@@ -24,7 +24,7 @@ Last updated: 2026-09-09
 
 Public REST server-time and instrument requests passed against Bybit Testnet on 2026-09-09. An authenticated current-orders query also passed on 2026-09-09. The required five-minute public WebSocket soak passed for both trades and orderbook, including clean shutdown.
 
-Fresh Testnet HMAC credentials were recreated locally on 2026-09-09 in a gitignored `../../.env` restricted to mode `0600`; values are never printed or copied into the repository. After funding the associated Unified account, the mandatory authenticated Linear order lifecycle passed: metadata-derived placement, query, cancellation, terminal-state query, executions, and positions. A concurrent private WebSocket processed the corresponding order lifecycle and persisted the final `Cancelled` state. The live offline-change/restart scenario also passed: an isolated snapshot recorded `New`, the order was cancelled while its stream was stopped, and restart reconciliation reported one discrepancy and repaired it to `Cancelled`. Separate Spot IOC demonstrations completed through `bybitctl`, including BTC→USDT→ETH with actual execution-fee reporting. Credentials previously shared in chat remain explicitly disallowed and were not used.
+Fresh Testnet HMAC credentials were recreated locally on 2026-09-09 in a gitignored `../../.env` restricted to mode `0600`; values are never printed or copied into the repository. After funding the associated Unified account, the mandatory authenticated Linear order lifecycle passed: metadata-derived placement, query, cancellation, terminal-state query, executions, and positions. A concurrent private WebSocket processed the corresponding order lifecycle and persisted the final `Cancelled` state. The live offline-change/restart scenario also passed: an isolated snapshot recorded `New`, the order was cancelled while its stream was stopped, and restart reconciliation reported one discrepancy and repaired it to `Cancelled`. Separate Spot IOC demonstrations completed through `venuewire`, including BTC→USDT→ETH with actual execution-fee reporting. Credentials previously shared in chat remain explicitly disallowed and were not used.
 
 Live FIX is optional and remains unverified because Bybit requires separate RSA credentials and whitelist access. All mandatory FIX behavior passes against the injectable local mock.
 
@@ -33,7 +33,7 @@ Live FIX is optional and remains unverified because Bybit requires separate RSA 
 - `go test ./...`: 114 passed across 11 packages.
 - `go test -race ./...`: 114 passed across 11 packages.
 - `go vet ./...`: passed.
-- `go build -o /tmp/bybitctl ./cmd/bybitctl`: passed.
+- `go build -o /tmp/venuewire ./cmd/venuewire`: passed.
 - `go test ./internal/fix -run '^$' -fuzz FuzzFIXParser -fuzztime 3s -parallel 2`: passed.
 - Automated credential/private-key scan: passed.
-- `bybitctl fix mock-demo`: reached Filled with two distinct persisted executions.
+- `venuewire fix mock-demo`: reached Filled with two distinct persisted executions.

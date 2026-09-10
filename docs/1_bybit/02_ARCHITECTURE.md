@@ -4,7 +4,7 @@
 
 ```text
                          +------------------+
-                         |    bybitctl CLI   |
+                         |    venuewire CLI   |
                          +--------+---------+
                                   |
                      explicit user commands only

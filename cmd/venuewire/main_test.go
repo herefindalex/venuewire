@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"bybit/internal/config"
-	"bybit/internal/domain"
-	"bybit/internal/observability"
-	"bybit/internal/orderstate"
+	"venuewire/internal/config"
+	"venuewire/internal/domain"
+	"venuewire/internal/observability"
+	"venuewire/internal/orderstate"
 )
 
 func TestAuthenticatedCommandClassification(t *testing.T) {
@@ -45,8 +45,8 @@ func TestAuthenticatedCommandClassification(t *testing.T) {
 }
 
 func TestUsageListsEveryImplementedCommand(t *testing.T) {
-	if !strings.Contains(usage, "Bybit + Deribit Testnet connector lab") {
-		t.Fatal("help title does not identify both supported venues")
+	if !strings.Contains(usage, "VenueWire - Bybit + Deribit Testnet connector") {
+		t.Fatal("help title does not identify VenueWire and both supported venues")
 	}
 	commands := []string{
 		"time",
@@ -68,13 +68,13 @@ func TestUsageListsEveryImplementedCommand(t *testing.T) {
 		"fix connect-testnet",
 	}
 	for _, command := range commands {
-		if !strings.Contains(usage, "bybitctl "+command) {
+		if !strings.Contains(usage, "venuewire "+command) {
 			t.Errorf("help does not list %q", command)
 		}
 	}
 	for _, command := range []string{
-		"bybitctl --venue deribit fix mock-demo",
-		"bybitctl --venue deribit fix connect-testnet",
+		"venuewire --venue deribit fix mock-demo",
+		"venuewire --venue deribit fix connect-testnet",
 		"--enable-connection-cod --confirm",
 	} {
 		if !strings.Contains(usage, command) {

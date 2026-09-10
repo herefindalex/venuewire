@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"bybit/internal/domain"
-	"bybit/internal/fix"
-	"bybit/internal/orderstate"
-	"bybit/internal/reconcile"
+	"venuewire/internal/domain"
+	"venuewire/internal/fix"
+	"venuewire/internal/orderstate"
+	"venuewire/internal/reconcile"
 )
 
 func TestDisconnectCreatesNewSessionAtOneAndReconciles(t *testing.T) {

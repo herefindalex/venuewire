@@ -12,11 +12,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"bybit/internal/config"
-	"bybit/internal/deribit"
-	"bybit/internal/deribitfix"
-	bybitfix "bybit/internal/fix"
-	"bybit/internal/intent"
+	"venuewire/internal/config"
+	"venuewire/internal/deribit"
+	"venuewire/internal/deribitfix"
+	bybitfix "venuewire/internal/fix"
+	"venuewire/internal/intent"
 )
 
 type deribitFIXRejectError struct {

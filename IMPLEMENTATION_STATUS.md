@@ -29,7 +29,7 @@ Run after the final implementation changes:
 | `go test ./... -count=1 -timeout=90s` | PASS — 239 tests, 16 packages |
 | `go test -race ./... -count=1 -timeout=120s` | PASS — 239 tests, 16 packages |
 | `go vet ./...` | PASS |
-| `go build -o ./bin/bybitctl ./cmd/bybitctl` | PASS |
+| `go build -o ./bin/venuewire ./cmd/venuewire` | PASS |
 | `bash -n scripts/e2e/run_multi_venue_e2e.sh` | PASS |
 | ShellCheck | `BLOCKED_TOOLING` — executable not installed |
 | repository secret/env checks | PASS — `.env` and key material ignored/untracked |

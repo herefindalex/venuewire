@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"bybit/internal/config"
-	"bybit/internal/deribit"
-	"bybit/internal/deribitreconcile"
-	"bybit/internal/intent"
-	"bybit/internal/orderstate"
+	"venuewire/internal/config"
+	"venuewire/internal/deribit"
+	"venuewire/internal/deribitreconcile"
+	"venuewire/internal/intent"
+	"venuewire/internal/orderstate"
 )
 
 func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string, output io.Writer) (bool, error) {

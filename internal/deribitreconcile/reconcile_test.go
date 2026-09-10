@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"bybit/internal/deribit"
-	"bybit/internal/intent"
-	"bybit/internal/orderstate"
+	"venuewire/internal/deribit"
+	"venuewire/internal/intent"
+	"venuewire/internal/orderstate"
 )
 
 type fakeQueries struct {

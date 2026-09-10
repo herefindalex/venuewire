@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"io"
 
-	"bybit/internal/config"
-	"bybit/internal/orderstate"
+	"venuewire/internal/config"
+	"venuewire/internal/orderstate"
 )
 
 func executeStateCommand(ctx context.Context, cfg config.Config, args []string, output io.Writer) (bool, error) {

@@ -5,10 +5,10 @@ import (
 	"io"
 	"log/slog"
 
-	"bybit/internal/config"
-	"bybit/internal/orderstate"
-	"bybit/internal/reconcile"
-	"bybit/internal/rest"
+	"venuewire/internal/config"
+	"venuewire/internal/orderstate"
+	"venuewire/internal/reconcile"
+	"venuewire/internal/rest"
 )
 
 func executeReconcileCommand(ctx context.Context, cfg config.Config, logger *slog.Logger, args []string, output io.Writer) (bool, error) {

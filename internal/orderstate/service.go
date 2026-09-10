@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"bybit/internal/domain"
+	"venuewire/internal/domain"
 )
 
 type TransitionError struct {

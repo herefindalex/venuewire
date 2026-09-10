@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	bybitfix "bybit/internal/fix"
+	bybitfix "venuewire/internal/fix"
 )
 
 func encodeServer(t *testing.T, msgType string, seq int, body ...bybitfix.Field) []byte {

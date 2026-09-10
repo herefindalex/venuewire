@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"bybit/internal/domain"
+	"venuewire/internal/domain"
 )
 
 type MigrationOptions struct {

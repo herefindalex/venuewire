@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	bybitfix "bybit/internal/fix"
+	bybitfix "venuewire/internal/fix"
 )
 
 func TestRecoveryBuffersAndDeliversOutOfOrderMessageExactlyOnce(t *testing.T) {

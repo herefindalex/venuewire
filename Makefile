@@ -12,5 +12,5 @@ test:
 check: fmt vet test
 
 build:
-	go build -o /bin/bybitctl ./cmd/bybitctl
-
+	mkdir -p ./bin
+	go build -o ./bin/venuewire ./cmd/venuewire

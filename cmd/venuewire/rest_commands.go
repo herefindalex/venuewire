@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"time"
 
-	"bybit/internal/config"
-	"bybit/internal/domain"
-	"bybit/internal/orderstate"
-	"bybit/internal/rest"
+	"venuewire/internal/config"
+	"venuewire/internal/domain"
+	"venuewire/internal/orderstate"
+	"venuewire/internal/rest"
 )
 
 func executeRESTCommand(ctx context.Context, cfg config.Config, logger *slog.Logger, args []string, output io.Writer) (bool, error) {

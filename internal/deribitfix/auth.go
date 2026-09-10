@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	bybitfix "bybit/internal/fix"
+	bybitfix "venuewire/internal/fix"
 )
 
 const TargetCompID = "DERIBITSERVER"

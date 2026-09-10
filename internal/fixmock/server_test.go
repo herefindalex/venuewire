@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"bybit/internal/domain"
-	"bybit/internal/fix"
-	"bybit/internal/orderstate"
+	"venuewire/internal/domain"
+	"venuewire/internal/fix"
+	"venuewire/internal/orderstate"
 )
 
 type cancellationEOFTransport struct {

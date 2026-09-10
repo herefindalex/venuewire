@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"bybit/internal/domain"
-	"bybit/internal/orderstate"
+	"venuewire/internal/domain"
+	"venuewire/internal/orderstate"
 )
 
 type NewOrderRequest struct{ Symbol, Side, OrderType, Qty, Price, ClOrdID, TimeInForce string }

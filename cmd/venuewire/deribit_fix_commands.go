@@ -14,11 +14,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"bybit/internal/config"
-	"bybit/internal/deribit"
-	"bybit/internal/deribitfix"
-	"bybit/internal/deribitfixmock"
-	bybitfix "bybit/internal/fix"
+	"venuewire/internal/config"
+	"venuewire/internal/deribit"
+	"venuewire/internal/deribitfix"
+	"venuewire/internal/deribitfixmock"
+	bybitfix "venuewire/internal/fix"
 )
 
 func executeDeribitFIXCommand(ctx context.Context, cfg config.Config, logger *slog.Logger, args []string, output io.Writer) (bool, error) {

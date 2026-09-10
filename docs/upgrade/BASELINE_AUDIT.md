@@ -8,7 +8,7 @@ The repository is an existing, working Bybit Testnet connector. The Deribit work
 
 Baseline commit: `809d2ca feat: implement Bybit Testnet connector lab`.
 
-At audit time, `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md` was staged and the Deribit environment-template/security-test changes were unstaged. No dashboard or HTTP UI service exists, so R1's user surface is the existing `bybitctl` CLI.
+At audit time, `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md` was staged and the Deribit environment-template/security-test changes were unstaged. No dashboard or HTTP UI service exists, so R1's user surface is the existing `venuewire` CLI.
 
 ## Baseline commands and results
 
@@ -18,14 +18,14 @@ At audit time, `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md` was stage
 | `go test ./...` | 115 passed after the Deribit environment allowlist fix |
 | `go test -race ./...` | 115 passed |
 | `go vet ./...` | passed |
-| `go build -o ./bin/bybitctl ./cmd/bybitctl` | passed |
+| `go build -o ./bin/venuewire ./cmd/venuewire` | passed |
 | Platform | Go 1.26.3, linux/amd64 |
 
 The first baseline run exposed a security-test regression: `.env.example` had three Deribit variables, while the exact security allowlist recognized only Bybit variables. The fix did not exempt Deribit. It expanded the exact allowlist, requires Deribit secrets to be empty, fixes the environment to Testnet, disables Deribit/trading/FIX gates by default, and requires nonzero risk limits.
 
 ## Existing CLI
 
-The binary is `./bin/bybitctl`. Existing Bybit behavior must remain backward compatible when no `--venue` is supplied.
+The binary is `./bin/venuewire`. Existing Bybit behavior must remain backward compatible when no `--venue` is supplied.
 
 - Public REST: `time`, `instrument`.
 - Public WS: `market trades`, `market orderbook`.

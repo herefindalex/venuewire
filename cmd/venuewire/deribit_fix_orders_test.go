@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"bybit/internal/config"
-	"bybit/internal/deribit"
-	"bybit/internal/intent"
+	"venuewire/internal/config"
+	"venuewire/internal/deribit"
+	"venuewire/internal/intent"
 )
 
 func TestDeribitFIXTradingRequiresAllIndependentGates(t *testing.T) {

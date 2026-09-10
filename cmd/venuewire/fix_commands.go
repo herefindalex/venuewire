@@ -11,11 +11,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"bybit/internal/config"
-	"bybit/internal/domain"
-	"bybit/internal/fix"
-	"bybit/internal/fixmock"
-	"bybit/internal/orderstate"
+	"venuewire/internal/config"
+	"venuewire/internal/domain"
+	"venuewire/internal/fix"
+	"venuewire/internal/fixmock"
+	"venuewire/internal/orderstate"
 )
 
 func executeFIXCommand(ctx context.Context, cfg config.Config, logger *slog.Logger, args []string, output io.Writer) (bool, error) {
@@ -45,7 +45,7 @@ func runFIXMockDemo(ctx context.Context, _ config.Config, logger *slog.Logger, o
 	demoContext, cancel := context.WithCancel(ctx)
 	defer cancel()
 	dial, mockDone := fixmock.PairDialer(demoContext, fixmock.PartialThenFilled)
-	tempDir, err := os.MkdirTemp("", "bybitctl-fix-mock-")
+	tempDir, err := os.MkdirTemp("", "venuewire-fix-mock-")
 	if err != nil {
 		return fmt.Errorf("create isolated FIX mock state: %w", err)
 	}

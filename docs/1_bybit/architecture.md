@@ -1,7 +1,7 @@
 # Implemented architecture
 
 ```text
-bybitctl
+venuewire
   ├─ REST V5 client ─────────────┐
   ├─ public WS (bounded/droppable)│
   ├─ private WS (fail on overflow)├─> domain order state ─> atomic JSON store

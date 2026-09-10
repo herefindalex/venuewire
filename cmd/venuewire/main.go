@@ -9,70 +9,70 @@ import (
 	"strings"
 	"syscall"
 
-	"bybit/internal/config"
-	"bybit/internal/observability"
+	"venuewire/internal/config"
+	"venuewire/internal/observability"
 )
 
-const usage = `bybitctl - Bybit + Deribit Testnet connector lab
+const usage = `VenueWire - Bybit + Deribit Testnet connector
 
 Usage:
-  bybitctl <command> [options]
-  bybitctl --venue bybit|deribit|all <command> [options]
+  venuewire <command> [options]
+  venuewire --venue bybit|deribit|all <command> [options]
 
 Public REST:
-  bybitctl time
-  bybitctl instrument [--category linear] [--symbol BTCUSDT]
-  bybitctl ticker [--category linear] [--symbol BTCUSDT]
+  venuewire time
+  venuewire instrument [--category linear] [--symbol BTCUSDT]
+  venuewire ticker [--category linear] [--symbol BTCUSDT]
 
 Deribit Testnet JSON-RPC:
-  bybitctl --venue deribit doctor
-  bybitctl venue deribit time
-  bybitctl venue deribit instrument --name BTC-PERPETUAL
-  bybitctl venue deribit ticker --instrument BTC-PERPETUAL
-  bybitctl venue deribit instruments [--currency BTC] [--kind future]
-  bybitctl venue deribit account balances [--currency all|BTC,ETH]
-  bybitctl venue deribit positions [--currency BTC] [--kind future]
-  bybitctl venue deribit public-stream [--channels trades.BTC-PERPETUAL.100ms,book.BTC-PERPETUAL.100ms] [--duration 30s]
-  bybitctl venue deribit private-stream [--channels user.changes.any.any.raw] [--duration 30s] [--enable-connection-cod --confirm]
-  bybitctl venue deribit order plan --instrument BTC-PERPETUAL --side buy --amount 10 --type limit --price PRICE [--transport http|ws|fix] [--post-only]
-  bybitctl venue deribit order execute --plan-id ID --confirm
-  bybitctl venue deribit order status --order-id ID
-  bybitctl venue deribit order amend --order-id ID --amount AMOUNT --price PRICE [--transport http|ws|fix] --confirm
-  bybitctl venue deribit order cancel --order-id ID [--transport http|ws|fix] --confirm
-  bybitctl venue deribit order trades --order-id ID
-  bybitctl venue deribit reconcile
-  bybitctl --venue deribit fix mock-demo
-  bybitctl --venue deribit fix connect-testnet [--duration 5s]
-  bybitctl --venue all status
-  bybitctl --venue all portfolio
+  venuewire --venue deribit doctor
+  venuewire venue deribit time
+  venuewire venue deribit instrument --name BTC-PERPETUAL
+  venuewire venue deribit ticker --instrument BTC-PERPETUAL
+  venuewire venue deribit instruments [--currency BTC] [--kind future]
+  venuewire venue deribit account balances [--currency all|BTC,ETH]
+  venuewire venue deribit positions [--currency BTC] [--kind future]
+  venuewire venue deribit public-stream [--channels trades.BTC-PERPETUAL.100ms,book.BTC-PERPETUAL.100ms] [--duration 30s]
+  venuewire venue deribit private-stream [--channels user.changes.any.any.raw] [--duration 30s] [--enable-connection-cod --confirm]
+  venuewire venue deribit order plan --instrument BTC-PERPETUAL --side buy --amount 10 --type limit --price PRICE [--transport http|ws|fix] [--post-only]
+  venuewire venue deribit order execute --plan-id ID --confirm
+  venuewire venue deribit order status --order-id ID
+  venuewire venue deribit order amend --order-id ID --amount AMOUNT --price PRICE [--transport http|ws|fix] --confirm
+  venuewire venue deribit order cancel --order-id ID [--transport http|ws|fix] --confirm
+  venuewire venue deribit order trades --order-id ID
+  venuewire venue deribit reconcile
+  venuewire --venue deribit fix mock-demo
+  venuewire --venue deribit fix connect-testnet [--duration 5s]
+  venuewire --venue all status
+  venuewire --venue all portfolio
 
 Market WebSocket:
-  bybitctl market trades [--symbol BTCUSDT]
-  bybitctl market orderbook [--symbol BTCUSDT] [--depth 50]
+  venuewire market trades [--symbol BTCUSDT]
+  venuewire market orderbook [--symbol BTCUSDT] [--depth 50]
 
 Authenticated REST:
-  bybitctl account info
-  bybitctl account balances [--coin BTC,ETH,USDT]
-  bybitctl order place --side Buy|Sell --qty QTY [--category linear] [--symbol BTCUSDT] [--type Limit|Market] [--price PRICE] [--time-in-force GTC] [--reduce-only]
-  bybitctl order cancel [--category linear] [--symbol BTCUSDT] (--order-id ID | --order-link-id ID)
-  bybitctl order amend [--category linear] [--symbol BTCUSDT] (--order-id ID | --order-link-id ID) [--qty QTY] [--price PRICE]
-  bybitctl order status [--category linear] [--symbol BTCUSDT] [--order-id ID] [--order-link-id ID]
-  bybitctl executions [--category linear] [--symbol BTCUSDT] [--order-id ID] [--order-link-id ID]
-  bybitctl positions [--category linear] [--symbol BTCUSDT]
+  venuewire account info
+  venuewire account balances [--coin BTC,ETH,USDT]
+  venuewire order place --side Buy|Sell --qty QTY [--category linear] [--symbol BTCUSDT] [--type Limit|Market] [--price PRICE] [--time-in-force GTC] [--reduce-only]
+  venuewire order cancel [--category linear] [--symbol BTCUSDT] (--order-id ID | --order-link-id ID)
+  venuewire order amend [--category linear] [--symbol BTCUSDT] (--order-id ID | --order-link-id ID) [--qty QTY] [--price PRICE]
+  venuewire order status [--category linear] [--symbol BTCUSDT] [--order-id ID] [--order-link-id ID]
+  venuewire executions [--category linear] [--symbol BTCUSDT] [--order-id ID] [--order-link-id ID]
+  venuewire positions [--category linear] [--symbol BTCUSDT]
 
 Private state and reconciliation:
-  bybitctl private-stream [--symbol BTCUSDT]
-  bybitctl reconcile [--category linear] [--symbol BTCUSDT]
-  bybitctl state migrate-v1 --bybit-account-alias ALIAS [--dry-run] [--backup PATH]
-  bybitctl state restore-v1 [--backup PATH]
+  venuewire private-stream [--symbol BTCUSDT]
+  venuewire reconcile [--category linear] [--symbol BTCUSDT]
+  venuewire state migrate-v1 --bybit-account-alias ALIAS [--dry-run] [--backup PATH]
+  venuewire state restore-v1 [--backup PATH]
 
 FIX:
-  bybitctl fix mock-demo
-  bybitctl fix mock-server [--listen 127.0.0.1:9001] [--scenario accepted]
-  bybitctl fix connect-testnet
+  venuewire fix mock-demo
+  venuewire fix mock-server [--listen 127.0.0.1:9001] [--scenario accepted]
+  venuewire fix connect-testnet
 
 Help:
-  bybitctl help | --help | -h
+  venuewire help | --help | -h
 
 Safety:
   All authenticated commands fail closed unless exact Testnet endpoints and the

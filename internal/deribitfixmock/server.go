@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"bybit/internal/deribitfix"
-	bybitfix "bybit/internal/fix"
+	"venuewire/internal/deribitfix"
+	bybitfix "venuewire/internal/fix"
 )
 
 type AuthenticationError struct{}

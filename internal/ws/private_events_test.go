@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"bybit/internal/domain"
+	"venuewire/internal/domain"
 )
 
 func TestDecodePrivateOrderStatuses(t *testing.T) {

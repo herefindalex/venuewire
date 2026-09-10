@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"bybit/internal/config"
+	"venuewire/internal/config"
 )
 
 func TestDeribitFIXMockDemoProvidesSessionEvidenceWithoutCredentials(t *testing.T) {
@@ -32,8 +32,8 @@ func TestDeribitFIXMockDemoProvidesSessionEvidenceWithoutCredentials(t *testing.
 		HeartbeatTestRequest   bool   `json:"heartbeatTestRequest"`
 		ResendSequenceReset    bool   `json:"resendSequenceReset"`
 		ReconciliationCallback bool   `json:"reconciliationCallback"`
-		MockFinalOrderStatus    string `json:"mockFinalOrderStatus"`
-		SecurityListMultiplier  string `json:"securityListMultiplier"`
+		MockFinalOrderStatus   string `json:"mockFinalOrderStatus"`
+		SecurityListMultiplier string `json:"securityListMultiplier"`
 		TradingWritePerformed  bool   `json:"tradingWritePerformed"`
 	}
 	if err := json.Unmarshal(output.Bytes(), &result); err != nil {

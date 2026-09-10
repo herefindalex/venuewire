@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"bybit/internal/deribit"
-	bybitfix "bybit/internal/fix"
+	"venuewire/internal/deribit"
+	bybitfix "venuewire/internal/fix"
 )
 
 const (

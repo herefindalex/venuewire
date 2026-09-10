@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"bybit/internal/domain"
+	"venuewire/internal/domain"
 )
 
 const SnapshotVersion = 2

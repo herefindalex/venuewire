@@ -63,7 +63,7 @@ Real execution/fee reconciliation remains NOT_RUN here. Zero trades and zero fee
 - Expected: legacy state migrates only after dry-run; exact backup exists; reconciliation is idempotent; private-ready callback can recover
 - Actual: dry-run validated 8 Bybit orders and 2 executions; apply created `state/orders.json.v1.bak`; Deribit reconciliation independently found and applied 3 connector-owned terminal orders; two consecutive reports had zero unresolved/multiple matches and zero new trades; private stream reached ready while running reconciliation
 - Result: PASS
-- Recovery: `./bin/bybitctl state restore-v1` restores the retained backup; it was not invoked because v2 is the active schema
+- Recovery: `./bin/venuewire state restore-v1` restores the retained backup; it was not invoked because v2 is the active schema
 
 Crash/ambiguity fixture evidence: local tests cover accepted-before-local-ACK recovery, no-match staying `OutcomeUnknown`, multiple label matches becoming `NeedsReview`, duplicate pages, same-millisecond cursor ordering, and pagination no-progress failure. No unresolved intent is automatically resubmitted.
 
@@ -90,7 +90,7 @@ The cleanup orders were connector-owned and reduce-only. The E2E trap now tracks
 - UTC time: 2026-09-09T17:41Z
 - Build: local `master` worktree after commit `6e785ea`
 - Venue/environment/account/transport: Deribit/local Testnet fixture/`deribit-test`/FIX 4.4
-- Command: `bybitctl --venue deribit fix mock-demo`
+- Command: `venuewire --venue deribit fix mock-demo`
 - Expected: Deribit SHA-256 Logon dialect, heartbeat, actual resend, forward reset, SecurityList multiplier proof, D/G/F and 8 lifecycle all pass without exchange credentials or external writes
 - Actual: `LOCAL_TESTED`; authenticated fixture session; TestRequest echoed; original outbound sequence replayed with `43=Y` and `122`; reset recovered through callback; multiplier 10 converted minimum 10 USD to one contract; mock order accepted, replaced and ended `OrdStatus=4`
 - Native order ID: local fixture `mock-order-1`
@@ -102,7 +102,7 @@ The cleanup orders were connector-owned and reduce-only. The E2E trap now tracks
 - UTC time: 2026-09-09T17:22Z
 - Build: local `master` worktree after commit `6e785ea`
 - Venue/environment/account/transport: Deribit/Testnet/`deribit-test`/TLS FIX 4.4
-- Command: `bybitctl --venue deribit fix connect-testnet --duration 3s`
+- Command: `venuewire --venue deribit fix connect-testnet --duration 3s`
 - Gates: `DERIBIT_ENABLED=true`, `DERIBIT_FIX_ENABLED=true`, `RUN_DERIBIT_FIX_TESTS=1`; no trading gate enabled
 - Expected: exact Testnet TLS endpoint accepts authenticated Logon and bounded clean Logout; no order message is sent
 - Actual: authenticated Logon succeeded with `TargetCompID=DERIBITSERVER`; command exited 0 after requested duration; `tradingWritePerformed=false`

@@ -25,13 +25,13 @@
 ## Build 與設定
 
 ```bash
-go build -o ./bin/bybitctl ./cmd/bybitctl
+go build -o ./bin/venuewire ./cmd/venuewire
 cp .env.example .env
 chmod 600 .env
 set -a
 source .env
 set +a
-./bin/bybitctl help
+./bin/venuewire help
 ```
 
 Deribit 使用 `DERIBIT_API_KEY` 與 `DERIBIT_API_SECRET`；JSON-RPC 與 FIX 共用這組 Testnet client credentials。不要把值寫進程式、文件、log 或 commit。`.env` 已由 `.gitignore` 排除，本次工作沒有修改或刪除 `.env`。
@@ -52,7 +52,7 @@ Deribit 使用 `DERIBIT_API_KEY` 與 `DERIBIT_API_SECRET`；JSON-RPC 與 FIX 共
 
 ```bash
 RUN_MULTI_VENUE_E2E=1 RUN_DERIBIT_TRADING_TESTS=1 \
-  ./bin/bybitctl --venue deribit private-stream \
+  ./bin/venuewire --venue deribit private-stream \
   --duration 10s --enable-connection-cod --confirm
 ```
 

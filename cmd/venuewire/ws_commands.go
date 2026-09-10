@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"strconv"
 
-	"bybit/internal/config"
-	bybitws "bybit/internal/ws"
+	"venuewire/internal/config"
+	bybitws "venuewire/internal/ws"
 )
 
 func executeMarketCommand(ctx context.Context, cfg config.Config, logger *slog.Logger, args []string, output io.Writer) (bool, error) {

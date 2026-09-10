@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"bybit/internal/config"
+	"venuewire/internal/config"
 )
 
 func TestStateMigrationCommandRequiresExplicitMappingAndSupportsDryRun(t *testing.T) {

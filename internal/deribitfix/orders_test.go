@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"bybit/internal/deribit"
-	bybitfix "bybit/internal/fix"
+	"venuewire/internal/deribit"
+	bybitfix "venuewire/internal/fix"
 )
 
 func testQuantitySpec() QuantitySpec {

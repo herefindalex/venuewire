@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"bybit/internal/domain"
+	"venuewire/internal/domain"
 )
 
 func TestFileStoreRoundTripAndPermissions(t *testing.T) {

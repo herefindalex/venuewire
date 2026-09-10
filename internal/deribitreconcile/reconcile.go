@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"bybit/internal/deribit"
-	"bybit/internal/domain"
-	"bybit/internal/intent"
-	"bybit/internal/orderstate"
+	"venuewire/internal/deribit"
+	"venuewire/internal/domain"
+	"venuewire/internal/intent"
+	"venuewire/internal/orderstate"
 )
 
 type Queries interface {

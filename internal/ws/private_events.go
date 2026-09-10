@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"bybit/internal/domain"
+	"venuewire/internal/domain"
 )
 
 type PrivateEventKind string
