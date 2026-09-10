@@ -458,7 +458,7 @@ onBeforeUnmount(() => {
     <template v-if="selectedTrade">
       <div class="drawer-title"><div><p class="eyebrow">{{ selectedTrade.venue }} · TESTNET</p><h3>{{ selectedTrade.fromAsset }} → {{ selectedTrade.toAsset }}</h3></div><a-tag>{{ selectedTrade.status }}</a-tag></div>
       <a-descriptions :column="1" size="small" bordered><a-descriptions-item label="VenueWire Trade ID">{{ selectedTrade.intentId }}</a-descriptions-item><a-descriptions-item label="Client Order ID">{{ selectedTrade.clientOrderId }}</a-descriptions-item><a-descriptions-item label="Venue Order ID">{{ selectedTrade.venueOrderId || 'Pending' }}</a-descriptions-item><a-descriptions-item label="Filled quantity">{{ displayDecimal(selectedTrade.filledBaseQty) || 'Pending' }}</a-descriptions-item><a-descriptions-item label="Average price">{{ displayDecimal(selectedTrade.averagePrice) || 'Pending' }}</a-descriptions-item><a-descriptions-item label="Net received">{{ displayDecimal(selectedTrade.netDestinationReceived) || 'Pending' }}</a-descriptions-item></a-descriptions>
-      <a-button block class="recheck-button" :loading="rechecking" @click="recheckTrade">Recheck with venue</a-button>
+      <a-button type="primary" size="large" block class="recheck-button" :loading="rechecking" @click="recheckTrade">Recheck with venue</a-button>
       <a-timeline class="trade-timeline"><a-timeline-item v-for="event in selectedTrade.lifecycle" :key="`${event.at}-${event.status}`"><strong>{{ event.status }}</strong><br><span class="muted">{{ new Date(event.at).toLocaleString() }}</span><p v-if="event.detail">{{ event.detail }}</p></a-timeline-item></a-timeline>
     </template>
   </a-drawer>

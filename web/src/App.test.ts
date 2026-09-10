@@ -176,7 +176,7 @@ describe('VenueWire console', () => {
     });
     mockedAPI.trades.mockResolvedValue({ trades: [unknownTrade] });
 
-    const wrapper = mount(App, { global: { plugins: [Antd] } });
+    const wrapper = mount(App, { attachTo: document.body, global: { plugins: [Antd] } });
     await flushPromises();
     await flushPromises();
 
@@ -200,6 +200,15 @@ describe('VenueWire console', () => {
     expect(text).toContain('2.0 s');
     expect(text).toContain('Equity');
     expect(FixtureWebSocket.instances[0]?.url).toContain('/api/ws');
+
+    (wrapper.vm as unknown as { showTrade: (trade: TradeView) => void }).showTrade(unknownTrade);
+    await flushPromises();
+    await vi.waitFor(() => {
+      const recheckButton = document.body.querySelector('.recheck-button');
+      expect(recheckButton).not.toBeNull();
+      expect(recheckButton?.classList.contains('ant-btn-primary')).toBe(true);
+      expect(recheckButton?.classList.contains('ant-btn-lg')).toBe(true);
+    });
     wrapper.unmount();
   });
 
