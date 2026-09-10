@@ -166,7 +166,8 @@ func summarizeFills(side domain.Side, requested string, fills []fill) (resolutio
 		return resolution{}, errors.New("trade requested quantity is invalid")
 	}
 	filled, quoteTotal := new(big.Rat), new(big.Rat)
-	fees := make(map[string]*big.Rat)
+	type feeKey struct{ asset, kind string }
+	fees := make(map[feeKey]*big.Rat)
 	for _, item := range fills {
 		if item.qty == nil || item.price == nil || item.qty.Sign() <= 0 || item.price.Sign() <= 0 {
 			return resolution{}, errors.New("venue execution contains invalid quantity or price")
@@ -178,11 +179,15 @@ func summarizeFills(side domain.Side, requested string, fills []fill) (resolutio
 			if asset == "" {
 				return resolution{}, errors.New("venue execution fee asset is missing")
 			}
-			amount := new(big.Rat).Abs(item.fee)
-			if fees[asset] == nil {
-				fees[asset] = new(big.Rat)
+			kind := "fee"
+			if item.fee.Sign() < 0 {
+				kind = "rebate"
 			}
-			fees[asset].Add(fees[asset], amount)
+			key := feeKey{asset: asset, kind: kind}
+			if fees[key] == nil {
+				fees[key] = new(big.Rat)
+			}
+			fees[key].Add(fees[key], new(big.Rat).Abs(item.fee))
 		}
 	}
 	result := resolution{filledBaseQty: decimal(filled), fillStatus: "COMPLETE", feeStatus: "COMPLETE"}
@@ -198,14 +203,18 @@ func summarizeFills(side domain.Side, requested string, fills []fill) (resolutio
 	}
 	result.netDestination = result.grossDestination
 	result.actualSource = result.grossSource
-	assets := make([]string, 0, len(fees))
-	for asset := range fees {
-		assets = append(assets, asset)
+	keys := make([]feeKey, 0, len(fees))
+	for key := range fees {
+		keys = append(keys, key)
 	}
-	sort.Strings(assets)
-	for _, asset := range assets {
-		amount := fees[asset]
-		result.fees = append(result.fees, intent.TradeFee{Asset: asset, Amount: decimal(amount)})
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].asset == keys[j].asset {
+			return keys[i].kind < keys[j].kind
+		}
+		return keys[i].asset < keys[j].asset
+	})
+	for _, key := range keys {
+		result.fees = append(result.fees, intent.TradeFee{Asset: key.asset, Amount: decimal(fees[key]), Kind: key.kind})
 	}
 	if filled.Cmp(requestedQty) >= 0 {
 		result.status = intent.TradeFilled
@@ -229,6 +238,11 @@ func applyAssets(result *resolution, side domain.Side, base, quote string) {
 		if !ok {
 			continue
 		}
+		multiplier := int64(1)
+		if fee.Kind == "rebate" {
+			multiplier = -1
+		}
+		amount.Mul(amount, big.NewRat(multiplier, 1))
 		if fee.Asset == destination {
 			value, ok := nonNegative(result.netDestination)
 			if ok {

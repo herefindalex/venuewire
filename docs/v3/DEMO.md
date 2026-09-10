@@ -60,7 +60,7 @@ Do not demonstrate through direct public access to the Go port. Use the configur
 
 ## 4. Authorized Testnet write walkthrough
 
-This section is `NOT_RUN` for V3.1 implementation. Use it only after the operator explicitly authorizes Testnet writes, checks current balances/open orders, reviews demo caps and enables every required venue/Web gate.
+This walkthrough was exercised on 2026-09-10 after the operator explicitly authorized Testnet writes and enabled the required venue/Web gates. Repeat the checks and obtain fresh authorization before any later run.
 
 For one supported direction:
 

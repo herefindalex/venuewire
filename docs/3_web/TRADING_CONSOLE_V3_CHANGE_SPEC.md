@@ -41,8 +41,8 @@
 | R04 | 資產估值隨行情更新 | 初始查詢 + 私人 WS + 公開價格 WS + 後端估值 + Browser WS |
 | R05 | 同一頁的快速交易 Modal | 輸入 → 檢視 → 明確確認 → 等待 → 結果；不跳到另一個交易頁 |
 | R06 | 成交後自動更新 | Modal 的餘額區與遮罩下的首頁使用同一份帳戶 store，同步更新 |
-| R07 | Deribit ETH ↔ BTC | `ETH_BTC` Spot，一張商品的 Buy／Sell 兩個方向 |
-| R08 | Bybit BTC ↔ USDT | `BTCUSDT` Spot，一張商品的 Buy／Sell 兩個方向 |
+| R07 | Deribit BTC ↔ USDC | `BTC_USDC` Spot，一張商品的 Buy／Sell 兩個方向；metadata、tick、amount step、minimum amount、contract size fallback 與 fee currency 只能取自該商品 API |
+| R08 | Bybit BTC／ETH ↔ USDT | `BTCUSDT` 與 `ETHUSDT` Spot，各自提供 Buy／Sell 兩個方向 |
 | R09 | 限價 IOC + 0.5% 價格保護 | 不改成裸市價單；不承諾全額成交；0.5% 不含手續費 |
 | R10 | 簡單登入 | 單一固定帳號／密碼從 `.env` 或 OS environment 讀取；無使用者資料庫、註冊與重設密碼流程 |
 | R11 | 面試展示可連入 | 透過既有 Nginx HTTPS，不直接公開 Go port |
@@ -59,7 +59,7 @@ UI 以英文標籤供面試展示，例如 `Account Balance`、`Quick Trade`、`
 
 第三家交易所、自動套利／策略、跨所補單、多跳換幣、提款／轉帳／建立子帳戶、槓桿／永續合約 Web 下單、全套交易圖表、訂單簿視覺化、註冊／OAuth／RBAC、多租戶、Go 原生 TLS、重新實作 FIX。
 
-保留舊 CLI 的合約／FIX 功能，但 Web 不暴露任意交易所原生下單代理。不得因 ETH_BTC 不可用，偷偷轉成 ETH→USDT→BTC。
+保留舊 CLI 的合約／FIX 功能，但 Web 不暴露任意交易所原生下單代理。指定 Spot 商品不可用時必須 fail closed，不得偷偷跨商品或跨資產繞單。
 
 ---
 
@@ -208,15 +208,17 @@ QUICK_TRADE_SLIPPAGE_BPS=50
 QUICK_TRADE_MAX_BTC=0.01
 QUICK_TRADE_MAX_ETH=1
 QUICK_TRADE_MAX_USDT=1000
+QUICK_TRADE_MAX_USDC=1000
 
 # V3.1：全站共用每小時／並行額度；各交易所來源資產支出上限。
 DEMO_MAX_TRADES_PER_SESSION=10
 DEMO_MAX_TRADES_PER_HOUR=30
 DEMO_MAX_CONCURRENT_TRADES=1
 DEMO_MAX_BYBIT_BTC_QTY=0.01
+DEMO_MAX_BYBIT_ETH_QTY=1
 DEMO_MAX_BYBIT_USDT_AMOUNT=1000
 DEMO_MAX_DERIBIT_BTC_AMOUNT=0.01
-DEMO_MAX_DERIBIT_ETH_AMOUNT=1
+DEMO_MAX_DERIBIT_USDC_AMOUNT=1000
 
 # 交易所設定沿用既有程式；不要直接覆蓋使用者原檔。
 BYBIT_ENV=testnet
@@ -373,6 +375,8 @@ API 中所有價格、數量、費用與金額使用**十進位字串**，timest
 1. **Exchange Equity (USD)**：交易所回報的 account equity，附 `asOf`，不擅自重算為另一個意義。
 2. **Estimated Asset Value (USD)**：本地資產數量 × 已驗證價格的即時估值；標示 `Estimated / ≈`，不是清算／保證金引擎。
 
+若交易所（例如 Deribit 多幣別 account summaries）沒有回報單一 aggregate USD total，UI 必須保留 Exchange-reported total 欄位並明示 `Not reported by venue`；不得隱藏資料缺口，也不得以本地估值或逐幣別換算冒充交易所總額。
+
 純 Spot、無負債且 coverage 完整時，可讓主要卡片顯示 `Total Account Value — Estimated` 並隨行情更新，旁邊保留交易所快照。存在合約、options、借款或不完整定價時，主標題改為「已定價資產估值／小計」，不能冒稱全帳戶總額。
 
 **禁止以 `equity(snapshot) × 最新幣價` 宣稱精確重建 derivatives equity；禁止重複加入已包含在 equity 內的 UPL；禁止加總每一幣別重複回報的 Deribit cross-collateral total。** [B1][D1]
@@ -408,12 +412,14 @@ V3 不要求所有截圖中的代幣都有即時 feed；要求每筆都可見、
 
 | Route ID | UI 方向 | 原生商品 | 操作 | 下單量單位 |
 |---|---|---|---|---|
-| `deribit-eth-to-btc` | ETH → BTC | `ETH_BTC`，Spot | `private/sell` | ETH（base） |
-| `deribit-btc-to-eth` | BTC → ETH | `ETH_BTC`，Spot | `private/buy` | ETH（base），由 BTC 支出上限反算 |
-| `bybit-usdt-to-btc` | USDT → BTC | `BTCUSDT`，Spot | Buy | BTC（base），由 USDT 支出上限反算 |
-| `bybit-btc-to-usdt` | BTC → USDT | `BTCUSDT`，Spot | Sell | BTC（base） |
+| `deribit-usdc-btc` | USDC → BTC | `BTC_USDC`，Spot | `private/buy` | BTC（base），由 USDC 支出上限反算 |
+| `deribit-btc-usdc` | BTC → USDC | `BTC_USDC`，Spot | `private/sell` | BTC（base） |
+| `bybit-usdt-btc` | USDT → BTC | `BTCUSDT`，Spot | Buy | BTC（base），由 USDT 支出上限反算 |
+| `bybit-btc-usdt` | BTC → USDT | `BTCUSDT`，Spot | Sell | BTC（base） |
+| `bybit-usdt-eth` | USDT → ETH | `ETHUSDT`，Spot | Buy | ETH（base），由 USDT 支出上限反算 |
+| `bybit-eth-usdt` | ETH → USDT | `ETHUSDT`，Spot | Sell | ETH（base） |
 
-兩個方向是一張商品的買／賣，不捏造 `BTC_ETH` 或 `USDTBTC`。[B3][D3][D4][D7]
+每個方向都必須映射同一張真實交易所商品的買／賣，不捏造反向 symbol，也不合成缺少的 order-book side。[B3][D3][D4][D7]
 
 ### 9.1 Metadata gate
 
@@ -422,6 +428,8 @@ V3 不要求所有截圖中的代幣都有即時 feed；要求每筆都可見、
 V3 必須新增 **Deribit Spot capability**，不能沿用 `BTC-PERPETUAL` 的 USD 面額規則。保留 V2 合約支援；允許清單以 `(venue, productType, instrument)` 為 key。
 
 Deribit Spot 的實際匹配場所可能由 metadata 標示 `is_cbe_routed`／`is_csr`；這不等於專案新增 Coinbase adapter。依回傳旗標驗證所需訂單／回報語意，不假定所有 Spot 同步回傳 fills，也不要求使用者新增 Coinbase 憑證。[D5]
+
+Deribit `public/get_instrument` 未在 Spot metadata 另給 pre-trade `fee_currency`；Review 的 fee estimate 必須由該次 API 回傳的 `quote_currency` 與 `taker_commission` 建立，不得沿用其他商品的幣別。成交後以 `private/get_user_trades_by_order` 每筆 execution 的 `fee_currency`／`fee` 為權威值並覆蓋 estimate；缺失或無法映射時 fail closed。
 
 商品不存在、停牌、metadata 不明、IOC 不支援、無有效流動性或缺 scope 時，前端列出 route 但 disabled 並說明原因。不得為了展示成功而改商品／放大金額／換環境／改成 GTC。
 
@@ -603,7 +611,7 @@ quote 的確認副本、IntentID、clientRequestId、quote consumption、venue�
 | GET | `/api/venues/{venue}/account` | cached normalized account snapshot、估值與品質 |
 | POST | `/api/venues/{venue}/account/refresh` | 觸發合併後的受控刷新，不立即重複打交易所 |
 | GET | `/api/venues/{venue}/quick-trades` | 固定 route、limits、availability 與原因 |
-| POST | `/api/venues/{venue}/quotes` | 以 routeId／spendAmount 建立 Review quote，不下單 |
+| POST | `/api/venues/{venue}/quotes` | 以 routeId／amount 建立 Review quote，不下單 |
 | POST | `/api/venues/{venue}/trades` | 以 quoteId／clientRequestId 確認一個 intent |
 | GET | `/api/venues/{venue}/trades/{intentId}` | 狀態、fills／fees、同步狀態 |
 | GET | `/api/venues/{venue}/trades` | 有界近期列表／pending；可用 clientRequestId 查回結果 |
@@ -613,8 +621,8 @@ quote 的確認副本、IntentID、clientRequestId、quote consumption、venue�
 
 ```json
 {
-  "routeId": "bybit-usdt-to-btc",
-  "spendAmount": "1000"
+  "routeId": "bybit-usdt-btc",
+  "amount": "1000"
 }
 ```
 
@@ -1022,7 +1030,7 @@ README、現有 V2 規格與交接文件，先做 Phase 0 基線盤點，再增�
 
 不要重建專案，不要破壞已完成的 Bybit／Deribit、CLI、FIX、資料與測試。
 本版加入：程式自行讀 dotenv、固定 env 帳密登入、Vue Web 切換交易所、
-即時資產／估值頁、Deribit ETH↔BTC 與 Bybit BTC↔USDT 的 Spot Quick Trade Modal。
+即時資產／估值頁、Deribit BTC↔USDC 與 Bybit BTC／ETH↔USDT 的 Spot Quick Trade Modal。
 
 交易必須 Review→Confirm，使用 0.5% 保護的 Limit IOC；處理部分成交、
 實際費用、未知結果、持久化冪等與恢復。結果與餘額同步分開，

@@ -26,10 +26,12 @@ type Route struct {
 }
 
 var supportedRoutes = map[string]Route{
-	"bybit-usdt-btc":  {ID: "bybit-usdt-btc", Venue: domain.VenueBybit, Instrument: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", FromAsset: "USDT", ToAsset: "BTC", Side: domain.SideBuy},
-	"bybit-btc-usdt":  {ID: "bybit-btc-usdt", Venue: domain.VenueBybit, Instrument: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", FromAsset: "BTC", ToAsset: "USDT", Side: domain.SideSell},
-	"deribit-btc-eth": {ID: "deribit-btc-eth", Venue: domain.VenueDeribit, Instrument: "ETH_BTC", BaseAsset: "ETH", QuoteAsset: "BTC", FromAsset: "BTC", ToAsset: "ETH", Side: domain.SideBuy},
-	"deribit-eth-btc": {ID: "deribit-eth-btc", Venue: domain.VenueDeribit, Instrument: "ETH_BTC", BaseAsset: "ETH", QuoteAsset: "BTC", FromAsset: "ETH", ToAsset: "BTC", Side: domain.SideSell},
+	"bybit-usdt-btc":   {ID: "bybit-usdt-btc", Venue: domain.VenueBybit, Instrument: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", FromAsset: "USDT", ToAsset: "BTC", Side: domain.SideBuy},
+	"bybit-btc-usdt":   {ID: "bybit-btc-usdt", Venue: domain.VenueBybit, Instrument: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", FromAsset: "BTC", ToAsset: "USDT", Side: domain.SideSell},
+	"bybit-usdt-eth":   {ID: "bybit-usdt-eth", Venue: domain.VenueBybit, Instrument: "ETHUSDT", BaseAsset: "ETH", QuoteAsset: "USDT", FromAsset: "USDT", ToAsset: "ETH", Side: domain.SideBuy},
+	"bybit-eth-usdt":   {ID: "bybit-eth-usdt", Venue: domain.VenueBybit, Instrument: "ETHUSDT", BaseAsset: "ETH", QuoteAsset: "USDT", FromAsset: "ETH", ToAsset: "USDT", Side: domain.SideSell},
+	"deribit-usdc-btc": {ID: "deribit-usdc-btc", Venue: domain.VenueDeribit, Instrument: "BTC_USDC", BaseAsset: "BTC", QuoteAsset: "USDC", FromAsset: "USDC", ToAsset: "BTC", Side: domain.SideBuy},
+	"deribit-btc-usdc": {ID: "deribit-btc-usdc", Venue: domain.VenueDeribit, Instrument: "BTC_USDC", BaseAsset: "BTC", QuoteAsset: "USDC", FromAsset: "BTC", ToAsset: "USDC", Side: domain.SideSell},
 }
 
 type InstrumentRules struct {
@@ -114,7 +116,11 @@ func (e *Error) Error() string {
 func (e *Error) Unwrap() error { return e.Err }
 
 func Routes() []Route {
-	return []Route{supportedRoutes["bybit-usdt-btc"], supportedRoutes["bybit-btc-usdt"], supportedRoutes["deribit-btc-eth"], supportedRoutes["deribit-eth-btc"]}
+	return []Route{
+		supportedRoutes["bybit-usdt-btc"], supportedRoutes["bybit-btc-usdt"],
+		supportedRoutes["bybit-usdt-eth"], supportedRoutes["bybit-eth-usdt"],
+		supportedRoutes["deribit-usdc-btc"], supportedRoutes["deribit-btc-usdc"],
+	}
 }
 
 func (s *Service) Create(ctx context.Context, request CreateRequest) (intent.QuickTradeQuote, error) {
@@ -220,6 +226,7 @@ func (s *Service) Create(ctx context.Context, request CreateRequest) (intent.Qui
 		BookObservedAt: market.ObservedAt, MetadataRevision: market.Rules.MetadataRevision,
 		PriceProtectionBPS: s.SlippageBPS, GrossReceiveEstimate: decimalString(grossDestination),
 		NetReceiveEstimate: decimalString(netDestination), EstimatedFees: estimatedFees,
+		FeeRate: decimalString(feeRate), FeeChargeAsset: fee.ChargeAsset,
 		SourceDebitUpperBound: decimalString(sourceDebit), ThirdAssetReserves: thirdReserves,
 		AccountRevision: sourceCapacity.AccountRevision, CreatedAt: now, ExpiresAt: now.Add(s.TTL),
 		Warnings: warnings, Executable: true,
@@ -300,7 +307,10 @@ func (s *Service) ValidateForConfirm(ctx context.Context, quote intent.QuickTrad
 	if err != nil {
 		return quoteError("FEE_MODEL_UNAVAILABLE", "fee information could not be revalidated")
 	}
-	if _, err := parseFeePolicy(route, fee); err != nil || len(quote.EstimatedFees) != 1 || quote.EstimatedFees[0].Source != fee.Source {
+	currentFeeRate, err := parseFeePolicy(route, fee)
+	quotedFeeRate, quotedRateErr := nonNegativeDecimal("quoted fee rate", quote.FeeRate)
+	if err != nil || quotedRateErr != nil || currentFeeRate.Cmp(quotedFeeRate) != 0 ||
+		quote.FeeChargeAsset != fee.ChargeAsset || len(quote.EstimatedFees) != 1 || quote.EstimatedFees[0].Source != fee.Source {
 		return quoteError("QUOTE_CHANGED", "fee information changed; review a new quote")
 	}
 	if fee.ChargeAsset == "third" {

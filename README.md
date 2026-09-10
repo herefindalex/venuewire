@@ -9,7 +9,7 @@ The project demonstrates normalized account state, exact-decimal Spot quoting, d
 - Venue endpoints are restricted to exact Testnet allowlists. Redirects, altered paths, Mainnet and unsafe bind/proxy settings fail closed.
 - Exchange credentials and Web login secrets come from process environment or a local dotenv file and never enter Browser DTOs. `.env`, key files, state, logs and binaries are ignored.
 - Browser trading is disabled unless `WEB_TRADING_ENABLED=true`; venue read/trading/FIX gates remain independently enforced.
-- Browser orders are limited to four fixed Spot directions: Bybit BTC↔USDT and Deribit ETH↔BTC. Review produces a five-second frozen quote; Confirm sends a fee-aware, no-borrow Limit IOC with 0.5% protection.
+- Browser orders are limited to liquid Testnet Spot routes: Bybit BTC↔USDT and ETH↔USDT, plus Deribit BTC↔USDC. Review produces a five-second frozen quote; Confirm sends a fee-aware, no-borrow Limit IOC with 0.5% protection.
 - Confirm persists the intent and quota reservation before submission. Duplicate confirmation cannot create a second logical trade. A transport-uncertain result becomes `Unknown` and is reconciled without automatic resubmission.
 - Testnet writes and deployment changes require explicit operator authorization. Local tests and builds do not place orders.
 

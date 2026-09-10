@@ -36,7 +36,7 @@ func runWebVenueStreams(ctx context.Context, cfg config.Config, webConfig config
 }
 
 func runBybitWebStreams(ctx context.Context, cfg config.Config, webConfig config.WebConfig, accounts *accountstate.Manager, accountRefresh chan<- domain.Venue, tradeRefresh chan<- struct{}, logger *slog.Logger) {
-	public := bybitws.NewClient(bybitws.Config{URL: cfg.WSPublicSpotURL, Topics: []string{"orderbook.50.BTCUSDT"}, StaleAfter: 15 * time.Second})
+	public := bybitws.NewClient(bybitws.Config{URL: cfg.WSPublicSpotURL, Topics: []string{"orderbook.50.BTCUSDT", "orderbook.50.ETHUSDT"}, StaleAfter: 15 * time.Second})
 	private := bybitws.NewPrivateClient(bybitws.PrivateConfig{
 		URL: cfg.WSPrivateURL, APIKey: cfg.APIKey, APISecret: cfg.APISecret,
 		Topics: []string{"wallet", "order.spot", "execution.spot"}, StaleAfter: 30 * time.Second,
@@ -79,13 +79,13 @@ func runBybitWebStreams(ctx context.Context, cfg config.Config, webConfig config
 }
 
 func runDeribitWebStreams(ctx context.Context, cfg config.Config, webConfig config.WebConfig, accounts *accountstate.Manager, httpClient *deribit.Client, accountRefresh chan<- domain.Venue, tradeRefresh chan<- struct{}, valuationUpdates *valuationQueue, logger *slog.Logger) {
-	public, err := deribit.NewWSClient(nil, deribit.WSConfig{URL: cfg.Deribit.WSURL, Channels: []string{"book.ETH_BTC.none.50.100ms", "deribit_price_index.btc_usd", "deribit_price_index.eth_usd"}, StaleAfter: 15 * time.Second})
+	public, err := deribit.NewWSClient(nil, deribit.WSConfig{URL: cfg.Deribit.WSURL, Channels: []string{"book.BTC_USDC.none.50.100ms", "deribit_price_index.btc_usd", "deribit_price_index.eth_usd"}, StaleAfter: 15 * time.Second})
 	if err != nil {
 		logger.Warn("Deribit public WebSocket configuration rejected")
 		return
 	}
 	private, err := deribit.NewWSClient(httpClient, deribit.WSConfig{
-		URL: cfg.Deribit.WSURL, Channels: []string{"user.portfolio.any", "user.orders.ETH_BTC.raw", "user.trades.ETH_BTC.raw"}, Private: true,
+		URL: cfg.Deribit.WSURL, Channels: []string{"user.portfolio.any", "user.orders.BTC_USDC.raw", "user.trades.BTC_USDC.raw"}, Private: true,
 		StaleAfter: 30 * time.Second,
 		OnReady: func(_ context.Context, _ uint64) error {
 			triggerVenue(accountRefresh, domain.VenueDeribit)

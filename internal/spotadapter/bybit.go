@@ -168,10 +168,17 @@ func (a *Bybit) instrumentRules(ctx context.Context, route quicktrade.Route) (qu
 	if minimumNotional == "" {
 		minimumNotional = instrument.LotSizeFilter.MinNotional
 	}
+	minimumQuantity := instrument.LotSizeFilter.MinOrderQty
+	if minimumQuantity == "" {
+		// Current Spot metadata may omit the deprecated minOrderQty. The legal
+		// quantity floor is then one quantity step; minOrderAmt remains the
+		// independent notional floor.
+		minimumQuantity = instrument.LotSizeFilter.QtyStep
+	}
 	rules := quicktrade.InstrumentRules{
 		Instrument: instrument.Symbol, BaseAsset: instrument.BaseCoin, QuoteAsset: instrument.QuoteCoin,
 		TickSize: instrument.PriceFilter.TickSize, QuantityStep: instrument.LotSizeFilter.QtyStep,
-		MinimumQuantity: instrument.LotSizeFilter.MinOrderQty, MinimumNotional: minimumNotional,
+		MinimumQuantity: minimumQuantity, MinimumNotional: minimumNotional,
 		MaximumQuantity: instrument.LotSizeFilter.MaxOrderQty,
 	}
 	if _, ok := positiveDecimal(rules.TickSize); !ok {

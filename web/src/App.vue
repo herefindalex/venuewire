@@ -53,8 +53,13 @@ interface SocketEnvelope {
 }
 
 const routeOptions = computed(() => selectedVenue.value === 'bybit'
-  ? [{ label: 'USDT → BTC', value: 'bybit-usdt-btc' }, { label: 'BTC → USDT', value: 'bybit-btc-usdt' }]
-  : [{ label: 'BTC → ETH', value: 'deribit-btc-eth' }, { label: 'ETH → BTC', value: 'deribit-eth-btc' }]);
+  ? [
+      { label: 'USDT → BTC', value: 'bybit-usdt-btc' },
+      { label: 'BTC → USDT', value: 'bybit-btc-usdt' },
+      { label: 'USDT → ETH', value: 'bybit-usdt-eth' },
+      { label: 'ETH → USDT', value: 'bybit-eth-usdt' },
+    ]
+    : [{ label: 'USDC → BTC', value: 'deribit-usdc-btc' }, { label: 'BTC → USDC', value: 'deribit-btc-usdc' }]);
 const quoteRemaining = computed(() => quote.value ? Math.max(0, Math.ceil((Date.parse(quote.value.expiresAt) - quoteNow.value) / 1000)) : 0);
 const canConfirm = computed(() => !!quote.value?.executable && quoteRemaining.value > 0 && !session.value?.readOnly);
 const selectedStatus = computed(() => statuses.value.find((item) => item.venue === selectedVenue.value));
@@ -339,7 +344,12 @@ onBeforeUnmount(() => {
         </div>
         <div class="hero-actions">
         <div class="account-value"><span>Local USD mark</span><strong>{{ account?.totalUsd || account?.pricedSubtotalUsd ? `$${displayDecimal(account.totalUsd || account.pricedSubtotalUsd)}` : '—' }}</strong><small>{{ account?.completeness ?? 'Unavailable' }}{{ account?.pricedSubtotalUsd && !account?.totalUsd ? ' · priced subtotal' : '' }}</small></div>
-        <div v-if="account?.exchangeReportedTotalUsd" class="account-value"><span>Exchange-reported total</span><strong>${{ displayDecimal(account.exchangeReportedTotalUsd) }}</strong><small>Venue snapshot · not locally recalculated</small></div>
+          <div class="account-value">
+            <span>Exchange-reported total</span>
+            <strong v-if="account?.exchangeReportedTotalUsd">${{ displayDecimal(account.exchangeReportedTotalUsd) }}</strong>
+            <strong v-else class="account-value-unavailable">Not reported by venue</strong>
+            <small>{{ account?.exchangeReportedTotalUsd ? 'Venue snapshot · not locally recalculated' : 'No aggregate USD total in the venue response' }}</small>
+          </div>
           <a-button type="primary" size="large" :disabled="!account" @click="openQuickTrade">Quick Trade</a-button>
         </div>
       </div>

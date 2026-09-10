@@ -38,29 +38,33 @@ type WebConfig struct {
 	QuickTradeMaxBTC         string
 	QuickTradeMaxETH         string
 	QuickTradeMaxUSDT        string
+	QuickTradeMaxUSDC        string
 	MaxTradesPerSession      int
 	MaxTradesPerHour         int
 	MaxConcurrentTrades      int
 	MaxBybitBTCQty           string
+	MaxBybitETHQty           string
 	MaxBybitUSDTAmount       string
 	MaxDeribitBTCAmount      string
-	MaxDeribitETHAmount      string
+	MaxDeribitUSDCAmount     string
 }
 
 func LoadWebConfig(base Config) (WebConfig, error) {
 	cfg := WebConfig{
-		Host:                webEnv("WEB_HOST", ""),
-		PublicOrigin:        webEnv("WEB_PUBLIC_ORIGIN", ""),
-		Username:            webEnv("WEB_USERNAME", ""),
-		Password:            webEnv("WEB_PASSWORD", ""),
-		DefaultVenue:        domain.Venue(webEnv("WEB_DEFAULT_VENUE", "bybit")),
-		QuickTradeMaxBTC:    webEnv("QUICK_TRADE_MAX_BTC", "0.01"),
-		QuickTradeMaxETH:    webEnv("QUICK_TRADE_MAX_ETH", "1"),
-		QuickTradeMaxUSDT:   webEnv("QUICK_TRADE_MAX_USDT", "1000"),
-		MaxBybitBTCQty:      webEnv("DEMO_MAX_BYBIT_BTC_QTY", "0.01"),
-		MaxBybitUSDTAmount:  webEnv("DEMO_MAX_BYBIT_USDT_AMOUNT", "1000"),
-		MaxDeribitBTCAmount: webEnv("DEMO_MAX_DERIBIT_BTC_AMOUNT", "0.01"),
-		MaxDeribitETHAmount: webEnv("DEMO_MAX_DERIBIT_ETH_AMOUNT", "1"),
+		Host:                 webEnv("WEB_HOST", ""),
+		PublicOrigin:         webEnv("WEB_PUBLIC_ORIGIN", ""),
+		Username:             webEnv("WEB_USERNAME", ""),
+		Password:             webEnv("WEB_PASSWORD", ""),
+		DefaultVenue:         domain.Venue(webEnv("WEB_DEFAULT_VENUE", "bybit")),
+		QuickTradeMaxBTC:     webEnv("QUICK_TRADE_MAX_BTC", "0.01"),
+		QuickTradeMaxETH:     webEnv("QUICK_TRADE_MAX_ETH", "1"),
+		QuickTradeMaxUSDT:    webEnv("QUICK_TRADE_MAX_USDT", "1000"),
+		QuickTradeMaxUSDC:    webEnv("QUICK_TRADE_MAX_USDC", "1000"),
+		MaxBybitBTCQty:       webEnv("DEMO_MAX_BYBIT_BTC_QTY", "0.01"),
+		MaxBybitETHQty:       webEnv("DEMO_MAX_BYBIT_ETH_QTY", "1"),
+		MaxBybitUSDTAmount:   webEnv("DEMO_MAX_BYBIT_USDT_AMOUNT", "1000"),
+		MaxDeribitBTCAmount:  webEnv("DEMO_MAX_DERIBIT_BTC_AMOUNT", "0.01"),
+		MaxDeribitUSDCAmount: webEnv("DEMO_MAX_DERIBIT_USDC_AMOUNT", "1000"),
 	}
 
 	var errs []error
@@ -165,13 +169,15 @@ func validateWebConfig(base Config, cfg WebConfig) []error {
 	}
 
 	for name, value := range map[string]string{
-		"QUICK_TRADE_MAX_BTC":         cfg.QuickTradeMaxBTC,
-		"QUICK_TRADE_MAX_ETH":         cfg.QuickTradeMaxETH,
-		"QUICK_TRADE_MAX_USDT":        cfg.QuickTradeMaxUSDT,
-		"DEMO_MAX_BYBIT_BTC_QTY":      cfg.MaxBybitBTCQty,
-		"DEMO_MAX_BYBIT_USDT_AMOUNT":  cfg.MaxBybitUSDTAmount,
-		"DEMO_MAX_DERIBIT_BTC_AMOUNT": cfg.MaxDeribitBTCAmount,
-		"DEMO_MAX_DERIBIT_ETH_AMOUNT": cfg.MaxDeribitETHAmount,
+		"QUICK_TRADE_MAX_BTC":          cfg.QuickTradeMaxBTC,
+		"QUICK_TRADE_MAX_ETH":          cfg.QuickTradeMaxETH,
+		"QUICK_TRADE_MAX_USDT":         cfg.QuickTradeMaxUSDT,
+		"QUICK_TRADE_MAX_USDC":         cfg.QuickTradeMaxUSDC,
+		"DEMO_MAX_BYBIT_BTC_QTY":       cfg.MaxBybitBTCQty,
+		"DEMO_MAX_BYBIT_ETH_QTY":       cfg.MaxBybitETHQty,
+		"DEMO_MAX_BYBIT_USDT_AMOUNT":   cfg.MaxBybitUSDTAmount,
+		"DEMO_MAX_DERIBIT_BTC_AMOUNT":  cfg.MaxDeribitBTCAmount,
+		"DEMO_MAX_DERIBIT_USDC_AMOUNT": cfg.MaxDeribitUSDCAmount,
 	} {
 		if value == "" {
 			errs = append(errs, fmt.Errorf("%s must not be empty", name))

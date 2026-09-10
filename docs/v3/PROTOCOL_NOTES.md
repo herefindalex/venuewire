@@ -23,14 +23,16 @@ These notes describe the Web Console behavior layered on the existing V2 Bybit/D
 
 ## Spot Quick Trade
 
-The four fixed routes are:
+The six fixed routes are:
 
 | Route | Venue instruction | Source budget |
 |---|---|---|
 | Bybit USDT→BTC | Buy base BTC on `BTCUSDT` | USDT |
 | Bybit BTC→USDT | Sell base BTC on `BTCUSDT` | BTC |
-| Deribit BTC→ETH | Buy base ETH on Spot `ETH_BTC` | BTC |
-| Deribit ETH→BTC | Sell base ETH on Spot `ETH_BTC` | ETH |
+| Bybit USDT→ETH | Buy base ETH on Spot `ETHUSDT` | USDT |
+| Bybit ETH→USDT | Sell base ETH on Spot `ETHUSDT` | ETH |
+| Deribit USDC→BTC | Buy base BTC on Spot `BTC_USDC` | USDC |
+| Deribit BTC→USDC | Sell base BTC on Spot `BTC_USDC` | BTC |
 
 All amounts use `math/big.Rat` planning and decimal strings at protocol boundaries. Metadata supplies tick, quantity step, minimum and maximum constraints. Buy protection rounds the worst price upward without exceeding the 50-bps bound; sell protection rounds downward. Quantity never rounds upward beyond the source budget.
 
@@ -67,4 +69,4 @@ Events received before the submission callback are retained briefly and correlat
 
 - Mainnet, transfers, withdrawals, smart routing, cross-venue failover, full order entry, charts and strategies are out of scope.
 - One shared demo login/history is intentional. Strong CLI/Web or multi-instance reservation coordination is not implemented for this MVP.
-- Local fixture verification does not prove current exchange availability, balances, permissions, latency or split-host deployment. Those items remain `NOT_RUN` until explicitly authorized and observed.
+- Current exchange availability, balances, permissions and split-host behavior remain environment-specific. The 2026-09-10 authorized run verified both Testnet venues, public/private streams, HTTPS/WSS, a Deribit `BTC_USDC` fill and a Bybit `BTCUSDT` fill; future deployments must repeat these checks.

@@ -51,13 +51,13 @@ func TestRecordDeribitOrderMetric(t *testing.T) {
 	ackAt := time.Date(2026, 9, 10, 18, 0, 0, 0, time.UTC)
 	manager.RecordOrderSubmission(domain.VenueDeribit, "client-1", "venue-1", ackAt, time.Millisecond, true, false)
 	if err := recordDeribitOrderMetric(manager, deribit.WSNotification{
-		Channel: "user.orders.ETH_BTC.raw", ReceivedAt: ackAt.Add(10 * time.Millisecond),
+		Channel: "user.orders.BTC_USDC.raw", ReceivedAt: ackAt.Add(10 * time.Millisecond),
 		Data: json.RawMessage(`{"order_id":"venue-1","label":"client-1"}`),
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := recordDeribitOrderMetric(manager, deribit.WSNotification{
-		Channel: "user.trades.ETH_BTC.raw", ReceivedAt: ackAt.Add(20 * time.Millisecond),
+		Channel: "user.trades.BTC_USDC.raw", ReceivedAt: ackAt.Add(20 * time.Millisecond),
 		Data: json.RawMessage(`[{"trade_id":"trade-1","order_id":"venue-1"}]`),
 	}); err != nil {
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestDecodeDeribitUSDPrice(t *testing.T) {
 }
 
 func TestDecodeDeribitUSDPriceIgnoresOtherChannelsAndRejectsInvalidPrice(t *testing.T) {
-	if _, relevant, err := decodeDeribitUSDPrice(deribit.WSNotification{Channel: "book.ETH_BTC.none.50.100ms"}); err != nil || relevant {
+	if _, relevant, err := decodeDeribitUSDPrice(deribit.WSNotification{Channel: "book.BTC_USDC.none.50.100ms"}); err != nil || relevant {
 		t.Fatalf("book event = relevant %t err %v", relevant, err)
 	}
 	for _, data := range []string{`{"price":0}`, `{"price":"invalid"}`, `{`} {

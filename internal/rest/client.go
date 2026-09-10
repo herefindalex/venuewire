@@ -206,6 +206,14 @@ func (c *Client) Orders(ctx context.Context, category, symbol, orderID, orderLin
 }
 
 func (c *Client) OrdersPage(ctx context.Context, category, symbol, orderID, orderLinkID string, openOnly *int, cursor string) (OrderPage, ResponseMeta, error) {
+	return c.orderPage(ctx, "/v5/order/realtime", category, symbol, orderID, orderLinkID, openOnly, cursor)
+}
+
+func (c *Client) OrderHistoryPage(ctx context.Context, category, symbol, orderID, orderLinkID, cursor string) (OrderPage, ResponseMeta, error) {
+	return c.orderPage(ctx, "/v5/order/history", category, symbol, orderID, orderLinkID, nil, cursor)
+}
+
+func (c *Client) orderPage(ctx context.Context, path, category, symbol, orderID, orderLinkID string, openOnly *int, cursor string) (OrderPage, ResponseMeta, error) {
 	query := url.Values{"category": {category}}
 	setIfNotEmpty(query, "symbol", symbol)
 	setIfNotEmpty(query, "orderId", orderID)
@@ -218,7 +226,7 @@ func (c *Client) OrdersPage(ctx context.Context, category, symbol, orderID, orde
 		List           []Order `json:"list"`
 		NextPageCursor string  `json:"nextPageCursor"`
 	}
-	meta, _, err := c.do(ctx, http.MethodGet, "/v5/order/realtime", query, nil, true, &result)
+	meta, _, err := c.do(ctx, http.MethodGet, path, query, nil, true, &result)
 	return OrderPage{List: result.List, NextPageCursor: result.NextPageCursor}, meta, err
 }
 

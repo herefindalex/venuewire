@@ -31,9 +31,9 @@ Target: `docs/3_web/TRADING_CONSOLE_V3_CHANGE_SPEC.md` plus `VENUEWIRE_V3_1_PUBL
 | 15–17 — Freshness/status/metrics | WS recovery/logging | Receive vs meaningful event age, stream/account state, RTT/events/errors/reconnect/reconcile metrics | API/UI fixtures complete |
 | 18 — Recent Trades | Persistent orders/executions | Shared Browser history, lifecycle, relogin/reload recovery and Recheck | Local server/component fixtures complete |
 | 19 — About | Existing connector capability evidence | Architecture, truthful FIX labels, non-sensitive build/uptime | Vue implementation and build metadata tests complete |
-| 20 — Deployment | Nginx reference fragments | Trusted proxy/WSS boundary, private bind, ACL and rollback docs | Local code/config tests and docs complete; real deployment `NOT_RUN` |
+| 20 — Deployment | Nginx reference fragments | Trusted proxy/WSS boundary, private bind, ACL and rollback docs | Local checks complete; public HTTPS/WSS deployed verification complete, privileged host ACL not directly inspected |
 | 21–22 — UI/scope | Reference visual/specification | Focused account/Quick Trade/status/history/About UI; no terminal/fault simulator | Vue implementation/component fixtures complete |
-| 23–24 — Acceptance | Existing backend fixtures | All 15 failure scenarios, Browser/API/restart/frontend/build regression and evidence labels | Local suite complete; current Testnet/deployment evidence `NOT_RUN` |
+| 23–24 — Acceptance | Existing backend fixtures | All 15 failure scenarios, Browser/API/restart/frontend/build regression and evidence labels | Local suite plus current Browser/Testnet/deployment evidence complete |
 
 ## Remaining gaps
 
@@ -45,4 +45,4 @@ No known local implementation requirement remains unaddressed after the final re
 4. Real split-host Nginx HTTPS/WSS, private Go bind and firewall/ACL verification.
 5. Sanitized screenshots and failure recordings from that real deployed UI.
 
-Until those run, delivery is labeled **local implementation complete; external verification pending**, not globally complete.
+The 2026-09-10 delivery is labeled **deployed Testnet MVP verified**; environment changes require a fresh external verification run.

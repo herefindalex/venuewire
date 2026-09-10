@@ -219,9 +219,10 @@ DEMO_MAX_TRADES_PER_HOUR=30
 DEMO_MAX_CONCURRENT_TRADES=1
 
 DEMO_MAX_BYBIT_BTC_QTY=0.01
+DEMO_MAX_BYBIT_ETH_QTY=1
 DEMO_MAX_BYBIT_USDT_AMOUNT=1000
 DEMO_MAX_DERIBIT_BTC_AMOUNT=0.01
-DEMO_MAX_DERIBIT_ETH_AMOUNT=1
+DEMO_MAX_DERIBIT_USDC_AMOUNT=1000
 ```
 
 These source-asset spend caps are project policy defaults, not verified exchange limits. Apply the stricter of the V3 asset cap and the venue-specific demo cap, then validate current instrument rules, available funds and fee reserves. For BTC source routes, the spend cap includes any fee charged in BTC; it is not merely an order quantity cap.
@@ -340,17 +341,19 @@ V3 quick-trade behavior remains:
 ## Deribit Spot
 
 ```text
-ETH -> BTC
-BTC -> ETH
+USDC -> BTC
+BTC -> USDC
 ```
 
-using the exchange-supported ETH/BTC Spot instrument.
+using the exchange-supported `BTC_USDC` Spot instrument. Instrument metadata, tick size, amount step, minimum amount, contract-size fallback, fee currency, quote, confirm, and reconciliation all remain scoped to `BTC_USDC`; no `ETH_BTC` assumption or synthetic book side is permitted.
 
 ## Bybit Spot
 
 ```text
 USDT -> BTC
 BTC -> USDT
+USDT -> ETH
+ETH -> USDT
 ```
 
 using BTCUSDT Spot.

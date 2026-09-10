@@ -37,6 +37,7 @@ type Order struct {
 
 type Trade struct {
 	TradeID        string      `json:"trade_id"`
+	TradeSeq       int64       `json:"trade_seq"`
 	OrderID        string      `json:"order_id"`
 	InstrumentName string      `json:"instrument_name"`
 	Direction      string      `json:"direction"`
@@ -141,27 +142,71 @@ func (c *Client) OpenFutureOrdersByCurrency(ctx context.Context, currency string
 }
 
 func (c *Client) TradesByOrder(ctx context.Context, orderID string) ([]Trade, error) {
+	var result []Trade
+	startSeq := int64(0)
+	for pageNumber := 0; pageNumber < 20; pageNumber++ {
+		page, err := c.tradesByOrderPage(ctx, orderID, startSeq, 1000)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, page.Trades...)
+		if !page.HasMore {
+			return result, nil
+		}
+		if len(page.Trades) == 0 || page.Trades[len(page.Trades)-1].TradeSeq < startSeq {
+			return nil, errors.New("Deribit trade pagination did not advance")
+		}
+		next := page.Trades[len(page.Trades)-1].TradeSeq + 1
+		if next <= startSeq {
+			return nil, errors.New("Deribit trade pagination did not advance")
+		}
+		startSeq = next
+	}
+	return nil, errors.New("Deribit trade pagination exceeded safety limit")
+}
+
+func (c *Client) tradesByOrderPage(ctx context.Context, orderID string, startSeq int64, count int) (TradePage, error) {
 	var raw json.RawMessage
-	if err := c.PrivateRead(ctx, "private/get_user_trades_by_order", map[string]any{"order_id": orderID, "sorting": "asc"}, &raw); err != nil {
-		return nil, err
+	params := map[string]any{"order_id": orderID, "sorting": "asc", "count": count}
+	if startSeq > 0 {
+		params["start_seq"] = startSeq
+	}
+	if err := c.PrivateRead(ctx, "private/get_user_trades_by_order", params, &raw); err != nil {
+		return TradePage{}, err
 	}
 	var direct []Trade
 	if err := json.Unmarshal(raw, &direct); err == nil {
-		return direct, nil
+		return TradePage{Trades: direct}, nil
 	}
 	var result struct {
 		Trades  []Trade `json:"trades"`
 		HasMore bool    `json:"has_more"`
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {
-		return nil, err
+		return TradePage{}, err
 	}
-	return result.Trades, nil
+	return TradePage{Trades: result.Trades, HasMore: result.HasMore}, nil
 }
 
 func (c *Client) OrderHistory(ctx context.Context, instrument string) ([]Order, error) {
+	var result []Order
+	const count = 100
+	for pageNumber := 0; pageNumber < 20; pageNumber++ {
+		page, err := c.orderHistoryPage(ctx, instrument, pageNumber*count, count)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, page...)
+		if len(page) < count {
+			return result, nil
+		}
+	}
+	return nil, errors.New("Deribit order history pagination exceeded safety limit")
+}
+
+func (c *Client) orderHistoryPage(ctx context.Context, instrument string, offset, count int) ([]Order, error) {
 	var raw json.RawMessage
-	if err := c.PrivateRead(ctx, "private/get_order_history_by_instrument", map[string]any{"instrument_name": instrument, "count": 100, "include_old": true, "include_unfilled": true}, &raw); err != nil {
+	if err := c.PrivateRead(ctx, "private/get_order_history_by_instrument", map[string]any{"instrument_name": instrument, "count": count, "offset": offset, "include_old": true, "include_unfilled": true}, &raw); err != nil {
 		return nil, err
 	}
 	var direct []Order

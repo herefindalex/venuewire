@@ -290,6 +290,69 @@ func TestTradesByOrderAcceptsDirectArray(t *testing.T) {
 	}
 }
 
+func TestTradesByOrderFollowsTradeSequenceUntilComplete(t *testing.T) {
+	var calls int
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+		var got capturedRequest
+		_ = json.NewDecoder(req.Body).Decode(&got)
+		if got.Method == "public/auth" {
+			respond(t, writer, got.ID, map[string]any{"access_token": "token", "expires_in": 300}, nil)
+			return
+		}
+		calls++
+		if calls == 1 {
+			respond(t, writer, got.ID, map[string]any{"trades": []map[string]any{{"trade_id": "trade-1", "trade_seq": 10, "order_id": "order-1", "amount": 0.1, "price": 100}}, "has_more": true}, nil)
+			return
+		}
+		if got.Params["start_seq"] != float64(11) {
+			t.Errorf("start_seq = %#v, want 11", got.Params["start_seq"])
+		}
+		respond(t, writer, got.ID, map[string]any{"trades": []map[string]any{{"trade_id": "trade-2", "trade_seq": 11, "order_id": "order-1", "amount": 0.2, "price": 101}}, "has_more": false}, nil)
+	}))
+	defer server.Close()
+	client, _ := NewClient(server.URL, "key", "secret", server.Client())
+	trades, err := client.TradesByOrder(context.Background(), "order-1")
+	if err != nil || len(trades) != 2 || trades[1].TradeID != "trade-2" || calls != 2 {
+		t.Fatalf("TradesByOrder() = %+v, calls=%d, error=%v", trades, calls, err)
+	}
+}
+
+func TestOrdersByLabelSearchesBeyondFirstHistoryPage(t *testing.T) {
+	var historyCalls int
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+		var got capturedRequest
+		_ = json.NewDecoder(req.Body).Decode(&got)
+		switch got.Method {
+		case "public/auth":
+			respond(t, writer, got.ID, map[string]any{"access_token": "token", "expires_in": 300}, nil)
+		case "private/get_open_orders_by_instrument":
+			respond(t, writer, got.ID, []Order{}, nil)
+		case "private/get_order_history_by_instrument":
+			historyCalls++
+			if historyCalls == 1 {
+				orders := make([]Order, 100)
+				for index := range orders {
+					orders[index] = Order{OrderID: fmt.Sprintf("old-%d", index), Label: "other"}
+				}
+				respond(t, writer, got.ID, orders, nil)
+				return
+			}
+			if got.Params["offset"] != float64(100) {
+				t.Errorf("offset = %#v, want 100", got.Params["offset"])
+			}
+			respond(t, writer, got.ID, []Order{{OrderID: "target-order", Label: "venuewire-label"}}, nil)
+		default:
+			t.Fatalf("unexpected method %q", got.Method)
+		}
+	}))
+	defer server.Close()
+	client, _ := NewClient(server.URL, "key", "secret", server.Client())
+	orders, err := client.OrdersByLabel(context.Background(), "BTC_USDC", "venuewire-label")
+	if err != nil || len(orders) != 1 || orders[0].OrderID != "target-order" || historyCalls != 2 {
+		t.Fatalf("OrdersByLabel() = %+v, calls=%d, error=%v", orders, historyCalls, err)
+	}
+}
+
 func TestInstrumentMetadataIsCached(t *testing.T) {
 	var calls atomic.Int32
 	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {

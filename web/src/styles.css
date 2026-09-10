@@ -31,15 +31,16 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradie
 .ant-btn-primary { background: #0b63ce; }
 .ant-btn-primary:not(:disabled):hover { background: #084fAA; }
 
-/* Subtle row rhythm improves horizontal scanning without competing with status tags. */
-.ant-table-wrapper .ant-table-tbody > tr:nth-child(even) > td { background: rgba(111, 150, 190, .035); }
-.ant-table-wrapper .ant-table-tbody > tr:nth-child(odd) > td { background: rgba(4, 12, 22, .08); }
+/* Distinct row rhythm keeps dense account and trade tables easy to scan. */
+.ant-table-wrapper .ant-table-tbody > tr:nth-child(even) > td { background: rgba(84, 130, 170, .18); }
+.ant-table-wrapper .ant-table-tbody > tr:nth-child(odd) > td { background: rgba(2, 8, 15, .22); }
 .ant-table-wrapper .ant-table-tbody > tr:hover > td { background: rgba(55, 96, 130, .5) !important; }
 
 .panel, .two-column, .hero-row, .hero-actions { min-width: 0; }
 .ant-table-wrapper { width: 100%; min-width: 0; max-width: 100%; }
 .ant-table-wrapper .ant-table-content { scrollbar-color: #526a82 #0a1727; }
 .account-value strong { overflow-wrap: anywhere; }
+.account-value .account-value-unavailable { color: #c4d1df; font-size: 18px; line-height: 1.7; }
 .ant-drawer-content-wrapper { max-width: calc(100vw - 16px); }
 
 @media (max-width: 900px) {

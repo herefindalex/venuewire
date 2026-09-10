@@ -69,15 +69,21 @@ func (a *Deribit) Available(_ context.Context, _ quicktrade.Route, asset string)
 }
 
 func (a *Deribit) Fee(ctx context.Context, route quicktrade.Route) (quicktrade.FeePolicy, error) {
-	_, err := a.instrumentRules(ctx, route)
+	rules, err := a.instrumentRules(ctx, route)
 	if err != nil {
 		return quicktrade.FeePolicy{}, err
 	}
-	// The raw taker commission is included in the metadata revision. ETH_BTC
-	// commissions settle in the quote currency: source for buys, destination for sells.
-	chargeAsset := "to"
-	if route.FromAsset == route.QuoteAsset {
+	// Deribit Spot instrument metadata does not expose a separate fee_currency
+	// before execution. Its API-sourced quote currency determines the estimate;
+	// reconciliation replaces that estimate with each execution's fee_currency.
+	chargeAsset := ""
+	switch strings.ToUpper(strings.TrimSpace(rules.QuoteAsset)) {
+	case route.FromAsset:
 		chargeAsset = "from"
+	case route.ToAsset:
+		chargeAsset = "to"
+	default:
+		return quicktrade.FeePolicy{}, errors.New("Deribit Spot fee currency is outside the selected route")
 	}
 	return quicktrade.FeePolicy{Rate: a.cachedInstrumentFee(route.Instrument), ChargeAsset: chargeAsset, Source: "Deribit Spot instrument taker commission"}, nil
 }
@@ -89,6 +95,7 @@ func (a *Deribit) Submit(ctx context.Context, trade intent.QuickTrade) (quicktra
 	result, err := a.Client.Place(ctx, strings.ToLower(trade.Quote.Side), deribit.PlaceParams{
 		InstrumentName: trade.Quote.Instrument,
 		Amount:         json.Number(trade.Quote.BaseQty),
+		Type:           "limit",
 		Price:          json.Number(trade.Quote.LimitPrice),
 		Label:          trade.ClientOrderID,
 		TimeInForce:    "immediate_or_cancel",

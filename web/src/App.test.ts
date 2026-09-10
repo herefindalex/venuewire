@@ -203,6 +203,41 @@ describe('VenueWire console', () => {
     wrapper.unmount();
   });
 
+  it('labels a missing venue aggregate instead of hiding the exchange-reported total', async () => {
+    mockedAPI.me.mockResolvedValueOnce({
+      username: 'demo',
+      csrfToken: 'csrf-fixture',
+      expiresAt: '2026-09-10T21:00:00Z',
+      readOnly: false,
+    });
+    mockedAPI.venues.mockResolvedValueOnce({
+      venues: [{ id: 'deribit', environment: 'testnet', accountAlias: 'deribit-demo' }],
+      defaultVenue: 'deribit',
+      tradingEnabled: true,
+    });
+    mockedAPI.account.mockResolvedValue({
+      account: {
+        ...account,
+        venue: 'deribit',
+        accountAlias: 'deribit-demo',
+        accountType: 'account summaries',
+        exchangeReportedTotalUsd: undefined,
+        exchangeReportedAsOf: undefined,
+      },
+    });
+    mockedAPI.status.mockResolvedValue({ venues: [staleStatus], build: {} });
+    mockedAPI.trades.mockResolvedValue({ trades: [] });
+
+    const wrapper = mount(App, { global: { plugins: [Antd] } });
+    await flushPromises();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Exchange-reported total');
+    expect(wrapper.text()).toContain('Not reported by venue');
+    expect(wrapper.text()).toContain('No aggregate USD total in the venue response');
+    wrapper.unmount();
+  });
+
   it('shows the shared account store and balance sync in the trade result modal', async () => {
     mockedAPI.me.mockResolvedValueOnce({
       username: 'demo', csrfToken: 'csrf-fixture', expiresAt: '2026-09-10T21:00:00Z', readOnly: false,

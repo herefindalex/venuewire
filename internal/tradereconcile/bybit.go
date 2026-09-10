@@ -7,17 +7,18 @@ import (
 
 	"venuewire/internal/domain"
 	"venuewire/internal/intent"
+	"venuewire/internal/rest"
 )
 
 func (s *Service) recheckBybit(ctx context.Context, trade intent.QuickTrade) (resolution, error) {
 	if s.Bybit == nil {
 		return resolution{}, errors.New("Bybit reconciliation client is unavailable")
 	}
-	orders, _, err := s.Bybit.Orders(ctx, "spot", trade.Quote.Instrument, trade.VenueOrderID, trade.ClientOrderID, nil)
+	orders, err := s.bybitOrders(ctx, trade)
 	if err != nil {
 		return resolution{}, err
 	}
-	executions, _, err := s.Bybit.Executions(ctx, "spot", trade.Quote.Instrument, trade.VenueOrderID, trade.ClientOrderID)
+	executions, err := s.bybitExecutions(ctx, trade)
 	if err != nil {
 		return resolution{}, err
 	}
@@ -66,6 +67,104 @@ func (s *Service) recheckBybit(ctx context.Context, trade intent.QuickTrade) (re
 	result.venueOrderID, result.rawStatus = order.OrderID, order.OrderStatus
 	applyBybitOrderStatus(&result, order.OrderStatus)
 	return result, nil
+}
+
+const maxReconciliationPages = 20
+
+type bybitOrderPager interface {
+	OrdersPage(context.Context, string, string, string, string, *int, string) (rest.OrderPage, rest.ResponseMeta, error)
+}
+
+type bybitOrderHistoryPager interface {
+	OrderHistoryPage(context.Context, string, string, string, string, string) (rest.OrderPage, rest.ResponseMeta, error)
+}
+
+type bybitExecutionPager interface {
+	ExecutionsPage(context.Context, string, string, string, string, string) (rest.ExecutionPage, rest.ResponseMeta, error)
+}
+
+func (s *Service) bybitOrders(ctx context.Context, trade intent.QuickTrade) ([]rest.Order, error) {
+	pager, paged := s.Bybit.(bybitOrderPager)
+	if !paged {
+		orders, _, err := s.Bybit.Orders(ctx, "spot", trade.Quote.Instrument, trade.VenueOrderID, trade.ClientOrderID, nil)
+		return orders, err
+	}
+	orders, err := loadBybitOrderPages(ctx, func(cursor string) (rest.OrderPage, error) {
+		page, _, err := pager.OrdersPage(ctx, "spot", trade.Quote.Instrument, trade.VenueOrderID, trade.ClientOrderID, nil, cursor)
+		return page, err
+	})
+	if err != nil || hasMatchingBybitOrder(orders, trade) {
+		return orders, err
+	}
+	history, ok := s.Bybit.(bybitOrderHistoryPager)
+	if !ok {
+		return orders, nil
+	}
+	return loadBybitOrderPages(ctx, func(cursor string) (rest.OrderPage, error) {
+		page, _, err := history.OrderHistoryPage(ctx, "spot", trade.Quote.Instrument, trade.VenueOrderID, trade.ClientOrderID, cursor)
+		return page, err
+	})
+}
+
+func (s *Service) bybitExecutions(ctx context.Context, trade intent.QuickTrade) ([]rest.Execution, error) {
+	pager, paged := s.Bybit.(bybitExecutionPager)
+	if !paged {
+		executions, _, err := s.Bybit.Executions(ctx, "spot", trade.Quote.Instrument, trade.VenueOrderID, trade.ClientOrderID)
+		return executions, err
+	}
+	var result []rest.Execution
+	cursor := ""
+	seen := map[string]bool{}
+	for pageNumber := 0; pageNumber < maxReconciliationPages; pageNumber++ {
+		page, _, err := pager.ExecutionsPage(ctx, "spot", trade.Quote.Instrument, trade.VenueOrderID, trade.ClientOrderID, cursor)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, page.List...)
+		if page.NextPageCursor == "" {
+			return result, nil
+		}
+		if page.NextPageCursor == cursor || seen[page.NextPageCursor] {
+			return nil, errors.New("Bybit execution pagination did not advance")
+		}
+		seen[page.NextPageCursor] = true
+		cursor = page.NextPageCursor
+	}
+	return nil, errors.New("Bybit execution pagination exceeded safety limit")
+}
+
+func loadBybitOrderPages(ctx context.Context, load func(string) (rest.OrderPage, error)) ([]rest.Order, error) {
+	var result []rest.Order
+	cursor := ""
+	seen := map[string]bool{}
+	for pageNumber := 0; pageNumber < maxReconciliationPages; pageNumber++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		page, err := load(cursor)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, page.List...)
+		if page.NextPageCursor == "" {
+			return result, nil
+		}
+		if page.NextPageCursor == cursor || seen[page.NextPageCursor] {
+			return nil, errors.New("Bybit order pagination did not advance")
+		}
+		seen[page.NextPageCursor] = true
+		cursor = page.NextPageCursor
+	}
+	return nil, errors.New("Bybit order pagination exceeded safety limit")
+}
+
+func hasMatchingBybitOrder(orders []rest.Order, trade intent.QuickTrade) bool {
+	for _, order := range orders {
+		if (trade.VenueOrderID != "" && order.OrderID == trade.VenueOrderID) || order.OrderLinkID == trade.ClientOrderID {
+			return true
+		}
+	}
+	return false
 }
 
 func applyBybitOrderStatus(result *resolution, raw string) {

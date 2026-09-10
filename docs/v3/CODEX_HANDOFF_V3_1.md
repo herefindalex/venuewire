@@ -1,7 +1,7 @@
 # VenueWire V3.1 公開 Testnet Web Console 交接
 
 更新日期：2026-09-10
-交付狀態：**本機實作完成，外部驗證待辦**
+交付狀態：**Testnet MVP 已部署並完成外部驗證**
 
 ## 已完成內容
 
@@ -12,7 +12,7 @@ VenueWire 現在以登入式 Vue 3 Web Console 作為面試展示主介面，Go 
 - Browser 可獨立切換 Bybit／Deribit，讀取後端 cache 的 normalized account snapshot；Browser 數量不直接觸發交易所 API。
 - 首頁分開顯示 exchange-reported USD 與 public-price local USD mark。部分定價只顯示 priced subtotal；USDT 不假定等於一美元。
 - Browser WebSocket 提供初始 snapshot、連續 sequence、process instance ID、revision 防倒退、bounded resync，以及 account／valuation／trade／health events。
-- Quick Trade 固定支援 Bybit BTC↔USDT 與 Deribit ETH↔BTC Spot。Review → Confirm 使用五秒 quote、0.5% 保護、Limit IOC、exact decimal、metadata／fee／capacity 驗證及 no-borrow submission。
+- Quick Trade 固定支援 Bybit BTC↔USDT、ETH↔USDT 與 Deribit BTC↔USDC Spot。Review → Confirm 使用五秒 quote、0.5% 保護、Limit IOC、exact decimal、metadata／fee／capacity 驗證及 no-borrow submission。
 - Confirm 先持久化 intent、冪等索引、quota 與 reservation，再只送一次。`Unknown` 不重送且保留唯一 concurrent slot；重啟、private reconnect、週期與 Recheck 共用 serialized reconciliation。
 - Filled、partial-cancel、zero-fill、Rejected、Unknown、實際 fee、net received 與 balance sync 分離語意已完成。
 - System Status 顯示 public/private receive/event age、reconnect、REST order RTT、ACK→order/execution event、rate limit、reconciliation 狀態與 discrepancy。
@@ -22,11 +22,11 @@ VenueWire 現在以登入式 Vue 3 Web Console 作為面試展示主介面，Go 
 ## 已驗證結果
 
 ```text
-go test ./... -count=1 -timeout=180s                 PASS：390 tests / 23 packages
+go test ./...                                        PASS：419 tests / 23 packages
 go test -race ./... -count=1 -timeout=240s           PASS：390 tests / 23 packages
 go vet ./...                                          PASS
 npm --prefix web run typecheck                        PASS
-npm --prefix web test                                 PASS：6 tests / 2 files
+npm --prefix web test -- --run                        PASS：13 tests / 5 files
 npm --prefix web run build                            PASS
 make build                                             PASS：bin/venuewire
 ```
@@ -72,17 +72,13 @@ go build -o ./bin/venuewire ./cmd/venuewire
 
 Nginx 必須 overwrite XFF/Real-IP、保留公開 Host、禁止 upstream retry 重送 trade POST，並支援 `/api/ws` upgrade。只有部署人員核對真實 IP、ACL、既有 locations 與憑證後才能執行 `nginx -t`／reload。
 
-## 尚未執行的外部驗證
+## 已完成的外部驗證
 
-本輪沒有獲得下列外部副作用授權，因此全部正確標為 `NOT_RUN`：
-
-- V3.1 Web process 的 Bybit Testnet account/public/private stream 實測。
-- V3.1 Web process 的 Deribit Testnet account/public/private stream 實測。
-- 透過 Browser 執行 Bybit／Deribit Spot Testnet 訂單。
-- 真實 Nginx、憑證、防火牆、ACL、systemd 或 split-host HTTPS/WSS 操作。
-- 真實部署 UI 的去敏感化 screenshots／failure recordings。
-
-舊 V2 已完成的 Testnet/FIX evidence 保留在 `docs/upgrade/VALIDATION_REPORT.md`，但不能拿來宣稱新的 Browser order flow 已驗證。
+- Bybit／Deribit Testnet account、public/private stream 與公開 HTTPS/WSS 已實測。
+- Deribit `BTC_USDC` 與 Bybit `BTCUSDT` 小額 Limit IOC 已取得 venue order ID，並保存 terminal fill、average price、fee 與 balance sync；Deribit 在服務重啟後再次 recheck 成功。
+- Bybit `ETHUSDT` 雙向與 Deribit `BTC_USDC` 雙向 route 已產生 executable quote；stale book 維持 fail closed。
+- Headless Chrome 已驗證登入／登出、venue switching、route options、quote expiry、About、桌面／mobile layout、對比、zebra rows 與無登入後 console errors。
+- 操作者回報 `nginx -t` 通過並完成 reload；本程序沒有直接讀取 privileged Nginx／host firewall 設定。
 
 ## 外部驗證時的操作原則
 
@@ -101,4 +97,4 @@ Nginx 必須 overwrite XFF/Real-IP、保留公開 Host、禁止 upstream retry �
 - 不提供 public fault simulator。
 - 不做 CLI/Web 強一致、多 process/multi-instance quota coordination。
 - 不支援 Mainnet、轉帳、提款、策略、自動交易、套利線、完整 order book、第三交易所、smart routing 或 cross-venue failover。
-- 外部清單完成前，不能將交付名稱改成「全部完成」；正確描述仍是「本機實作完成，外部驗證待辦」。
+- 此驗證只適用目前 Testnet 部署；更換帳戶、host、Nginx 或網路邊界後必須重跑外部驗證。

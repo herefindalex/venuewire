@@ -85,10 +85,10 @@ func executeWebCommand(ctx context.Context, cfg config.Config, logger *slog.Logg
 			Providers: quoteProviders, TTL: webConfig.QuoteTTL, BookMaxAge: webConfig.TradeBookMaxAge,
 			SlippageBPS: webConfig.QuickTradeSlippageBPS,
 			Caps: quicktrade.Caps{
-				ByAsset: map[string]string{"BTC": webConfig.QuickTradeMaxBTC, "ETH": webConfig.QuickTradeMaxETH, "USDT": webConfig.QuickTradeMaxUSDT},
+				ByAsset: map[string]string{"BTC": webConfig.QuickTradeMaxBTC, "ETH": webConfig.QuickTradeMaxETH, "USDT": webConfig.QuickTradeMaxUSDT, "USDC": webConfig.QuickTradeMaxUSDC},
 				ByVenueSource: map[string]string{
-					"bybit:BTC": webConfig.MaxBybitBTCQty, "bybit:USDT": webConfig.MaxBybitUSDTAmount,
-					"deribit:BTC": webConfig.MaxDeribitBTCAmount, "deribit:ETH": webConfig.MaxDeribitETHAmount,
+					"bybit:BTC": webConfig.MaxBybitBTCQty, "bybit:ETH": webConfig.MaxBybitETHQty, "bybit:USDT": webConfig.MaxBybitUSDTAmount,
+					"deribit:BTC": webConfig.MaxDeribitBTCAmount, "deribit:USDC": webConfig.MaxDeribitUSDCAmount,
 				},
 			},
 		},

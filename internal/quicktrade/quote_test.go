@@ -11,7 +11,7 @@ import (
 	"venuewire/internal/domain"
 )
 
-func TestQuoteServiceMapsAllFourSpotDirectionsWithExactProtection(t *testing.T) {
+func TestQuoteServiceMapsAllSupportedSpotDirectionsWithExactProtection(t *testing.T) {
 	now := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
 	providers := fixtureProviders(now)
 	tests := []struct {
@@ -20,8 +20,10 @@ func TestQuoteServiceMapsAllFourSpotDirectionsWithExactProtection(t *testing.T) 
 	}{
 		{"bybit-usdt-btc", "1000", "BTCUSDT", "Buy", "0.00995", "100500", "0.00995", "0.00994005", "BTC", domain.VenueBybit},
 		{"bybit-btc-usdt", "0.01", "BTCUSDT", "Sell", "0.01", "99490.1", "999.9", "998.9001", "USDT", domain.VenueBybit},
-		{"deribit-btc-eth", "0.01", "ETH_BTC", "Buy", "0.199", "0.0502", "0.199", "0.198801", "ETH", domain.VenueDeribit},
-		{"deribit-eth-btc", "1", "ETH_BTC", "Sell", "1", "0.0497", "0.0499", "0.0498501", "BTC", domain.VenueDeribit},
+		{"bybit-usdt-eth", "1000", "ETHUSDT", "Buy", "0.402", "2484.96", "0.402", "0.401598", "ETH", domain.VenueBybit},
+		{"bybit-eth-usdt", "1", "ETHUSDT", "Sell", "1", "2460.14", "2472.5", "2470.0275", "USDT", domain.VenueBybit},
+		{"deribit-usdc-btc", "1000", "BTC_USDC", "Buy", "0.0127", "78490", "0.0127", "0.0127", "USDC", domain.VenueDeribit},
+		{"deribit-btc-usdc", "0.01", "BTC_USDC", "Sell", "0.01", "77610", "780", "779.22", "USDC", domain.VenueDeribit},
 	}
 	for _, tc := range tests {
 		t.Run(tc.route, func(t *testing.T) {
@@ -142,22 +144,104 @@ func TestProtectedDepthWarnsWithoutIncreasingOrderQuantity(t *testing.T) {
 	}
 }
 
+func TestQuoteServiceRequiresFreshValidTwoSidedBook(t *testing.T) {
+	now := time.Now().UTC()
+	tests := []struct {
+		name         string
+		routeID      string
+		spend        string
+		bids         []BookLevel
+		asks         []BookLevel
+		wantCode     string
+		wantEmptyRef string
+	}{
+		{name: "bids-only sell fails", routeID: "deribit-btc-usdc", spend: "0.001", bids: []BookLevel{{Price: "78000", Quantity: "2"}}, wantCode: "INVALID_BOOK"},
+		{name: "bids-only buy fails", routeID: "deribit-usdc-btc", spend: "100", bids: []BookLevel{{Price: "78000", Quantity: "2"}}, wantCode: "INVALID_BOOK"},
+		{name: "asks-only buy fails", routeID: "deribit-usdc-btc", spend: "100", asks: []BookLevel{{Price: "78100", Quantity: "2"}}, wantCode: "INVALID_BOOK"},
+		{name: "asks-only sell fails", routeID: "deribit-btc-usdc", spend: "0.001", asks: []BookLevel{{Price: "78100", Quantity: "2"}}, wantCode: "INVALID_BOOK"},
+		{name: "crossed two-sided book fails", routeID: "deribit-usdc-btc", spend: "100", bids: []BookLevel{{Price: "78100", Quantity: "2"}}, asks: []BookLevel{{Price: "78000", Quantity: "2"}}, wantCode: "INVALID_BOOK"},
+		{name: "malformed executable side fails", routeID: "deribit-btc-usdc", spend: "0.001", bids: []BookLevel{{Price: "bad", Quantity: "2"}}, wantCode: "INVALID_BOOK"},
+		{name: "valid two-sided book succeeds", routeID: "deribit-usdc-btc", spend: "100", bids: []BookLevel{{Price: "78000", Quantity: "2"}}, asks: []BookLevel{{Price: "78100", Quantity: "2"}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			providers := fixtureProviders(now)
+			provider := providers[domain.VenueDeribit].(*fixtureProvider)
+			provider.market.Bids, provider.market.Asks = tc.bids, tc.asks
+			quote, err := fixtureService(now, providers).Create(context.Background(), CreateRequest{
+				Identity: "shared-user", Venue: domain.VenueDeribit, RouteID: tc.routeID,
+				SpendBudget: tc.spend, AccountAlias: "deribit-test",
+			})
+			if tc.wantCode != "" {
+				assertQuoteCode(t, err, tc.wantCode)
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantEmptyRef == "ask" && quote.ReferenceAsk != "" {
+				t.Fatalf("reference ask = %q, want empty", quote.ReferenceAsk)
+			}
+			if tc.wantEmptyRef == "bid" && quote.ReferenceBid != "" {
+				t.Fatalf("reference bid = %q, want empty", quote.ReferenceBid)
+			}
+		})
+	}
+}
+
+func TestValidateForConfirmRejectsChangedFeePolicy(t *testing.T) {
+	now := time.Now().UTC()
+	tests := []struct {
+		name   string
+		mutate func(*FeePolicy)
+	}{
+		{name: "rate", mutate: func(fee *FeePolicy) { fee.Rate = "0.002" }},
+		{name: "charge asset", mutate: func(fee *FeePolicy) { fee.ChargeAsset = "from" }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			providers := fixtureProviders(now)
+			provider := providers[domain.VenueBybit].(*fixtureProvider)
+			service := fixtureService(now, providers)
+			quote, err := service.Create(context.Background(), CreateRequest{
+				Identity: "shared-user", Venue: domain.VenueBybit, RouteID: "bybit-usdt-btc",
+				SpendBudget: "100", AccountAlias: "bybit-test",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			tc.mutate(&provider.fee)
+			assertQuoteCode(t, service.ValidateForConfirm(context.Background(), quote), "QUOTE_CHANGED")
+		})
+	}
+}
+
 type fixtureProvider struct {
 	market      MarketSnapshot
+	markets     map[string]MarketSnapshot
 	marketErr   error
 	capacity    map[string]string
 	capacityErr error
 	fee         FeePolicy
+	fees        map[string]FeePolicy
 	feeErr      error
 }
 
-func (p *fixtureProvider) Market(context.Context, Route) (MarketSnapshot, error) {
+func (p *fixtureProvider) Market(_ context.Context, route Route) (MarketSnapshot, error) {
+	if market, ok := p.markets[route.ID]; ok {
+		return market, p.marketErr
+	}
 	return p.market, p.marketErr
 }
 func (p *fixtureProvider) Available(_ context.Context, _ Route, asset string) (Capacity, error) {
 	return Capacity{Available: p.capacity[asset], AccountRevision: 7, ObservedAt: p.market.ObservedAt}, p.capacityErr
 }
-func (p *fixtureProvider) Fee(context.Context, Route) (FeePolicy, error) { return p.fee, p.feeErr }
+func (p *fixtureProvider) Fee(_ context.Context, route Route) (FeePolicy, error) {
+	if fee, ok := p.fees[route.ID]; ok {
+		return fee, p.feeErr
+	}
+	return p.fee, p.feeErr
+}
 
 func fixtureProviders(now time.Time) map[domain.Venue]Provider {
 	return map[domain.Venue]Provider{
@@ -166,16 +250,29 @@ func fixtureProviders(now time.Time) map[domain.Venue]Provider {
 				Rules: InstrumentRules{Instrument: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", TickSize: "0.1", QuantityStep: "0.00001", MinimumQuantity: "0.00001", MinimumNotional: "5", MaximumQuantity: "10", MetadataRevision: "bybit-fixture-v1"},
 				Bids:  []BookLevel{{Price: "99990", Quantity: "2"}}, Asks: []BookLevel{{Price: "100000", Quantity: "2"}}, ObservedAt: now,
 			},
-			capacity: map[string]string{"BTC": "10", "USDT": "1000000"},
+			capacity: map[string]string{"BTC": "10", "ETH": "100", "USDT": "1000000"},
 			fee:      FeePolicy{Rate: "0.001", ChargeAsset: "to", Source: "fixture account fee"},
+			markets: map[string]MarketSnapshot{
+				"bybit-usdt-eth": {
+					Rules: InstrumentRules{Instrument: "ETHUSDT", BaseAsset: "ETH", QuoteAsset: "USDT", TickSize: "0.01", QuantityStep: "0.001", MinimumQuantity: "0.001", MinimumNotional: "5", MaximumQuantity: "100", MetadataRevision: "bybit-eth-fixture-v1"},
+					Bids:  []BookLevel{{Price: "2472.5", Quantity: "20"}}, Asks: []BookLevel{{Price: "2472.6", Quantity: "20"}}, ObservedAt: now,
+				},
+				"bybit-eth-usdt": {
+					Rules: InstrumentRules{Instrument: "ETHUSDT", BaseAsset: "ETH", QuoteAsset: "USDT", TickSize: "0.01", QuantityStep: "0.001", MinimumQuantity: "0.001", MinimumNotional: "5", MaximumQuantity: "100", MetadataRevision: "bybit-eth-fixture-v1"},
+					Bids:  []BookLevel{{Price: "2472.5", Quantity: "20"}}, Asks: []BookLevel{{Price: "2472.6", Quantity: "20"}}, ObservedAt: now,
+				},
+			},
 		},
 		domain.VenueDeribit: &fixtureProvider{
 			market: MarketSnapshot{
-				Rules: InstrumentRules{Instrument: "ETH_BTC", BaseAsset: "ETH", QuoteAsset: "BTC", TickSize: "0.0001", QuantityStep: "0.001", MinimumQuantity: "0.001", MinimumNotional: "0.0001", MaximumQuantity: "100", MetadataRevision: "deribit-fixture-v1"},
-				Bids:  []BookLevel{{Price: "0.0499", Quantity: "20"}}, Asks: []BookLevel{{Price: "0.05", Quantity: "20"}}, ObservedAt: now,
+				Rules: InstrumentRules{Instrument: "BTC_USDC", BaseAsset: "BTC", QuoteAsset: "USDC", TickSize: "1", QuantityStep: "0.0001", MinimumQuantity: "0.0001", MinimumNotional: "10", MaximumQuantity: "1", MetadataRevision: "deribit-fixture-v1"},
+				Bids:  []BookLevel{{Price: "78000", Quantity: "2"}}, Asks: []BookLevel{{Price: "78100", Quantity: "2"}}, ObservedAt: now,
 			},
-			capacity: map[string]string{"BTC": "10", "ETH": "100"},
-			fee:      FeePolicy{Rate: "0.001", ChargeAsset: "to", Source: "fixture account fee"},
+			capacity: map[string]string{"BTC": "10", "USDC": "1000000"},
+			fees: map[string]FeePolicy{
+				"deribit-usdc-btc": {Rate: "0.001", ChargeAsset: "from", Source: "fixture account fee"},
+				"deribit-btc-usdc": {Rate: "0.001", ChargeAsset: "to", Source: "fixture account fee"},
+			},
 		},
 	}
 }
@@ -184,8 +281,8 @@ func fixtureService(now time.Time, providers map[domain.Venue]Provider) *Service
 	return &Service{
 		Providers: providers, TTL: 5 * time.Second, BookMaxAge: 3 * time.Second, SlippageBPS: 50,
 		Caps: Caps{
-			ByAsset:       map[string]string{"BTC": "0.01", "ETH": "1", "USDT": "1000"},
-			ByVenueSource: map[string]string{"bybit:BTC": "0.01", "bybit:USDT": "1000", "deribit:BTC": "0.01", "deribit:ETH": "1"},
+			ByAsset:       map[string]string{"BTC": "0.01", "ETH": "1", "USDT": "1000", "USDC": "1000"},
+			ByVenueSource: map[string]string{"bybit:BTC": "0.01", "bybit:ETH": "1", "bybit:USDT": "1000", "deribit:BTC": "0.01", "deribit:USDC": "1000"},
 		},
 		Now: func() time.Time { return now }, NewID: func() (string, error) { return "quote_fixture", nil },
 	}

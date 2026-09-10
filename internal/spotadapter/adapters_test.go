@@ -124,6 +124,26 @@ func TestBybitAdapterNormalizesSpotInputsAndSubmission(t *testing.T) {
 	}
 }
 
+func TestBybitAdapterUsesQuantityStepWhenDeprecatedMinimumQuantityIsMissing(t *testing.T) {
+	now := time.UnixMilli(1789000000124).UTC()
+	instrument := rest.Instrument{Symbol: "BTCUSDT", Status: "Trading", BaseCoin: "BTC", QuoteCoin: "USDT"}
+	instrument.PriceFilter.TickSize = "0.01"
+	instrument.LotSizeFilter.QtyStep = "0.000001"
+	instrument.LotSizeFilter.MinOrderAmt = "5"
+	client := &fakeBybitClient{
+		instrument: instrument,
+		book: rest.SpotOrderBook{Symbol: "BTCUSDT", TimestampMS: now.UnixMilli(),
+			Bids: [][]string{{"99999.99", "0.2"}}, Asks: [][]string{{"100000.01", "0.3"}}},
+	}
+	market, err := (&Bybit{Client: client, Now: func() time.Time { return now }}).Market(context.Background(), routeByID(t, "bybit-usdt-btc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if market.Rules.MinimumQuantity != "0.000001" || market.Rules.MinimumNotional != "5" {
+		t.Fatalf("minimum rules = %+v", market.Rules)
+	}
+}
+
 func TestBybitAdapterClassifiesExplicitRejectionAndUncertainFailure(t *testing.T) {
 	route := routeByID(t, "bybit-usdt-btc")
 	client := &fakeBybitClient{placeErr: &rest.APIError{Code: 170140, Message: "order value exceeded"}}
@@ -146,23 +166,29 @@ func TestBybitAdapterClassifiesExplicitRejectionAndUncertainFailure(t *testing.T
 func TestDeribitAdapterNormalizesSpotInputsFeeAndSubmission(t *testing.T) {
 	now := time.UnixMilli(1789000000124).UTC()
 	client := &fakeDeribitClient{
-		instrument: deribit.Instrument{InstrumentName: "ETH_BTC", Kind: "spot", BaseCurrency: "ETH", QuoteCurrency: "BTC", TickSize: json.Number("0.00000001"), AmountStep: json.Number("0.0001"), MinTradeAmount: json.Number("0.001"), TakerCommission: json.Number("0.001"), IsActive: true},
-		book:       deribit.SpotOrderBook{InstrumentName: "ETH_BTC", TimestampMS: now.UnixMilli(), Bids: [][]json.Number{{json.Number("0.05"), json.Number("2")}}, Asks: [][]json.Number{{json.Number("0.0501"), json.Number("3")}}},
+		instrument: deribit.Instrument{InstrumentName: "BTC_USDC", Kind: "spot", BaseCurrency: "BTC", QuoteCurrency: "USDC", TickSize: json.Number("1"), AmountStep: json.Number("0.0001"), MinTradeAmount: json.Number("0.0001"), TakerCommission: json.Number("0.001"), IsActive: true},
+		book:       deribit.SpotOrderBook{InstrumentName: "BTC_USDC", TimestampMS: now.UnixMilli(), Bids: [][]json.Number{{json.Number("78000"), json.Number("2")}}, Asks: [][]json.Number{{json.Number("78100"), json.Number("3")}}},
 		result:     deribit.OrderResult{Order: deribit.Order{OrderID: "deribit-order-1", OrderState: "open"}},
 	}
-	accounts := &fakeCapacity{values: map[domain.Venue]map[string]string{domain.VenueDeribit: {"BTC": "0.02", "ETH": "1"}}, asOf: now}
+	accounts := &fakeCapacity{values: map[domain.Venue]map[string]string{domain.VenueDeribit: {"BTC": "0.02", "USDC": "1000"}}, asOf: now}
 	adapter := &Deribit{Client: client, Accounts: accounts, MetadataTTL: time.Minute, Now: func() time.Time { return now }}
-	route := routeByID(t, "deribit-btc-eth")
+	route := routeByID(t, "deribit-usdc-btc")
 
 	market, err := adapter.Market(context.Background(), route)
-	if err != nil || market.Rules.TickSize != "0.00000001" || market.Rules.QuantityStep != "0.0001" || market.Rules.MetadataRevision == "" {
+	if err != nil || market.Rules.TickSize != "1" || market.Rules.QuantityStep != "0.0001" || market.Rules.MetadataRevision == "" {
 		t.Fatalf("Market() = %+v, %v", market, err)
 	}
 	fee, err := adapter.Fee(context.Background(), route)
 	if err != nil || fee.Rate != "0.001" || fee.ChargeAsset != "from" {
 		t.Fatalf("buy Fee() = %+v, %v", fee, err)
 	}
-	sellRoute := routeByID(t, "deribit-eth-btc")
+	metadataDrivenRoute := route
+	metadataDrivenRoute.QuoteAsset = "BTC"
+	fee, err = adapter.Fee(context.Background(), metadataDrivenRoute)
+	if err != nil || fee.ChargeAsset != "from" {
+		t.Fatalf("Fee() must use API quote currency, got %+v, %v", fee, err)
+	}
+	sellRoute := routeByID(t, "deribit-btc-usdc")
 	fee, err = adapter.Fee(context.Background(), sellRoute)
 	if err != nil || fee.ChargeAsset != "to" || client.instrumentCalls != 1 {
 		t.Fatalf("sell Fee() = %+v, calls=%d, error=%v", fee, client.instrumentCalls, err)
@@ -177,15 +203,15 @@ func TestDeribitAdapterNormalizesSpotInputsFeeAndSubmission(t *testing.T) {
 	if err != nil || submission.VenueOrderID != "deribit-order-1" || !submission.Accepted {
 		t.Fatalf("Submit() = %+v, %v", submission, err)
 	}
-	if client.lastSide != "buy" || client.lastOrder.InstrumentName != "ETH_BTC" || client.lastOrder.TimeInForce != "immediate_or_cancel" || client.lastOrder.Label != trade.ClientOrderID || client.lastOrder.Amount.String() != trade.Quote.BaseQty {
+	if client.lastSide != "buy" || client.lastOrder.InstrumentName != "BTC_USDC" || client.lastOrder.Type != "limit" || client.lastOrder.TimeInForce != "immediate_or_cancel" || client.lastOrder.Label != trade.ClientOrderID || client.lastOrder.Amount.String() != trade.Quote.BaseQty {
 		t.Fatalf("native Deribit order = %+v side=%q", client.lastOrder, client.lastSide)
 	}
 }
 
 func TestDeribitAdapterRejectsUnverifiableMetadataAndClassifiesErrors(t *testing.T) {
-	route := routeByID(t, "deribit-btc-eth")
+	route := routeByID(t, "deribit-usdc-btc")
 	client := &fakeDeribitClient{instrument: deribit.Instrument{
-		InstrumentName: "ETH_BTC", Kind: "spot", BaseCurrency: "ETH", QuoteCurrency: "BTC", TickSize: json.Number("0.00000001"),
+		InstrumentName: "BTC_USDC", Kind: "spot", BaseCurrency: "BTC", QuoteCurrency: "USDC", TickSize: json.Number("1"),
 		AmountStep: json.Number(""), MinTradeAmount: json.Number("0.001"), TakerCommission: json.Number("0.001"), IsActive: true,
 	}}
 	adapter := &Deribit{Client: client}

@@ -3,7 +3,9 @@ package tradereconcile
 import (
 	"context"
 	"errors"
+	"math/big"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,10 +17,13 @@ import (
 )
 
 type fakeBybit struct {
-	orders     []rest.Order
-	executions []rest.Execution
-	err        error
-	calls      int
+	orders         []rest.Order
+	executions     []rest.Execution
+	orderPages     map[string]rest.OrderPage
+	historyPages   map[string]rest.OrderPage
+	executionPages map[string]rest.ExecutionPage
+	err            error
+	calls          int
 }
 
 func (f *fakeBybit) Orders(context.Context, string, string, string, string, *int) ([]rest.Order, rest.ResponseMeta, error) {
@@ -28,6 +33,24 @@ func (f *fakeBybit) Orders(context.Context, string, string, string, string, *int
 func (f *fakeBybit) Executions(context.Context, string, string, string, string) ([]rest.Execution, rest.ResponseMeta, error) {
 	f.calls++
 	return f.executions, rest.ResponseMeta{}, f.err
+}
+func (f *fakeBybit) OrdersPage(_ context.Context, _, _, _, _ string, _ *int, cursor string) (rest.OrderPage, rest.ResponseMeta, error) {
+	f.calls++
+	if f.orderPages == nil {
+		return rest.OrderPage{List: f.orders}, rest.ResponseMeta{}, f.err
+	}
+	return f.orderPages[cursor], rest.ResponseMeta{}, f.err
+}
+func (f *fakeBybit) OrderHistoryPage(_ context.Context, _, _, _, _, cursor string) (rest.OrderPage, rest.ResponseMeta, error) {
+	f.calls++
+	return f.historyPages[cursor], rest.ResponseMeta{}, f.err
+}
+func (f *fakeBybit) ExecutionsPage(_ context.Context, _, _, _, _, cursor string) (rest.ExecutionPage, rest.ResponseMeta, error) {
+	f.calls++
+	if f.executionPages == nil {
+		return rest.ExecutionPage{List: f.executions}, rest.ResponseMeta{}, f.err
+	}
+	return f.executionPages[cursor], rest.ResponseMeta{}, f.err
 }
 
 type fakeDeribit struct {
@@ -92,12 +115,65 @@ func TestBybitPartialIOCReconcilesFeesAndTerminalBalance(t *testing.T) {
 	if updated.GrossSourceSpent != "53" || updated.GrossDestinationReceived != "0.5" || updated.NetDestinationReceived != "0.4995" || updated.ActualSourceDebit != "53" {
 		t.Fatalf("reconciled amounts = %+v", updated)
 	}
-	if len(updated.Fees) != 1 || updated.Fees[0] != (intent.TradeFee{Asset: "BTC", Amount: "0.0005"}) || updated.BalanceSyncStatus != "SYNCED" {
+	if len(updated.Fees) != 1 || updated.Fees[0] != (intent.TradeFee{Asset: "BTC", Amount: "0.0005", Kind: "fee"}) || updated.BalanceSyncStatus != "SYNCED" {
 		t.Fatalf("fees/balance = %+v %q", updated.Fees, updated.BalanceSyncStatus)
 	}
 	if len(accounts.calls) != 1 || accounts.calls[0] != domain.VenueBybit {
 		t.Fatalf("account refresh calls = %v", accounts.calls)
 	}
+}
+
+func TestApplyAssetsDistinguishesFeesFromRebates(t *testing.T) {
+	tests := []struct {
+		name       string
+		fee        intent.TradeFee
+		wantNet    string
+		wantSource string
+	}{
+		{name: "destination fee", fee: intent.TradeFee{Asset: "BTC", Amount: "0.1", Kind: "fee"}, wantNet: "0.9", wantSource: "100"},
+		{name: "source fee", fee: intent.TradeFee{Asset: "USDT", Amount: "0.1", Kind: "fee"}, wantNet: "1", wantSource: "100.1"},
+		{name: "third asset fee", fee: intent.TradeFee{Asset: "BNB", Amount: "0.1", Kind: "fee"}, wantNet: "1", wantSource: "100"},
+		{name: "destination rebate", fee: intent.TradeFee{Asset: "BTC", Amount: "0.1", Kind: "rebate"}, wantNet: "1.1", wantSource: "100"},
+		{name: "source rebate", fee: intent.TradeFee{Asset: "USDT", Amount: "0.1", Kind: "rebate"}, wantNet: "1", wantSource: "99.9"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := resolution{grossDestination: "1", grossSource: "100", fees: []intent.TradeFee{tc.fee}}
+			applyAssets(&result, domain.SideBuy, "BTC", "USDT")
+			if result.netDestination != tc.wantNet || result.actualSource != tc.wantSource {
+				t.Fatalf("net/source = %s/%s, want %s/%s", result.netDestination, result.actualSource, tc.wantNet, tc.wantSource)
+			}
+		})
+	}
+
+	result, err := summarizeFills(domain.SideBuy, "1", []fill{
+		{qty: mustPositive(t, "0.5"), price: mustPositive(t, "100"), fee: mustSigned(t, "0.1"), feeAsset: "BTC"},
+		{qty: mustPositive(t, "0.5"), price: mustPositive(t, "100"), fee: mustSigned(t, "-0.02"), feeAsset: "BTC"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(result.fees, []intent.TradeFee{{Asset: "BTC", Amount: "0.1", Kind: "fee"}, {Asset: "BTC", Amount: "0.02", Kind: "rebate"}}) {
+		t.Fatalf("fee/rebate aggregates = %+v", result.fees)
+	}
+}
+
+func mustPositive(t *testing.T, value string) *big.Rat {
+	t.Helper()
+	result, ok := positive(value)
+	if !ok {
+		t.Fatalf("invalid positive fixture %q", value)
+	}
+	return result
+}
+
+func mustSigned(t *testing.T, value string) *big.Rat {
+	t.Helper()
+	result, ok := signedDecimal(value)
+	if !ok {
+		t.Fatalf("invalid signed fixture %q", value)
+	}
+	return result
 }
 
 func TestDeribitZeroFillIOCIsTerminalAndReleasesSlot(t *testing.T) {
@@ -195,6 +271,39 @@ func TestLaterFillEvidenceSupersedesCancelledState(t *testing.T) {
 	}
 	if !slices.Equal(accounts.statuses, []string{"RUNNING", "SYNCED"}) || !slices.Equal(accounts.discrepancies, []bool{false, true}) {
 		t.Fatalf("reconciliation observations = %v %v", accounts.statuses, accounts.discrepancies)
+	}
+}
+
+func TestBybitCompletedIOCUsesHistoryFallbackAndAllExecutionPages(t *testing.T) {
+	now := time.Date(2026, 9, 10, 14, 45, 0, 0, time.UTC)
+	store, trade := activeTrade(t, now, domain.VenueBybit, "Buy", "USDT", "BTC", "BTCUSDT", "1")
+	client := &fakeBybit{
+		orderPages: map[string]rest.OrderPage{"": {}},
+		historyPages: map[string]rest.OrderPage{"": {List: []rest.Order{{
+			OrderID: trade.VenueOrderID, OrderLinkID: trade.ClientOrderID, OrderStatus: "Filled",
+		}}}},
+		executionPages: map[string]rest.ExecutionPage{
+			"":       {List: []rest.Execution{{OrderID: trade.VenueOrderID, OrderLinkID: trade.ClientOrderID, ExecQty: "0.4", ExecPrice: "100", ExecFee: "0.0004", FeeCurrency: "BTC"}}, NextPageCursor: "page-2"},
+			"page-2": {List: []rest.Execution{{OrderID: trade.VenueOrderID, OrderLinkID: trade.ClientOrderID, ExecQty: "0.6", ExecPrice: "101", ExecFee: "0.0006", FeeCurrency: "BTC"}}},
+		},
+	}
+	updated, err := (&Service{Store: store, Bybit: client}).RecheckTrade(context.Background(), trade.ID, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status != intent.TradeFilled || updated.FilledBaseQty != "1" || updated.AveragePrice != "100.6" || len(updated.Fees) != 1 || updated.Fees[0].Amount != "0.001" {
+		t.Fatalf("history/paged result = %+v", updated)
+	}
+}
+
+func TestBybitPaginationFailsClosedWhenCursorDoesNotAdvance(t *testing.T) {
+	now := time.Date(2026, 9, 10, 14, 50, 0, 0, time.UTC)
+	_, trade := activeTrade(t, now, domain.VenueBybit, "Buy", "USDT", "BTC", "BTCUSDT", "1")
+	client := &fakeBybit{orderPages: map[string]rest.OrderPage{
+		"": {NextPageCursor: "same"}, "same": {NextPageCursor: "same"},
+	}}
+	if _, err := (&Service{Bybit: client}).bybitOrders(context.Background(), trade); err == nil || !strings.Contains(err.Error(), "did not advance") {
+		t.Fatalf("pagination error = %v", err)
 	}
 }
 

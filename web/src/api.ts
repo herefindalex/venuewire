@@ -120,7 +120,7 @@ export interface TradeView {
   venueOrderId?: string;
   filledBaseQty?: string;
   averagePrice?: string;
-  fees?: Array<{ asset: string; amount: string }>;
+  fees?: Array<{ asset: string; amount: string; kind?: 'fee' | 'rebate' }>;
   netDestinationReceived?: string;
   fillDetailsStatus: string;
   feeDetailsStatus: string;

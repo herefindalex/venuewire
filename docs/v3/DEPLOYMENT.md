@@ -1,6 +1,6 @@
 # VenueWire V3.1 deployment
 
-Status: implementation and reference configuration are locally verified. No Nginx, firewall, certificate, service or Testnet account change was performed during V3.1 work; real split-host deployment is `NOT_RUN`.
+Status: implementation is locally verified and the configured split-host HTTPS/WSS Testnet deployment was exercised on 2026-09-10. Privileged Nginx and host firewall contents were not directly inspected by this process.
 
 ## Topology
 
@@ -86,7 +86,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-These commands are documentation, not evidence that the V3.1 deployment occurred.
+For the 2026-09-10 deployment, the operator reported a passing `nginx -t` and reload; the public Browser/API/WSS path was then verified independently.
 
 ## Host ACL
 

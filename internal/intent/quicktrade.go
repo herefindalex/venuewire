@@ -35,6 +35,7 @@ func (s TradeStatus) Terminal() bool {
 type TradeFee struct {
 	Asset  string `json:"asset"`
 	Amount string `json:"amount"`
+	Kind   string `json:"kind,omitempty"`
 }
 
 type QuoteFee struct {
@@ -79,6 +80,8 @@ type QuickTradeQuote struct {
 	GrossReceiveEstimate  string         `json:"grossReceiveEstimate"`
 	NetReceiveEstimate    string         `json:"netReceiveEstimate,omitempty"`
 	EstimatedFees         []QuoteFee     `json:"fees,omitempty"`
+	FeeRate               string         `json:"feeRate,omitempty"`
+	FeeChargeAsset        string         `json:"feeChargeAsset,omitempty"`
 	SourceDebitUpperBound string         `json:"sourceDebitUpperBound"`
 	ThirdAssetReserves    []AssetReserve `json:"thirdAssetReserves,omitempty"`
 	AccountRevision       uint64         `json:"accountRevision"`

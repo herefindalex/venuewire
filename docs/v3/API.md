@@ -1,6 +1,6 @@
 # VenueWire V3.1 Browser API
 
-Status: locally implemented and verified. External HTTPS/WSS and Testnet order verification are recorded separately as `NOT_RUN`.
+Status: locally verified and externally exercised through the configured HTTPS/WSS origin with authorized Bybit and Deribit Testnet orders.
 
 All routes are same-origin and are intended to be reached only through the configured HTTPS Nginx proxy. Private responses use `Cache-Control: no-store`. Errors contain a stable public code, safe message and correlation `requestId`; stack traces, credentials, provider payloads and session identities are never returned.
 
@@ -39,8 +39,10 @@ Supported route IDs:
 |---|---|---|
 | Bybit | `bybit-usdt-btc` | Buy BTC on `BTCUSDT`, budget in USDT |
 | Bybit | `bybit-btc-usdt` | Sell BTC on `BTCUSDT`, budget in BTC |
-| Deribit | `deribit-btc-eth` | Buy ETH on Spot `ETH_BTC`, budget in BTC |
-| Deribit | `deribit-eth-btc` | Sell ETH on Spot `ETH_BTC`, budget in ETH |
+| Bybit | `bybit-usdt-eth` | Buy ETH on `ETHUSDT`, budget in USDT |
+| Bybit | `bybit-eth-usdt` | Sell ETH on `ETHUSDT`, budget in ETH |
+| Deribit | `deribit-usdc-btc` | Buy BTC on Spot `BTC_USDC`, budget in USDC |
+| Deribit | `deribit-btc-usdc` | Sell BTC on Spot `BTC_USDC`, budget in BTC |
 
 `POST /api/trades/confirm` accepts only `quoteId` and a Browser-generated `clientRequestId`. It requires `WEB_TRADING_ENABLED=true`, revalidates the frozen quote and atomically persists the intent, quota accounting and concurrent reservation before the one venue submission attempt. Duplicate request IDs or a consumed quote return the existing logical trade. Transport uncertainty becomes `Unknown`; explicit venue rejection becomes `Rejected`.
 
