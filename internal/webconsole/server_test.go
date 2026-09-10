@@ -2,6 +2,7 @@ package webconsole
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net"
@@ -9,12 +10,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/gorilla/websocket"
 
 	"venuewire/internal/config"
 	"venuewire/internal/domain"
+	"venuewire/internal/intent"
+	"venuewire/internal/quicktrade"
 )
 
 func TestAuthenticationSessionCSRFAndLogout(t *testing.T) {
@@ -265,5 +269,170 @@ func TestSessionCookieSignatureCannotBeForged(t *testing.T) {
 	response := performRequest(server, http.MethodGet, "/api/auth/me", "", forged, "")
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("forged cookie status = %d", response.Code)
+	}
+}
+
+func TestFrontendServesEmbeddedIndexAndDoesNotMaskAPINotFound(t *testing.T) {
+	server := newTestServer(t)
+	server.assets = fstest.MapFS{
+		"index.html":    {Data: []byte("<html>VenueWire</html>")},
+		"assets/app.js": {Data: []byte("console.log('VenueWire')")},
+	}
+	index := performRequest(server, http.MethodGet, "/", "", nil, "")
+	if index.Code != http.StatusOK || !strings.Contains(index.Body.String(), "VenueWire") || index.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("index status/body/cache = %d %s %q", index.Code, index.Body.String(), index.Header().Get("Cache-Control"))
+	}
+	spa := performRequest(server, http.MethodGet, "/trades/trade-1", "", nil, "")
+	if spa.Code != http.StatusOK || !strings.Contains(spa.Body.String(), "VenueWire") {
+		t.Fatalf("SPA fallback = %d %s", spa.Code, spa.Body.String())
+	}
+	api := performRequest(server, http.MethodGet, "/api/not-implemented", "", nil, "")
+	if api.Code != http.StatusNotFound || strings.Contains(api.Body.String(), "<html>") {
+		t.Fatalf("API fallback = %d %s", api.Code, api.Body.String())
+	}
+}
+
+func TestRecentTradesAreSharedWithoutSessionIdentifiers(t *testing.T) {
+	server := newTestServer(t)
+	server.trades = intent.Store{Path: t.TempDir() + "/intents.json"}
+	now := time.Now().UTC()
+	confirmation := webTradeConfirmation(now)
+	if _, _, err := server.trades.ConfirmQuickTrade(t.Context(), confirmation, intent.DemoLimits{MaxTradesPerSession: 10, MaxTradesPerHour: 30, MaxConcurrentTrades: 1}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := server.trades.MarkQuickTradeDispatching(t.Context(), confirmation.IntentID, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := server.trades.UpdateQuickTrade(t.Context(), confirmation.IntentID, intent.QuickTradeUpdate{Status: intent.TradeUnknown}, now); err != nil {
+		t.Fatal(err)
+	}
+	login := performRequest(server, http.MethodPost, "/api/auth/login", `{"username":"alex","password":"fixture-password"}`, nil, "")
+	response := performRequest(server, http.MethodGet, "/api/trades", "", login.Result().Cookies()[0], "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), confirmation.SessionID) || strings.Contains(response.Body.String(), confirmation.Identity) {
+		t.Fatalf("public trade response exposes internal identity: %s", response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), confirmation.IntentID) || !strings.Contains(response.Body.String(), "bybit-usdt-btc") {
+		t.Fatalf("public trade missing lifecycle identity: %s", response.Body.String())
+	}
+}
+
+func TestTradeRecheckRequiresCSRFAndIsRateLimited(t *testing.T) {
+	server := newTestServer(t)
+	server.trades = intent.Store{Path: t.TempDir() + "/intents.json"}
+	now := time.Now().UTC()
+	server.now = func() time.Time { return now }
+	confirmation := webTradeConfirmation(now)
+	if _, _, err := server.trades.ConfirmQuickTrade(t.Context(), confirmation, intent.DemoLimits{MaxTradesPerSession: 10, MaxTradesPerHour: 30, MaxConcurrentTrades: 1}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := server.trades.MarkQuickTradeDispatching(t.Context(), confirmation.IntentID, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := server.trades.UpdateQuickTrade(t.Context(), confirmation.IntentID, intent.QuickTradeUpdate{Status: intent.TradeUnknown}, now); err != nil {
+		t.Fatal(err)
+	}
+	server.rechecker = fakeRechecker{store: server.trades}
+	login := performRequest(server, http.MethodPost, "/api/auth/login", `{"username":"alex","password":"fixture-password"}`, nil, "")
+	cookie := login.Result().Cookies()[0]
+	var sessionView struct {
+		CSRFToken string `json:"csrfToken"`
+	}
+	decodeBody(t, login, &sessionView)
+	path := "/api/trades/" + confirmation.IntentID + "/recheck"
+	if response := performRequest(server, http.MethodPost, path, "", cookie, "wrong"); response.Code != http.StatusForbidden {
+		t.Fatalf("missing CSRF status = %d", response.Code)
+	}
+	response := performRequest(server, http.MethodPost, path, "", cookie, sessionView.CSRFToken)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"status":"Filled"`) {
+		t.Fatalf("recheck status/body = %d %s", response.Code, response.Body.String())
+	}
+	limited := performRequest(server, http.MethodPost, path, "", cookie, sessionView.CSRFToken)
+	if limited.Code != http.StatusTooManyRequests || limited.Header().Get("Retry-After") == "" {
+		t.Fatalf("second recheck = %d retry=%q", limited.Code, limited.Header().Get("Retry-After"))
+	}
+}
+
+func TestQuickTradeAPIUsesServerIdentityAndHidesPrivateSession(t *testing.T) {
+	server := newTestServer(t)
+	server.config.TradingEnabled = true
+	application := &stubTradeApplication{}
+	server.tradeApp = application
+	login := performRequest(server, http.MethodPost, "/api/auth/login", `{"username":"alex","password":"fixture-password"}`, nil, "")
+	cookie := login.Result().Cookies()[0]
+	var sessionView struct {
+		CSRFToken string `json:"csrfToken"`
+	}
+	decodeBody(t, login, &sessionView)
+
+	quote := performRequest(server, http.MethodPost, "/api/venues/bybit/quotes", `{"routeId":"bybit-usdt-btc","amount":"100"}`, cookie, sessionView.CSRFToken)
+	if quote.Code != http.StatusCreated || strings.Contains(quote.Body.String(), "alex") || strings.Contains(quote.Body.String(), "private-session") {
+		t.Fatalf("quote status/body = %d %s", quote.Code, quote.Body.String())
+	}
+	if application.createRequest.Identity != "alex" || application.createRequest.AccountAlias != "bybit-test" {
+		t.Fatalf("server scope not applied: %+v", application.createRequest)
+	}
+
+	confirm := performRequest(server, http.MethodPost, "/api/trades/confirm", `{"quoteId":"quote-1","clientRequestId":"browser-request-1"}`, cookie, sessionView.CSRFToken)
+	if confirm.Code != http.StatusAccepted || strings.Contains(confirm.Body.String(), application.confirmRequest.SessionID) {
+		t.Fatalf("confirm status/body = %d %s", confirm.Code, confirm.Body.String())
+	}
+	if application.confirmRequest.Identity != "alex" || application.confirmRequest.SessionID == "" || application.confirmRequest.ClientRequestID != "browser-request-1" {
+		t.Fatalf("confirmation scope = %+v", application.confirmRequest)
+	}
+}
+
+func TestTradingDisabledBlocksConfirmBeforeApplication(t *testing.T) {
+	server := newTestServer(t)
+	application := &stubTradeApplication{}
+	server.tradeApp = application
+	login := performRequest(server, http.MethodPost, "/api/auth/login", `{"username":"alex","password":"fixture-password"}`, nil, "")
+	cookie := login.Result().Cookies()[0]
+	var sessionView struct {
+		CSRFToken string `json:"csrfToken"`
+	}
+	decodeBody(t, login, &sessionView)
+	response := performRequest(server, http.MethodPost, "/api/trades/confirm", `{"quoteId":"quote-1","clientRequestId":"browser-request-1"}`, cookie, sessionView.CSRFToken)
+	if response.Code != http.StatusForbidden || application.confirmRequest.QuoteID != "" {
+		t.Fatalf("disabled confirm status/call = %d %+v", response.Code, application.confirmRequest)
+	}
+}
+
+type fakeRechecker struct{ store intent.Store }
+
+func (f fakeRechecker) RecheckTrade(ctx context.Context, intentID string, now time.Time) (intent.QuickTrade, error) {
+	return f.store.UpdateQuickTrade(ctx, intentID, intent.QuickTradeUpdate{Status: intent.TradeFilled, ResultStatus: "FILLED", Checked: true}, now)
+}
+
+type stubTradeApplication struct {
+	createRequest  quicktrade.CreateRequest
+	confirmRequest quicktrade.ConfirmRequest
+}
+
+func (s *stubTradeApplication) CreateQuote(_ context.Context, request quicktrade.CreateRequest) (intent.QuickTradeQuote, error) {
+	s.createRequest = request
+	now := time.Now().UTC()
+	return intent.QuickTradeQuote{ID: "quote-1", Identity: request.Identity, Venue: string(request.Venue), Environment: "testnet", AccountAlias: request.AccountAlias, RouteID: request.RouteID, FromAsset: "USDT", ToAsset: "BTC", SpendBudget: request.SpendBudget, Instrument: "BTCUSDT", Side: "Buy", BaseQty: "0.001", LimitPrice: "100500", TimeInForce: "IOC", CreatedAt: now, ExpiresAt: now.Add(5 * time.Second), Executable: true}, nil
+}
+
+func (s *stubTradeApplication) Confirm(_ context.Context, request quicktrade.ConfirmRequest) (quicktrade.ConfirmResult, error) {
+	s.confirmRequest = request
+	now := time.Now().UTC()
+	return quicktrade.ConfirmResult{Created: true, Trade: intent.QuickTrade{ID: "trade-1", Identity: request.Identity, SessionID: request.SessionID, ClientRequestID: request.ClientRequestID, Quote: intent.QuickTradeQuote{ID: request.QuoteID, Venue: "bybit", RouteID: "bybit-usdt-btc", FromAsset: "USDT", ToAsset: "BTC", SpendBudget: "100", Instrument: "BTCUSDT", Side: "Buy", BaseQty: "0.001", LimitPrice: "100500", TimeInForce: "IOC"}, ClientOrderID: "vw-trade-1", Status: intent.TradeAccepted, CreatedAt: now, UpdatedAt: now}}, nil
+}
+
+func webTradeConfirmation(now time.Time) intent.QuickTradeConfirmation {
+	return intent.QuickTradeConfirmation{
+		IntentID: "trade-1", Identity: "shared-demo-user", SessionID: "private-session-id",
+		ClientRequestID: "request-1", ClientOrderID: "vw-trade-1",
+		Quote: intent.QuickTradeQuote{
+			ID: "quote-1", Identity: "shared-demo-user", Venue: "bybit", Environment: "testnet",
+			AccountAlias: "bybit-test", RouteID: "bybit-usdt-btc", FromAsset: "USDT", ToAsset: "BTC",
+			SpendBudget: "100", Instrument: "BTCUSDT", Side: "Buy", BaseQty: "0.001",
+			LimitPrice: "100500", TimeInForce: "IOC", SourceDebitUpperBound: "100",
+			CreatedAt: now, ExpiresAt: now.Add(time.Minute), Executable: true,
+		},
 	}
 }

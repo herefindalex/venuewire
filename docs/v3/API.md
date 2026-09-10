@@ -35,6 +35,32 @@ Requires session, exact `Origin` and `X-CSRF-Token`. Returns `204`, revokes the 
 
 Requires a valid session. Returns only enabled venue IDs, Testnet environment, configured account aliases, default venue and the Web trading switch. It never returns endpoint credentials.
 
+## Quick Trade
+
+### `POST /api/venues/{venue}/quotes`
+
+Requires session, exact Origin and CSRF. The browser supplies only `routeId` and decimal source `amount`; identity, account, environment, side, instrument, fees, price protection and order parameters are resolved by the backend. An executable quote contains the frozen Limit IOC parameters, reference bid/ask, visible-depth estimate, fee source, worst source debit, 50-bps protection and absolute 5-second expiry. Non-executable fee previews are explicitly marked and cannot be confirmed.
+
+### `POST /api/trades/confirm`
+
+Requires session, exact Origin, CSRF and `WEB_TRADING_ENABLED=true`. The browser sends only `quoteId` and `clientRequestId`. The backend revalidates freshness, current marketability, metadata, venue limits, capacity and fees before atomically persisting the intent and Demo quota occupancy. New submissions return `202`; duplicate logical requests return the existing trade and never submit another venue order.
+
+Transport uncertainty produces `Unknown`; it does not produce a failure result or replacement order. Explicit venue rejection produces `Rejected`.
+
+## Shared trade history
+
+### `GET /api/trades?limit=25`
+
+Returns newest-first shared Demo history, bounded from 1 to 100 rows. Internal login identity and session IDs are excluded.
+
+### `GET /api/trades/{intentId}`
+
+Returns normalized lifecycle, IDs, quantities, execution price, fees, net received state and synchronization quality for one intent.
+
+### `POST /api/trades/{intentId}/recheck`
+
+Requires session, exact Origin and CSRF. The operation queries through the configured reconciliation service and cannot submit a replacement. Concurrent rechecks coalesce; repeated checks are rate-limited. `Unknown` and its reservations remain until authoritative evidence resolves the trade.
+
 ## Browser WebSocket
 
 ### `GET /api/ws`

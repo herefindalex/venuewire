@@ -58,10 +58,13 @@ type Plan struct {
 }
 
 type Snapshot struct {
-	Version   int                    `json:"version"`
-	UpdatedAt time.Time              `json:"updatedAt"`
-	Plans     map[string]Plan        `json:"plans"`
-	Cursors   map[string]TradeCursor `json:"cursors,omitempty"`
+	Version        int                    `json:"version"`
+	UpdatedAt      time.Time              `json:"updatedAt"`
+	Plans          map[string]Plan        `json:"plans"`
+	Cursors        map[string]TradeCursor `json:"cursors,omitempty"`
+	QuickTrades    map[string]QuickTrade  `json:"quickTrades,omitempty"`
+	QuickRequests  map[string]string      `json:"quickRequests,omitempty"`
+	ConsumedQuotes map[string]string      `json:"consumedQuotes,omitempty"`
 }
 
 type TradeCursor struct {
@@ -100,7 +103,7 @@ func (s Store) Load(ctx context.Context) (*Snapshot, error) {
 	}
 	raw, err := os.ReadFile(s.Path)
 	if os.IsNotExist(err) {
-		return &Snapshot{Version: SnapshotVersion, Plans: map[string]Plan{}, Cursors: map[string]TradeCursor{}}, nil
+		return &Snapshot{Version: SnapshotVersion, Plans: map[string]Plan{}, Cursors: map[string]TradeCursor{}, QuickTrades: map[string]QuickTrade{}, QuickRequests: map[string]string{}, ConsumedQuotes: map[string]string{}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -118,6 +121,7 @@ func (s Store) Load(ctx context.Context) (*Snapshot, error) {
 	if snapshot.Cursors == nil {
 		snapshot.Cursors = map[string]TradeCursor{}
 	}
+	initializeQuickTradeMaps(&snapshot)
 	return &snapshot, nil
 }
 

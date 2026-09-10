@@ -1,0 +1,158 @@
+package quicktrade
+
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"venuewire/internal/domain"
+	"venuewire/internal/intent"
+)
+
+func TestApplicationConcurrentConfirmSubmitsExactlyOnce(t *testing.T) {
+	now := time.Now().UTC()
+	submitter := &recordingSubmitter{result: Submission{VenueOrderID: "venue-order-1", RawVenueStatus: "New", Accepted: true}}
+	application := fixtureApplication(t, now, submitter)
+	quote, err := application.CreateQuote(context.Background(), CreateRequest{Identity: "shared-user", Venue: domain.VenueBybit, RouteID: "bybit-usdt-btc", SpendBudget: "100", AccountAlias: "bybit-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	results := make(chan ConfirmResult, 2)
+	errorsFound := make(chan error, 2)
+	var wait sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			result, confirmErr := application.Confirm(context.Background(), ConfirmRequest{Identity: "shared-user", SessionID: "session-1", QuoteID: quote.ID, ClientRequestID: "request-1"})
+			results <- result
+			errorsFound <- confirmErr
+		}()
+	}
+	wait.Wait()
+	close(results)
+	close(errorsFound)
+	for err := range errorsFound {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	var intentID string
+	for result := range results {
+		if intentID == "" {
+			intentID = result.Trade.ID
+		} else if result.Trade.ID != intentID {
+			t.Fatalf("duplicate intents: %q and %q", intentID, result.Trade.ID)
+		}
+	}
+	if submitter.Calls() != 1 {
+		t.Fatalf("submit calls = %d, want 1", submitter.Calls())
+	}
+	stored, err := application.Store.GetQuickTrade(context.Background(), intentID)
+	if err != nil || stored.Status != intent.TradeAccepted || stored.VenueOrderID != "venue-order-1" {
+		t.Fatalf("stored trade = %+v err=%v", stored, err)
+	}
+}
+
+func TestApplicationUncertainSubmissionSurvivesRestartAndIsNotResent(t *testing.T) {
+	now := time.Now().UTC()
+	submitter := &recordingSubmitter{err: errors.New("fixture timeout")}
+	application := fixtureApplication(t, now, submitter)
+	quote, err := application.CreateQuote(context.Background(), CreateRequest{Identity: "shared-user", Venue: domain.VenueBybit, RouteID: "bybit-usdt-btc", SpendBudget: "100", AccountAlias: "bybit-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := ConfirmRequest{Identity: "shared-user", SessionID: "session-1", QuoteID: quote.ID, ClientRequestID: "request-1"}
+	first, err := application.Confirm(context.Background(), request)
+	if err != nil || first.Trade.Status != intent.TradeUnknown || !first.Trade.SendAttempted {
+		t.Fatalf("first result = %+v err=%v", first, err)
+	}
+
+	restartedSubmitter := &recordingSubmitter{}
+	restarted := fixtureApplicationWithPath(now.Add(time.Minute), restartedSubmitter, application.Store.Path)
+	retry, err := restarted.Confirm(context.Background(), request)
+	if err != nil || retry.Trade.ID != first.Trade.ID || retry.Trade.Status != intent.TradeUnknown {
+		t.Fatalf("restart retry = %+v err=%v", retry, err)
+	}
+	if restartedSubmitter.Calls() != 0 {
+		t.Fatalf("restart resent uncertain order %d times", restartedSubmitter.Calls())
+	}
+}
+
+func TestApplicationDistinguishesDefiniteRejectionFromUnknown(t *testing.T) {
+	now := time.Now().UTC()
+	submitter := &recordingSubmitter{err: &RejectedError{PublicMessage: "The venue rejected the quantity.", Err: errors.New("fixture native reject")}}
+	application := fixtureApplication(t, now, submitter)
+	quote, err := application.CreateQuote(context.Background(), CreateRequest{Identity: "shared-user", Venue: domain.VenueBybit, RouteID: "bybit-usdt-btc", SpendBudget: "100", AccountAlias: "bybit-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := application.Confirm(context.Background(), ConfirmRequest{Identity: "shared-user", SessionID: "session-1", QuoteID: quote.ID, ClientRequestID: "request-1"})
+	if err != nil || result.Trade.Status != intent.TradeRejected || result.Trade.ResultStatus != "REJECTED" || result.Trade.LastPublicError != "The venue rejected the quantity." {
+		t.Fatalf("rejection result = %+v err=%v", result, err)
+	}
+}
+
+func TestApplicationSubmissionOutlivesBrowserCancellation(t *testing.T) {
+	now := time.Now().UTC()
+	submitter := &recordingSubmitter{result: Submission{VenueOrderID: "venue-order-1"}, requireLiveContext: true}
+	application := fixtureApplication(t, now, submitter)
+	quote, err := application.CreateQuote(context.Background(), CreateRequest{Identity: "shared-user", Venue: domain.VenueBybit, RouteID: "bybit-usdt-btc", SpendBudget: "100", AccountAlias: "bybit-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	result, err := application.Confirm(ctx, ConfirmRequest{Identity: "shared-user", SessionID: "session-1", QuoteID: quote.ID, ClientRequestID: "request-1"})
+	if err != nil || result.Trade.Status != intent.TradeSubmitted {
+		t.Fatalf("cancelled browser result = %+v err=%v", result, err)
+	}
+}
+
+type recordingSubmitter struct {
+	mu                 sync.Mutex
+	calls              int
+	result             Submission
+	err                error
+	requireLiveContext bool
+}
+
+func (s *recordingSubmitter) Submit(ctx context.Context, _ intent.QuickTrade) (Submission, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls++
+	if s.requireLiveContext && ctx.Err() != nil {
+		return Submission{}, errors.New("submission inherited browser cancellation")
+	}
+	return s.result, s.err
+}
+
+func (s *recordingSubmitter) Calls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls
+}
+
+func fixtureApplication(t *testing.T, now time.Time, submitter Submitter) *Application {
+	t.Helper()
+	return fixtureApplicationWithPath(now, submitter, filepath.Join(t.TempDir(), "intents.json"))
+}
+
+func fixtureApplicationWithPath(now time.Time, submitter Submitter, path string) *Application {
+	providers := fixtureProviders(now)
+	return &Application{
+		Quotes:     fixtureService(now, providers),
+		Cache:      NewQuoteCache(100),
+		Store:      intent.Store{Path: path},
+		Submitters: map[domain.Venue]Submitter{domain.VenueBybit: submitter},
+		Limits:     intent.DemoLimits{MaxTradesPerSession: 10, MaxTradesPerHour: 30, MaxConcurrentTrades: 1},
+		Now:        func() time.Time { return now },
+		NewIntentID: func() (string, error) {
+			return "trade_fixture", nil
+		},
+	}
+}

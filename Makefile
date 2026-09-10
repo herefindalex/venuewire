@@ -1,4 +1,4 @@
-.PHONY: fmt vet test check build
+.PHONY: fmt vet test check web build build-cli
 
 fmt:
 	gofmt -w $$(find cmd internal -name '*.go' -type f)
@@ -11,6 +11,14 @@ test:
 
 check: fmt vet test
 
-build:
+web:
+	npm --prefix web ci
+	npm --prefix web run build
+
+build: web
+	mkdir -p ./bin
+	go build -tags webui -o ./bin/venuewire ./cmd/venuewire
+
+build-cli:
 	mkdir -p ./bin
 	go build -o ./bin/venuewire ./cmd/venuewire

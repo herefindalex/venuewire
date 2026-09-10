@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -22,18 +23,24 @@ import (
 	"github.com/gorilla/websocket"
 
 	"venuewire/internal/config"
+	"venuewire/internal/intent"
 )
 
 const sessionCookieName = "__Host-trading_session"
 
 type Server struct {
-	config   config.WebConfig
-	base     config.Config
-	logger   *slog.Logger
-	handler  http.Handler
-	now      func() time.Time
-	sessions *sessionStore
-	limiter  *loginLimiter
+	config    config.WebConfig
+	base      config.Config
+	logger    *slog.Logger
+	handler   http.Handler
+	now       func() time.Time
+	sessions  *sessionStore
+	limiter   *loginLimiter
+	trades    intent.Store
+	rechecker TradeRechecker
+	rechecks  *recheckCoordinator
+	tradeApp  TradeApplication
+	assets    fs.FS
 }
 
 type session struct {
@@ -77,7 +84,21 @@ const (
 	sessionKey   contextKey = "session"
 )
 
-func New(cfg config.WebConfig, base config.Config, logger *slog.Logger) *Server {
+type Option func(*Server)
+
+func WithTradeRechecker(rechecker TradeRechecker) Option {
+	return func(server *Server) { server.rechecker = rechecker }
+}
+
+func WithTradeApplication(application TradeApplication) Option {
+	return func(server *Server) { server.tradeApp = application }
+}
+
+func WithAssets(assets fs.FS) Option {
+	return func(server *Server) { server.assets = assets }
+}
+
+func New(cfg config.WebConfig, base config.Config, logger *slog.Logger, options ...Option) *Server {
 	if logger == nil {
 		logger = slog.New(slog.NewJSONHandler(io.Discard, nil))
 	}
@@ -90,7 +111,12 @@ func New(cfg config.WebConfig, base config.Config, logger *slog.Logger) *Server 
 			secret:   append([]byte(nil), cfg.SessionSecret...),
 			sessions: make(map[string]*session),
 		},
-		limiter: &loginLimiter{clients: make(map[string]*loginAttempt), maxClients: 10_000},
+		limiter:  &loginLimiter{clients: make(map[string]*loginAttempt), maxClients: 10_000},
+		trades:   intent.Store{Path: base.IntentFile},
+		rechecks: &recheckCoordinator{active: make(map[string]bool), last: make(map[string]time.Time)},
+	}
+	for _, option := range options {
+		option(s)
 	}
 	s.handler = s.routes()
 	return s
@@ -138,10 +164,13 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("GET /api/auth/me", s.requireSession(http.HandlerFunc(s.handleMe)))
 	mux.Handle("POST /api/auth/logout", s.requireSession(s.requireCSRF(http.HandlerFunc(s.handleLogout))))
 	mux.Handle("GET /api/venues", s.requireSession(http.HandlerFunc(s.handleVenues)))
+	mux.Handle("GET /api/trades", s.requireSession(http.HandlerFunc(s.handleRecentTrades)))
+	mux.Handle("GET /api/trades/{intentID}", s.requireSession(http.HandlerFunc(s.handleTradeDetail)))
+	mux.Handle("POST /api/trades/{intentID}/recheck", s.requireSession(s.requireCSRF(http.HandlerFunc(s.handleTradeRecheck))))
+	mux.Handle("POST /api/venues/{venue}/quotes", s.requireSession(s.requireCSRF(http.HandlerFunc(s.handleCreateQuote))))
+	mux.Handle("POST /api/trades/confirm", s.requireSession(s.requireCSRF(http.HandlerFunc(s.handleConfirmTrade))))
 	mux.Handle("GET /api/ws", s.requireSession(http.HandlerFunc(s.handleWebSocket)))
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		writeError(w, http.StatusNotFound, "not_found", "The requested resource was not found.", "")
-	})
+	mux.HandleFunc("/", s.handleFrontend)
 	return s.securityHeaders(s.requestIdentity(s.proxyBoundary(mux)))
 }
 
@@ -515,6 +544,11 @@ func ipInNetworks(ip net.IP, networks []*net.IPNet) bool {
 
 func writeError(w http.ResponseWriter, status int, code, message, requestID string) {
 	writeJSON(w, status, publicError{Error: code, Message: message, RequestID: requestID})
+}
+
+func (s *Server) internalError(w http.ResponseWriter, r *http.Request, operation string, err error) {
+	s.logger.Error("web request failed", slog.String("operation", operation), slog.String("requestId", requestID(r)), slog.String("error", err.Error()))
+	writeError(w, http.StatusInternalServerError, "internal_error", "The request could not be processed.", requestID(r))
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

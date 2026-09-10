@@ -29,7 +29,7 @@ func TestRepositoryContainsNoCredentialAssignmentsOrPrivateKeys(t *testing.T) {
 		if !entry.IsDir() && (entry.Name() == ".env" || entry.Name() == ".env~") {
 			return nil
 		}
-		if entry.IsDir() && (entry.Name() == ".git" || entry.Name() == ".idea") {
+		if entry.IsDir() && (entry.Name() == ".git" || entry.Name() == ".idea" || entry.Name() == "node_modules") {
 			return filepath.SkipDir
 		}
 		if entry.IsDir() || specExamples[filepath.ToSlash(relative)] {

@@ -38,6 +38,31 @@ Verification after Phase A:
 | Frontend test/build | NOT_APPLICABLE — frontend has not been created |
 | External Testnet/deployment operations | NOT_RUN |
 
+### V3.1 Phase B — Quick Trade domain and browser UI foundation
+
+Status: `LOCAL_VERIFIED_FOUNDATION`; real venue adapters, account runtime, reconciliation orchestration and end-to-end Demo behavior remain pending.
+
+- Extended the existing locked intent snapshot additively with confirmed Quick Trade snapshots, request/quote indexes, lifecycle, fee/result fields and restart-safe Demo accounting. Existing V2 plans and snapshot version remain readable.
+- Confirm acceptance, quote consumption, session/global rolling quotas and active-trade occupancy share one flock-protected atomic update. `Unknown` remains active across restart; terminal evidence releases concurrency but still counts toward session/hour quotas.
+- Added four fixed Spot route definitions and an exact `math/big.Rat` quote engine covering source-asset budgets, V3/V3.1 caps, tick/step/minimum validation, Limit IOC 50-bps protection, visible-depth estimates, fees, third-asset reserves, capacity and 5-second Confirm revalidation.
+- Added browser quote/confirm/history/detail/Recheck API boundaries. Public DTOs exclude session IDs and internal identities. A detached submission context prevents browser disconnect from cancelling persisted execution work.
+- Added Vue 3, TypeScript, Vite and Ant Design Vue UI for login, venue switch, account assets, protected Review/Confirm, visible TESTNET state, runtime status, shared Recent Trades lifecycle, Recheck and About/architecture.
+- Added build-tagged frontend embedding. Ordinary Go/CLI tests do not require generated frontend output; `make build` creates the frontend and a `webui` binary.
+- Actual Bybit/Deribit providers and submitters are not wired into the `web` command yet. The UI compiles and its contracts are tested, but account/status/quote execution endpoints remain unavailable in a running binary until the next phase.
+
+Verification after this foundation:
+
+| Check | Result |
+|---|---|
+| `go test ./... -count=1 -timeout=120s` | PASS — 303 tests, 19 packages |
+| `go test -race ./... -count=1 -timeout=120s` | PASS — 303 tests, 19 packages |
+| `go vet ./...` | PASS |
+| `npm --prefix web run typecheck` | PASS |
+| `npm --prefix web test` | PASS — 2 tests |
+| `npm --prefix web run build` | PASS |
+| `go build -tags webui -o /tmp/venuewire-web ./cmd/venuewire` | PASS |
+| External Testnet/deployment operations | NOT_RUN |
+
 ## Phase status
 
 | Phase | Status | Evidence |

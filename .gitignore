@@ -10,3 +10,5 @@ data/
 state/
 bin/
 coverage.out
+web/node_modules/
+internal/webassets/dist/
