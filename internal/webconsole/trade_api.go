@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"venuewire/internal/intent"
+	"venuewire/internal/quicktrade"
 )
 
 type TradeRechecker interface {
@@ -111,6 +112,14 @@ func (s *Server) handleTradeRecheck(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_trade_id", "A trade ID is required.", requestID(r))
 		return
 	}
+	if _, err := s.trades.GetQuickTrade(r.Context(), intentID); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, "trade_not_found", "The trade was not found.", requestID(r))
+			return
+		}
+		s.internalError(w, r, "load trade for recheck", err)
+		return
+	}
 	if s.rechecker == nil {
 		writeError(w, http.StatusServiceUnavailable, "recheck_unavailable", "Order recheck is temporarily unavailable.", requestID(r))
 		return
@@ -138,6 +147,11 @@ func (s *Server) handleTradeRecheck(w http.ResponseWriter, r *http.Request) {
 		var public *RecheckError
 		if errors.As(err, &public) {
 			writeError(w, public.Status, public.Code, public.Message, requestID(r))
+			return
+		}
+		var venueError *quicktrade.Error
+		if errors.As(err, &venueError) {
+			writeError(w, http.StatusServiceUnavailable, strings.ToLower(venueError.Code), venueError.Error(), requestID(r))
 			return
 		}
 		s.internalError(w, r, "recheck trade", err)

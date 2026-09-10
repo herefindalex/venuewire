@@ -98,6 +98,25 @@ Status: `LOCAL_VERIFIED_FOUNDATION`; Web Quick Trade now uses real adapter imple
 | `go build -tags webui -o /tmp/venuewire-web-spot ./cmd/venuewire` | PASS |
 | External Testnet market/account/order operations | `NOT_RUN` |
 
+### V3.1 Phase C3 — reconciliation-backed lifecycle and startup recovery
+
+Status: `LOCAL_VERIFIED`; private WebSocket event fusion remains pending, but every accepted Browser intent now has polling/manual recovery without resubmission.
+
+- Added centralized Bybit/Deribit Spot order and execution reconciliation using venue order ID plus durable client ID/label. Browser Recheck and a single periodic startup/runtime recovery loop share the same serialized reconciler.
+- Recovery never resubmits. A recovered `Created` intent with no send attempt becomes locally `Rejected`; attempted intents without conclusive evidence remain `Unknown` and retain the global concurrent slot.
+- Bybit and Deribit fills/fees are aggregated with exact rational arithmetic. Source-asset fees increase actual debit; destination-asset fees reduce net received.
+- IOC zero-fill resolves to `CANCELLED_NO_FILL`; IOC partial-fill resolves terminal `Cancelled` with `PARTIALLY_FILLED_CANCELLED` plus fill details. Later authoritative full-fill evidence can supersede a cancellation race.
+- Terminal reconciliation triggers a coalesced account refresh and records `SYNCED` or `STALE` balance state. Venue lookup failures return safe `VENUE_RECOVERING` without mutating the intent.
+- Recheck validates session/CSRF, existence and per-intent rate limits. All terminal/unknown state remains durable across restart.
+
+| Check | Result |
+|---|---|
+| `go test ./...` | PASS — 346 tests, 22 packages |
+| `go test -race ./internal/tradereconcile ./internal/intent ./internal/webconsole ./cmd/venuewire` | PASS — 74 tests, 4 packages |
+| `go vet ./...` | PASS |
+| `go build -tags webui -o /tmp/venuewire-web-reconcile ./cmd/venuewire` | PASS |
+| External Testnet reconciliation/order operations | `NOT_RUN` |
+
 ## Phase status
 
 | Phase | Status | Evidence |

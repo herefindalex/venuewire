@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"venuewire/internal/accountstate"
 	"venuewire/internal/config"
@@ -14,6 +15,7 @@ import (
 	"venuewire/internal/quicktrade"
 	"venuewire/internal/rest"
 	"venuewire/internal/spotadapter"
+	"venuewire/internal/tradereconcile"
 	"venuewire/internal/webassets"
 	"venuewire/internal/webconsole"
 )
@@ -69,6 +71,7 @@ func executeWebCommand(ctx context.Context, cfg config.Config, logger *slog.Logg
 		adapter := &spotadapter.Deribit{Client: deribitClient, Accounts: accounts}
 		quoteProviders[domain.VenueDeribit], submitters[domain.VenueDeribit] = adapter, adapter
 	}
+	tradeStore := intent.Store{Path: cfg.IntentFile}
 	tradeApplication := &quicktrade.Application{
 		Quotes: &quicktrade.Service{
 			Providers: quoteProviders, TTL: webConfig.QuoteTTL, BookMaxAge: webConfig.TradeBookMaxAge,
@@ -82,7 +85,7 @@ func executeWebCommand(ctx context.Context, cfg config.Config, logger *slog.Logg
 			},
 		},
 		Cache:      quicktrade.NewQuoteCache(1_000),
-		Store:      intent.Store{Path: cfg.IntentFile},
+		Store:      tradeStore,
 		Submitters: submitters,
 		Limits: intent.DemoLimits{
 			MaxTradesPerSession: webConfig.MaxTradesPerSession,
@@ -90,10 +93,40 @@ func executeWebCommand(ctx context.Context, cfg config.Config, logger *slog.Logg
 			MaxConcurrentTrades: webConfig.MaxConcurrentTrades,
 		},
 	}
+	rechecker := &tradereconcile.Service{Store: tradeStore, Accounts: accounts}
+	if bybitClient != nil {
+		rechecker.Bybit = bybitClient
+	}
+	if deribitClient != nil {
+		rechecker.Deribit = deribitClient
+	}
+	go runQuickTradeRecovery(accountContext, webConfig.AccountReconcileInterval, rechecker, logger)
 	logger.Info("web console starting", slog.String("listen", webConfig.ListenAddress()), slog.String("environment", "testnet"), slog.Bool("tradingEnabled", webConfig.TradingEnabled))
 	return true, webconsole.New(webConfig, cfg, logger,
 		webconsole.WithAssets(assets),
 		webconsole.WithAccountService(accounts),
 		webconsole.WithTradeApplication(tradeApplication),
+		webconsole.WithTradeRechecker(rechecker),
 	).ListenAndServe(ctx)
+}
+
+func runQuickTradeRecovery(ctx context.Context, interval time.Duration, rechecker *tradereconcile.Service, logger *slog.Logger) {
+	run := func() {
+		recoveryContext, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		if err := rechecker.Recover(recoveryContext, time.Now()); err != nil {
+			logger.Warn("quick trade reconciliation incomplete", slog.String("error", err.Error()))
+		}
+	}
+	run()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
+		}
+	}
 }

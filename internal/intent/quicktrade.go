@@ -255,6 +255,8 @@ type QuickTradeUpdate struct {
 	FeeDetailsStatus         string
 	BalanceSyncStatus        string
 	PublicError              string
+	ClearPublicError         bool
+	LifecycleDetail          string
 	RequestID                string
 	Checked                  bool
 }
@@ -262,7 +264,11 @@ type QuickTradeUpdate struct {
 func (s Store) UpdateQuickTrade(ctx context.Context, intentID string, update QuickTradeUpdate, now time.Time) (QuickTrade, error) {
 	return s.updateQuickTrade(ctx, intentID, func(trade *QuickTrade) error {
 		if update.Status != "" {
-			if err := applyTradeStatus(trade, update.Status, update.PublicError, update.RequestID, now); err != nil {
+			detail := update.LifecycleDetail
+			if detail == "" {
+				detail = update.PublicError
+			}
+			if err := applyTradeStatus(trade, update.Status, detail, update.RequestID, now); err != nil {
 				return err
 			}
 		}
@@ -287,7 +293,9 @@ func (s Store) UpdateQuickTrade(ctx context.Context, intentID string, update Qui
 		if update.Fees != nil {
 			trade.Fees = append([]TradeFee(nil), update.Fees...)
 		}
-		if update.PublicError != "" {
+		if update.ClearPublicError {
+			trade.LastPublicError = ""
+		} else if update.PublicError != "" {
 			trade.LastPublicError = update.PublicError
 		}
 		if update.Checked {
@@ -445,7 +453,7 @@ func applyTradeStatus(trade *QuickTrade, next TradeStatus, detail, requestID str
 }
 
 func validTradeTransition(from, to TradeStatus) bool {
-	if from == TradePendingCancel && to == TradeFilled {
+	if (from == TradePendingCancel || from == TradeCancelled) && to == TradeFilled {
 		return true
 	}
 	allowed := map[TradeStatus]map[TradeStatus]bool{
