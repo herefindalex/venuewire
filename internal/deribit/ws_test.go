@@ -166,6 +166,10 @@ func TestWSConnectedLifecycle(t *testing.T) {
 	if !client.Connected() {
 		t.Fatal("Connected() = false while Deribit connection is serving")
 	}
+	metrics := client.Metrics()
+	if metrics.LastReceiveAt.IsZero() || !metrics.LastEventAt.IsZero() {
+		t.Fatalf("Deribit stream times = %+v", metrics)
+	}
 	cancel()
 	select {
 	case err := <-done:

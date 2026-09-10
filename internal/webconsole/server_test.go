@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"venuewire/internal/accountstate"
 	"venuewire/internal/config"
 	"venuewire/internal/domain"
 	"venuewire/internal/intent"
@@ -158,6 +159,9 @@ func TestVenuesExposeNoCredentials(t *testing.T) {
 
 func TestBrowserWebSocketRequiresSessionAndClosesOnLogout(t *testing.T) {
 	server := newTestServer(t)
+	server.accounts = &fakeAccountService{snapshots: map[domain.Venue]accountstate.Snapshot{
+		domain.VenueBybit: {Venue: domain.VenueBybit, AccountAlias: "bybit-test", Revision: 7, Assets: []accountstate.Asset{{Asset: "BTC", Balance: "0.1", USDValue: "10000"}}},
+	}}
 	httpServer := httptest.NewServer(server.Handler())
 	defer httpServer.Close()
 	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/api/ws"
@@ -212,6 +216,16 @@ func TestBrowserWebSocketRequiresSessionAndClosesOnLogout(t *testing.T) {
 	var resnapshot map[string]any
 	if err := conn.ReadJSON(&resnapshot); err != nil || resnapshot["type"] != "snapshot" || resnapshot["seq"] != float64(3) {
 		t.Fatalf("resync snapshot = %#v err=%v", resnapshot, err)
+	}
+	server.events.Publish(runtimeevent.Event{Type: "valuation.updated", Venue: domain.VenueBybit, At: time.Now()})
+	var valuation map[string]any
+	if err := conn.ReadJSON(&valuation); err != nil || valuation["type"] != "valuation.updated" || valuation["seq"] != float64(4) || valuation["accountAlias"] != "bybit-test" {
+		t.Fatalf("valuation event = %#v err=%v", valuation, err)
+	}
+	payload, ok := valuation["payload"].(map[string]any)
+	account, accountOK := payload["account"].(map[string]any)
+	if !ok || !accountOK || account["revision"] != float64(7) {
+		t.Fatalf("valuation payload = %#v", valuation["payload"])
 	}
 
 	logout := performRequest(server, http.MethodPost, "/api/auth/logout", "", cookie, loginBody.CSRFToken)

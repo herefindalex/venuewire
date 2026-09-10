@@ -11,20 +11,21 @@ import (
 )
 
 type Asset struct {
-	Asset                string    `json:"asset"`
-	Balance              string    `json:"balance"`
-	Equity               string    `json:"equity,omitempty"`
-	Locked               string    `json:"locked,omitempty"`
-	Liability            string    `json:"liability,omitempty"`
-	AvailableToTrade     string    `json:"availableToTrade,omitempty"`
-	AvailableToTradeAsOf time.Time `json:"availableToTradeAsOf,omitempty"`
-	AvailableStatus      string    `json:"availableStatus"`
-	ValuationQuantity    string    `json:"valuationQuantity,omitempty"`
-	QuantityBasis        string    `json:"quantityBasis"`
-	USDValue             string    `json:"usdValue,omitempty"`
-	PriceSource          string    `json:"priceSource,omitempty"`
-	PriceAsOf            time.Time `json:"priceAsOf,omitempty"`
-	Quality              string    `json:"quality"`
+	Asset                    string    `json:"asset"`
+	Balance                  string    `json:"balance"`
+	Equity                   string    `json:"equity,omitempty"`
+	Locked                   string    `json:"locked,omitempty"`
+	Liability                string    `json:"liability,omitempty"`
+	AvailableToTrade         string    `json:"availableToTrade,omitempty"`
+	AvailableToTradeAsOf     time.Time `json:"availableToTradeAsOf,omitempty"`
+	AvailableStatus          string    `json:"availableStatus"`
+	ValuationQuantity        string    `json:"valuationQuantity,omitempty"`
+	QuantityBasis            string    `json:"quantityBasis"`
+	ExchangeReportedUSDValue string    `json:"exchangeReportedUsdValue,omitempty"`
+	USDValue                 string    `json:"usdValue,omitempty"`
+	PriceSource              string    `json:"priceSource,omitempty"`
+	PriceAsOf                time.Time `json:"priceAsOf,omitempty"`
+	Quality                  string    `json:"quality"`
 }
 
 type Snapshot struct {
@@ -48,36 +49,52 @@ type Provider interface {
 }
 
 type VenueHealth struct {
-	Venue             domain.Venue  `json:"venue"`
-	REST              string        `json:"rest"`
-	PublicWS          string        `json:"publicWs"`
-	PrivateWS         string        `json:"privateWs"`
-	AccountSync       string        `json:"accountSync"`
-	LastRESTAt        time.Time     `json:"lastRestAt,omitempty"`
-	LastEventAt       time.Time     `json:"lastEventAt,omitempty"`
-	MarketEventAt     time.Time     `json:"marketEventAt,omitempty"`
-	Reconnects        uint64        `json:"reconnects"`
-	PublicReconnects  uint64        `json:"-"`
-	PrivateReconnects uint64        `json:"-"`
-	LastReconcileAt   time.Time     `json:"lastReconcileAt,omitempty"`
-	RequestErrors     uint64        `json:"requestErrors"`
-	Discrepancies     uint64        `json:"reconciliationDiscrepancies"`
-	LastRequestRTT    time.Duration `json:"-"`
-	LastPublicError   string        `json:"-"`
+	OrderRequestRTT            time.Duration `json:"-"`
+	FirstOrderEventLatency     time.Duration `json:"-"`
+	FirstExecutionEventLatency time.Duration `json:"-"`
+	HasFirstOrderEvent         bool          `json:"-"`
+	HasFirstExecutionEvent     bool          `json:"-"`
+	OrderRequestErrors         uint64        `json:"orderRequestErrors"`
+	RateLimitState             string        `json:"rateLimitState"`
+	ReconciliationStatus       string        `json:"reconciliationStatus"`
+	LastPublicReceiveAt        time.Time     `json:"lastPublicReceiveAt,omitempty"`
+	LastPrivateReceiveAt       time.Time     `json:"lastPrivateReceiveAt,omitempty"`
+	LastPublicEventAt          time.Time     `json:"lastPublicEventAt,omitempty"`
+	LastPrivateEventAt         time.Time     `json:"lastPrivateEventAt,omitempty"`
+	Venue                      domain.Venue  `json:"venue"`
+	REST                       string        `json:"rest"`
+	PublicWS                   string        `json:"publicWs"`
+	PrivateWS                  string        `json:"privateWs"`
+	AccountSync                string        `json:"accountSync"`
+	LastRESTAt                 time.Time     `json:"lastRestAt,omitempty"`
+	LastEventAt                time.Time     `json:"lastEventAt,omitempty"`
+	MarketEventAt              time.Time     `json:"marketEventAt,omitempty"`
+	Reconnects                 uint64        `json:"reconnects"`
+	PublicReconnects           uint64        `json:"-"`
+	PrivateReconnects          uint64        `json:"-"`
+	LastReconcileAt            time.Time     `json:"lastReconcileAt,omitempty"`
+	RequestErrors              uint64        `json:"requestErrors"`
+	Discrepancies              uint64        `json:"reconciliationDiscrepancies"`
+	LastRequestRTT             time.Duration `json:"-"`
+	LastPublicError            string        `json:"-"`
 }
 
 type Manager struct {
-	mu        sync.RWMutex
-	providers map[domain.Venue]Provider
-	snapshots map[domain.Venue]Snapshot
-	health    map[domain.Venue]VenueHealth
-	revision  uint64
-	refreshMu sync.Mutex
-	refreshes map[domain.Venue]*refreshCall
-	interval  time.Duration
-	staleAge  time.Duration
-	now       func() time.Time
-	OnEvent   func(string, domain.Venue, time.Time)
+	pendingOrderEvents map[domain.Venue]map[string]*pendingOrderTiming
+	orderTimings       map[domain.Venue]map[string]*orderTiming
+	prices             map[string]USDPrice
+	valuationMaxAge    time.Duration
+	mu                 sync.RWMutex
+	providers          map[domain.Venue]Provider
+	snapshots          map[domain.Venue]Snapshot
+	health             map[domain.Venue]VenueHealth
+	revision           uint64
+	refreshMu          sync.Mutex
+	refreshes          map[domain.Venue]*refreshCall
+	interval           time.Duration
+	staleAge           time.Duration
+	now                func() time.Time
+	OnEvent            func(string, domain.Venue, time.Time)
 }
 
 type refreshCall struct {
@@ -90,9 +107,17 @@ func NewManager(providers []Provider, interval, staleAge time.Duration) (*Manage
 		return nil, errors.New("account refresh and stale durations must be positive")
 	}
 	manager := &Manager{
-		providers: make(map[domain.Venue]Provider), snapshots: make(map[domain.Venue]Snapshot),
-		health: make(map[domain.Venue]VenueHealth), refreshes: make(map[domain.Venue]*refreshCall),
-		interval: interval, staleAge: staleAge, now: time.Now,
+		pendingOrderEvents: make(map[domain.Venue]map[string]*pendingOrderTiming),
+		orderTimings:       make(map[domain.Venue]map[string]*orderTiming),
+		prices:             make(map[string]USDPrice),
+		valuationMaxAge:    15 * time.Second,
+		providers:          make(map[domain.Venue]Provider),
+		snapshots:          make(map[domain.Venue]Snapshot),
+		health:             make(map[domain.Venue]VenueHealth),
+		refreshes:          make(map[domain.Venue]*refreshCall),
+		interval:           interval,
+		staleAge:           staleAge,
+		now:                time.Now,
 	}
 	for _, provider := range providers {
 		if provider == nil || (provider.Venue() != domain.VenueBybit && provider.Venue() != domain.VenueDeribit) {
@@ -102,7 +127,9 @@ func NewManager(providers []Provider, interval, staleAge time.Duration) (*Manage
 			return nil, errors.New("duplicate account provider")
 		}
 		manager.providers[provider.Venue()] = provider
-		manager.health[provider.Venue()] = VenueHealth{Venue: provider.Venue(), REST: "UNAVAILABLE", PublicWS: "UNAVAILABLE", PrivateWS: "UNAVAILABLE", AccountSync: "SYNCING"}
+		manager.health[provider.Venue()] = VenueHealth{Venue: provider.Venue(), REST: "UNAVAILABLE", PublicWS: "UNAVAILABLE", PrivateWS: "UNAVAILABLE", AccountSync: "SYNCING", RateLimitState: "UNKNOWN", ReconciliationStatus: "IDLE"}
+		manager.orderTimings[provider.Venue()] = make(map[string]*orderTiming)
+		manager.pendingOrderEvents[provider.Venue()] = make(map[string]*pendingOrderTiming)
 	}
 	return manager, nil
 }
@@ -189,6 +216,7 @@ func (m *Manager) refresh(ctx context.Context, venue domain.Venue) error {
 		snapshot.SnapshotAsOf = finished
 	}
 	sort.Slice(snapshot.Assets, func(i, j int) bool { return snapshot.Assets[i].Asset < snapshot.Assets[j].Asset })
+	m.applyValuationLocked(&snapshot, finished)
 	m.snapshots[venue] = cloneSnapshot(snapshot)
 	health.REST = "LIVE"
 	health.AccountSync = "SYNCED"
@@ -258,6 +286,9 @@ func (m *Manager) UpdatePublicWS(venue domain.Venue, state string, eventAt time.
 		health.PublicReconnects = reconnects
 		health.Reconnects = health.PublicReconnects + health.PrivateReconnects
 		if !eventAt.IsZero() {
+			if health.LastPublicEventAt.IsZero() || eventAt.After(health.LastPublicEventAt) {
+				health.LastPublicEventAt = eventAt
+			}
 			if health.LastEventAt.IsZero() || eventAt.After(health.LastEventAt) {
 				health.LastEventAt = eventAt
 			}
@@ -285,12 +316,30 @@ func (m *Manager) UpdatePrivateWS(venue domain.Venue, state string, eventAt time
 		if !eventAt.IsZero() && (health.LastEventAt.IsZero() || eventAt.After(health.LastEventAt)) {
 			health.LastEventAt = eventAt
 		}
+		if !eventAt.IsZero() && (health.LastPrivateEventAt.IsZero() || eventAt.After(health.LastPrivateEventAt)) {
+			health.LastPrivateEventAt = eventAt
+		}
 		m.health[venue] = health
 	}
 	m.mu.Unlock()
 	if exists && changed && m.OnEvent != nil {
 		m.OnEvent("venue.health.updated", venue, m.now())
 	}
+}
+
+func (m *Manager) UpdateWSReceiveTimes(venue domain.Venue, publicAt, privateAt time.Time) {
+	m.mu.Lock()
+	health, exists := m.health[venue]
+	if exists {
+		if !publicAt.IsZero() && (health.LastPublicReceiveAt.IsZero() || publicAt.After(health.LastPublicReceiveAt)) {
+			health.LastPublicReceiveAt = publicAt
+		}
+		if !privateAt.IsZero() && (health.LastPrivateReceiveAt.IsZero() || privateAt.After(health.LastPrivateReceiveAt)) {
+			health.LastPrivateReceiveAt = privateAt
+		}
+		m.health[venue] = health
+	}
+	m.mu.Unlock()
 }
 
 func cloneSnapshot(source Snapshot) Snapshot {

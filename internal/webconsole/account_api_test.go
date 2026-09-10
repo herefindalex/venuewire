@@ -129,6 +129,12 @@ func TestSystemStatusUsesRuntimeHealthAndSafeBuildMetadata(t *testing.T) {
 			Venue: domain.VenueBybit, REST: "LIVE", PublicWS: "STALE", PrivateWS: "LIVE", AccountSync: "SYNCED",
 			MarketEventAt: now.Add(-1500 * time.Millisecond), Reconnects: 2, LastReconcileAt: now.Add(-4 * time.Second),
 			RequestErrors: 3, Discrepancies: 1, LastRequestRTT: 125 * time.Millisecond,
+			LastPublicReceiveAt: now.Add(-100 * time.Millisecond), LastPrivateReceiveAt: now.Add(-200 * time.Millisecond),
+			LastPublicEventAt: now.Add(-300 * time.Millisecond), LastPrivateEventAt: now.Add(-400 * time.Millisecond),
+			PublicReconnects: 1, PrivateReconnects: 1, OrderRequestRTT: 82 * time.Millisecond,
+			FirstOrderEventLatency: 104 * time.Millisecond, HasFirstOrderEvent: true,
+			FirstExecutionEventLatency: 116 * time.Millisecond, HasFirstExecutionEvent: true,
+			OrderRequestErrors: 2, RateLimitState: "OK", ReconciliationStatus: "SYNCED",
 		}},
 	}
 	server := newTestServer(t)
@@ -151,6 +157,15 @@ func TestSystemStatusUsesRuntimeHealthAndSafeBuildMetadata(t *testing.T) {
 		t.Fatalf("venue statuses = %+v", body.Venues)
 	}
 	status := body.Venues[0]
+	if status.PublicReceiveAgeMS == nil || *status.PublicReceiveAgeMS != 100 || status.PrivateReceiveAgeMS == nil || *status.PrivateReceiveAgeMS != 200 || status.PublicEventAgeMS == nil || *status.PublicEventAgeMS != 300 || status.PrivateEventAgeMS == nil || *status.PrivateEventAgeMS != 400 {
+		t.Fatalf("stream ages = %+v", status)
+	}
+	if status.OrderRequestRTTMS == nil || *status.OrderRequestRTTMS != 82 || status.FirstOrderEventLatencyMS == nil || *status.FirstOrderEventLatencyMS != 104 || status.FirstExecEventLatencyMS == nil || *status.FirstExecEventLatencyMS != 116 {
+		t.Fatalf("order timings = %+v", status)
+	}
+	if status.PublicReconnects != 1 || status.PrivateReconnects != 1 || status.OrderRequestErrors != 2 || status.RateLimitState != "OK" || status.ReconciliationStatus != "SYNCED" {
+		t.Fatalf("runtime counters = %+v", status)
+	}
 	if status.REST != "LIVE" || status.PublicWS != "STALE" || status.MarketAgeMS == nil || *status.MarketAgeMS != 1500 || status.AccountAgeMS == nil || *status.AccountAgeMS != 3000 || status.LastRequestRTT == nil || *status.LastRequestRTT != 125 {
 		t.Fatalf("runtime status = %+v", status)
 	}

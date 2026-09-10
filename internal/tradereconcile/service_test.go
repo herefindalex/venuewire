@@ -3,6 +3,7 @@ package tradereconcile
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -53,8 +54,15 @@ func (f *fakeDeribit) TradesByOrder(context.Context, string) ([]deribit.Trade, e
 }
 
 type fakeAccountRefresh struct {
-	calls []domain.Venue
-	err   error
+	calls         []domain.Venue
+	err           error
+	statuses      []string
+	discrepancies []bool
+}
+
+func (f *fakeAccountRefresh) UpdateReconciliation(_ domain.Venue, status string, discrepancy bool, _ time.Time) {
+	f.statuses = append(f.statuses, status)
+	f.discrepancies = append(f.discrepancies, discrepancy)
 }
 
 func (f *fakeAccountRefresh) Refresh(_ context.Context, venue domain.Venue) error {
@@ -141,12 +149,16 @@ func TestLaterFillEvidenceSupersedesCancelledState(t *testing.T) {
 		orders:     []rest.Order{{OrderID: "venue-1", OrderLinkID: trade.ClientOrderID, OrderStatus: "Filled"}},
 		executions: []rest.Execution{{OrderID: "venue-1", OrderLinkID: trade.ClientOrderID, ExecQty: "1", ExecPrice: "100", ExecFee: "0.1", FeeCurrency: "USDT"}},
 	}
-	updated, err := (&Service{Store: store, Bybit: client}).RecheckTrade(context.Background(), trade.ID, now.Add(time.Second))
+	accounts := &fakeAccountRefresh{}
+	updated, err := (&Service{Store: store, Bybit: client, Accounts: accounts}).RecheckTrade(context.Background(), trade.ID, now.Add(time.Second))
 	if err != nil {
 		t.Fatalf("RecheckTrade() error = %v", err)
 	}
 	if updated.Status != intent.TradeFilled || updated.ResultStatus != "FILLED" || updated.NetDestinationReceived != "99.9" || updated.TerminalAt == nil {
 		t.Fatalf("fill superseding cancellation = %+v", updated)
+	}
+	if !slices.Equal(accounts.statuses, []string{"RUNNING", "SYNCED"}) || !slices.Equal(accounts.discrepancies, []bool{false, true}) {
+		t.Fatalf("reconciliation observations = %v %v", accounts.statuses, accounts.discrepancies)
 	}
 }
 

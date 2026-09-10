@@ -63,6 +63,17 @@ function readableError(error: unknown) {
   return 'The request could not be completed.';
 }
 
+function ageLabel(milliseconds?: number) {
+  if (milliseconds === undefined) return '—';
+  if (milliseconds < 1000) return `${milliseconds} ms`;
+  return `${(milliseconds / 1000).toFixed(1)} s`;
+}
+
+function tradeLatency(trade: TradeView) {
+  const elapsed = Date.parse(trade.updatedAt) - Date.parse(trade.createdAt);
+  return Number.isFinite(elapsed) && elapsed >= 0 ? ageLabel(elapsed) : '—';
+}
+
 function acceptAccount(nextAccount: AccountView) {
   if (!account.value || nextAccount.revision >= account.value.revision) account.value = nextAccount;
 }
@@ -181,10 +192,12 @@ function connectSocket() {
       trades.value = [event.payload.trade, ...trades.value.filter((trade) => trade.intentId !== event.payload?.trade?.intentId)].slice(0, 50);
     } else if (event.type === 'venue.health.updated' && event.payload?.health) {
       statuses.value = event.payload.health;
+    } else if (event.type === 'valuation.updated' && event.venue === selectedVenue.value && event.payload?.account) {
+      acceptAccount(event.payload.account);
     } else if (event.type === 'resync.required') {
       nextSocket.send(JSON.stringify({ type: 'resync' }));
     }
-    if (event.type === 'valuation.updated' || event.type === 'resync.required') {
+    if (event.type === 'resync.required') {
       if (eventRefreshTimer) clearTimeout(eventRefreshTimer);
       eventRefreshTimer = window.setTimeout(() => void refreshAll(), 100);
     }
@@ -310,7 +323,8 @@ onBeforeUnmount(() => {
           <p class="muted">Snapshot {{ account?.snapshotAsOf ? new Date(account.snapshotAsOf).toLocaleTimeString() : 'unavailable' }}</p>
         </div>
         <div class="hero-actions">
-          <div class="account-value"><span>Locally marked value</span><strong>{{ account?.totalUsd ? `$${account.totalUsd}` : '—' }}</strong><small>{{ account?.completeness ?? 'Unavailable' }}</small></div>
+        <div class="account-value"><span>Local USD mark</span><strong>{{ account?.totalUsd || account?.pricedSubtotalUsd ? `$${account.totalUsd || account.pricedSubtotalUsd}` : '—' }}</strong><small>{{ account?.completeness ?? 'Unavailable' }}{{ account?.pricedSubtotalUsd && !account?.totalUsd ? ' · priced subtotal' : '' }}</small></div>
+        <div class="account-value"><span>Exchange-reported total</span><strong>{{ account?.exchangeReportedTotalUsd ? `$${account.exchangeReportedTotalUsd}` : '—' }}</strong><small>Venue snapshot · not locally recalculated</small></div>
           <a-button type="primary" size="large" :disabled="!account" @click="openQuickTrade">Quick Trade</a-button>
         </div>
       </div>
@@ -323,8 +337,10 @@ onBeforeUnmount(() => {
           <a-table-column title="Asset" data-index="asset"><template #default="{ text }"><strong>{{ text }}</strong></template></a-table-column>
           <a-table-column title="Balance" data-index="balance" />
           <a-table-column title="Available to trade" data-index="availableToTrade"><template #default="{ text }">{{ text || '—' }}</template></a-table-column>
-          <a-table-column title="USD value" data-index="usdValue"><template #default="{ text }">{{ text ? `$${text}` : '—' }}</template></a-table-column>
-          <a-table-column title="Quality" data-index="quality"><template #default="{ text }"><a-tag :color="text === 'live' ? 'green' : text === 'stale' ? 'orange' : 'default'">{{ text }}</a-tag></template></a-table-column>
+          <a-table-column title="Local USD mark" data-index="usdValue"><template #default="{ text }">{{ text ? `$${text}` : '—' }}</template></a-table-column>
+          <a-table-column title="Exchange-reported USD" data-index="exchangeReportedUsdValue"><template #default="{ text }">{{ text ? `$${text}` : '—' }}</template></a-table-column>
+          <a-table-column title="Price source" data-index="priceSource"><template #default="{ text }">{{ text || '—' }}</template></a-table-column>
+          <a-table-column title="Quality" data-index="quality"><template #default="{ text }"><a-tag :color="text === 'fresh' ? 'green' : text === 'stale' ? 'orange' : 'default'">{{ text }}</a-tag></template></a-table-column>
         </a-table>
       </section>
 
@@ -334,7 +350,21 @@ onBeforeUnmount(() => {
           <div v-if="statuses.length" class="status-list">
             <div v-for="status in statuses" :key="status.venue" class="status-card">
               <div class="status-title"><strong>{{ status.venue }}</strong><a-tag :color="status.accountSync === 'SYNCED' ? 'green' : 'orange'">{{ status.accountSync }}</a-tag></div>
-              <dl><dt>REST</dt><dd>{{ status.rest }}</dd><dt>Public WS</dt><dd>{{ status.publicWs }}</dd><dt>Private WS</dt><dd>{{ status.privateWs }}</dd><dt>Market age</dt><dd>{{ status.marketAgeMs == null ? '—' : `${status.marketAgeMs} ms` }}</dd><dt>Reconnects</dt><dd>{{ status.reconnects }}</dd></dl>
+              <dl>
+                <dt>REST</dt><dd>{{ status.rest }}</dd>
+                <dt>Public WS</dt><dd>{{ status.publicWs }}</dd>
+                <dt>Public receive</dt><dd>{{ ageLabel(status.publicReceiveAgeMs) }}</dd>
+                <dt>Public event</dt><dd>{{ ageLabel(status.publicEventAgeMs) }}</dd>
+                <dt>Private WS</dt><dd>{{ status.privateWs }}</dd>
+                <dt>Private receive</dt><dd>{{ ageLabel(status.privateReceiveAgeMs) }}</dd>
+                <dt>Private event</dt><dd>{{ ageLabel(status.privateEventAgeMs) }}</dd>
+                <dt>Reconnects</dt><dd>{{ status.publicReconnects }} public · {{ status.privateReconnects }} private</dd>
+                <dt>Order RTT</dt><dd>{{ ageLabel(status.orderRequestRttMs) }}</dd>
+                <dt>First order event</dt><dd>{{ ageLabel(status.firstOrderEventLatencyMs) }}</dd>
+                <dt>First execution event</dt><dd>{{ ageLabel(status.firstExecutionEventLatencyMs) }}</dd>
+                <dt>Rate limit</dt><dd>{{ status.rateLimitState }}</dd>
+                <dt>Reconciliation</dt><dd>{{ status.reconciliationStatus }}</dd>
+              </dl>
             </div>
           </div>
           <a-empty v-else description="Runtime status unavailable" />
@@ -347,6 +377,7 @@ onBeforeUnmount(() => {
             <a-table-column title="Venue" data-index="venue" />
             <a-table-column title="Direction"><template #default="{ record }">{{ record.fromAsset }} → {{ record.toAsset }}</template></a-table-column>
             <a-table-column title="Status" data-index="status"><template #default="{ text }"><a-tag :color="text === 'Filled' ? 'green' : text === 'Unknown' ? 'orange' : 'blue'">{{ text }}</a-tag></template></a-table-column>
+            <a-table-column title="Elapsed"><template #default="{ record }">{{ tradeLatency(record) }}</template></a-table-column>
           </a-table>
         </section>
       </div>

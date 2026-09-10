@@ -77,10 +77,11 @@ func TestManagerRefreshCachesSortedCopyAndCapacity(t *testing.T) {
 	}
 
 	// Returned snapshots must not mutate the manager's cached state.
+	unpricedCount := len(snapshot.UnpricedAssets)
 	snapshot.Assets[0].AvailableToTrade = "999"
 	snapshot.UnpricedAssets = append(snapshot.UnpricedAssets, "MUTATED")
 	again, _ := manager.Snapshot(domain.VenueBybit)
-	if again.Assets[0].AvailableToTrade != "0.5" || len(again.UnpricedAssets) != 0 {
+	if again.Assets[0].AvailableToTrade != "0.5" || len(again.UnpricedAssets) != unpricedCount {
 		t.Fatalf("cached snapshot was mutated through returned copy: %+v", again)
 	}
 

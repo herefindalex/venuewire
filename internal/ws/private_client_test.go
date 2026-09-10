@@ -116,6 +116,10 @@ func TestPrivateConnectedLifecycle(t *testing.T) {
 	if !client.Connected() {
 		t.Fatal("Connected() = false while private connection is serving")
 	}
+	lastReceiveAt, lastEventAt := client.StreamTimes()
+	if lastReceiveAt.IsZero() || !lastEventAt.IsZero() {
+		t.Fatalf("private stream times = %v %v", lastReceiveAt, lastEventAt)
+	}
 	cancel()
 	select {
 	case err := <-done:

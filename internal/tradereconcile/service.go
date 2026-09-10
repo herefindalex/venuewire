@@ -32,6 +32,10 @@ type AccountRefresher interface {
 	Refresh(context.Context, domain.Venue) error
 }
 
+type reconciliationObserver interface {
+	UpdateReconciliation(domain.Venue, string, bool, time.Time)
+}
+
 type Service struct {
 	mu       sync.Mutex
 	Store    intent.Store
@@ -58,12 +62,24 @@ type resolution struct {
 	definitive       bool
 }
 
-func (s *Service) RecheckTrade(ctx context.Context, intentID string, now time.Time) (intent.QuickTrade, error) {
+func (s *Service) RecheckTrade(ctx context.Context, intentID string, now time.Time) (result intent.QuickTrade, resultErr error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	trade, err := s.Store.GetQuickTrade(ctx, intentID)
 	if err != nil {
 		return intent.QuickTrade{}, err
+	}
+	venue := domain.Venue(trade.Quote.Venue)
+	if observer, ok := s.Accounts.(reconciliationObserver); ok {
+		observer.UpdateReconciliation(venue, "RUNNING", false, now)
+		defer func() {
+			status := "SYNCED"
+			if resultErr != nil {
+				status = "ERROR"
+			}
+			discrepancy := resultErr == nil && ((trade.Status == intent.TradeUnknown && result.Status.Terminal()) || (trade.Status.Terminal() && result.Status != trade.Status))
+			observer.UpdateReconciliation(venue, status, discrepancy, now)
+		}()
 	}
 	if trade.Status == intent.TradeCreated && !trade.SendAttempted {
 		return s.Store.UpdateQuickTrade(ctx, intentID, intent.QuickTradeUpdate{
@@ -73,7 +89,7 @@ func (s *Service) RecheckTrade(ctx context.Context, intentID string, now time.Ti
 	}
 
 	var resolved resolution
-	switch domain.Venue(trade.Quote.Venue) {
+	switch venue {
 	case domain.VenueBybit:
 		resolved, err = s.recheckBybit(ctx, trade)
 	case domain.VenueDeribit:

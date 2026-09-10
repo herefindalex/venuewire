@@ -13,7 +13,7 @@ The V2 phase history below remains historical evidence. V3/V3.1 implementation i
 | V3 Phase 0 baseline inspection | Complete; baseline failure recorded | `docs/v3/BASELINE_AUDIT.md`: 238 pass, 1 security-example failure, 2 skipped; same failure under race detector |
 | V3.1 gap analysis and product decisions | Documented | `docs/v3/V3_1_GAP_ANALYSIS.md`; `docs/3_web/VENUEWIRE_V3_1_PUBLIC_DEMO_SUPPLEMENT.md` section 26 |
 | Canonical configuration examples | Implemented and documented | V3 names, `QUOTE_TTL=5s`, V3.1 Demo caps, existing Deribit credential names and VenueWire commands |
-| Web / Spot / Demo hardening | In progress | Auth, frontend, durable browser intents/quotas, Spot adapters, reconciliation and runtime WS delivery are locally verified; valuation and final failure fixtures remain |
+| Web / Spot / Demo hardening | In progress | Auth, frontend, durable browser intents/quotas, Spot adapters, reconciliation, runtime WS delivery, live valuation and runtime metrics are locally verified; final failure fixtures remain |
 | V3/V3.1 frontend and external validation | Local checks pass; external not run | Vue typecheck/tests/build pass; no new Testnet orders or deployment operations performed |
 
 ### V3.1 Phase A — configuration and public Web boundary
@@ -138,6 +138,29 @@ Status: `LOCAL_VERIFIED`; live valuation and the remaining observability/failure
 | `npm --prefix web test` | PASS — 3 tests |
 | `npm --prefix web run build` | PASS |
 | External Testnet WebSocket/order/deployment operations | `NOT_RUN` |
+
+### V3.1 Phase C5 — live valuation and runtime trade metrics
+
+Status: `LOCAL_VERIFIED`; deterministic failure-scenario coverage, Browser E2E and final handoff artifacts remain pending.
+
+- Added a central exact-decimal USD valuation engine driven independently from account quantities. Public price updates never mutate exchange-reported balance, equity or valuation quantity, and out-of-order prices cannot replace newer marks.
+- Preserved exchange-reported per-asset and account USD values separately from local marks. A local total is exposed only with complete price coverage; partial coverage exposes only a priced subtotal and names every unpriced asset.
+- Added Deribit Testnet `btc_usd` and `eth_usd` public index subscriptions, configured price expiry and `WEB_PUSH_INTERVAL` coalescing that retains only the newest update per asset. USDT is not assumed to equal one USD.
+- Price expiry is observable without a new market message and emits one revision/event per valuation transition. Browser `valuation.updated` events carry the normalized account snapshot so the shared account store updates without a follow-up REST fetch.
+- Split public/private receive times from meaningful-event times and exposed per-stream reconnect counters. Private stream liveness uses received heartbeat/message freshness, so a quiet account is not treated as offline merely because it has no order or wallet event.
+- Added REST order RTT, ACK-to-first-order-event, ACK-to-first-execution-event, order request error, rate-limit, reconciliation-status and discrepancy metrics. Private events that arrive before the submission callback are retained briefly and correlated by client or venue order ID.
+- System Status displays the normalized stream, latency, rate-limit and reconciliation metrics. Account assets distinguish local USD marks from exchange-reported USD values, and Recent Trades shows persisted lifecycle elapsed time.
+
+| Check | Result |
+|---|---|
+| `go test -race ./internal/accountstate ./internal/ws ./internal/deribit ./internal/quicktrade ./internal/tradereconcile ./internal/webconsole ./cmd/venuewire -count=1 -timeout=180s` | PASS — 174 tests, 7 packages |
+| `go test ./... -count=1 -timeout=180s` | PASS — 374 tests, 23 packages |
+| `go vet ./...` | PASS |
+| `npm --prefix web run typecheck` | PASS |
+| `npm --prefix web test` | PASS — 3 tests |
+| `npm --prefix web run build` | PASS |
+| `go build -tags webui -o /tmp/venuewire-web-c5 ./cmd/venuewire` | PASS |
+| External Testnet valuation/order/deployment operations | `NOT_RUN` |
 
 ## Phase status
 

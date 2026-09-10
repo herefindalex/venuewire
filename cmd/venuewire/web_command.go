@@ -58,6 +58,9 @@ func executeWebCommand(ctx context.Context, cfg config.Config, logger *slog.Logg
 	if err != nil {
 		return true, fmt.Errorf("create account manager: %w", err)
 	}
+	if err := accounts.SetValuationMaxAge(webConfig.ValuationPriceMaxAge); err != nil {
+		return true, fmt.Errorf("configure account valuation: %w", err)
+	}
 	events := runtimeevent.NewBroker()
 	accounts.OnEvent = func(eventType string, venue domain.Venue, at time.Time) {
 		events.Publish(runtimeevent.Event{Type: eventType, Venue: venue, At: at})
@@ -97,6 +100,18 @@ func executeWebCommand(ctx context.Context, cfg config.Config, logger *slog.Logg
 			MaxTradesPerHour:    webConfig.MaxTradesPerHour,
 			MaxConcurrentTrades: webConfig.MaxConcurrentTrades,
 		},
+	}
+	tradeApplication.OnSubmission = func(observation quicktrade.SubmissionObservation) {
+		rateLimited := false
+		var bybitError *rest.APIError
+		if errors.As(observation.Err, &bybitError) && (bybitError.HTTPStatus == 429 || bybitError.Code == 10006) {
+			rateLimited = true
+		}
+		var deribitError *deribit.RPCError
+		if errors.As(observation.Err, &deribitError) && deribitError.Code == 10028 {
+			rateLimited = true
+		}
+		accounts.RecordOrderSubmission(observation.Venue, observation.ClientOrderID, observation.VenueOrderID, observation.AckAt, observation.RequestRTT, observation.Err == nil && observation.VenueOrderID != "", rateLimited)
 	}
 	rechecker := &tradereconcile.Service{Store: tradeStore, Accounts: accounts}
 	rechecker.OnEvent = func(eventType string, venue domain.Venue, intentID string, at time.Time) {

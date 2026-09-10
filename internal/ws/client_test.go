@@ -101,6 +101,28 @@ func TestContextCancellationClosesConnection(t *testing.T) {
 	}
 }
 
+func TestStatsSeparateLastReceiveFromMeaningfulEvent(t *testing.T) {
+	connection := newFakeConnection()
+	connection.reads <- readResult{payload: []byte(`{"success":true,"op":"subscribe"}`)}
+	client := NewClient(Config{URL: "fixture", Topics: []string{"publicTrade.BTCUSDT"}, Dial: func(context.Context, string) (Connection, error) { return connection, nil }, PingInterval: time.Hour, StaleAfter: time.Hour})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- client.Run(ctx, func(_ context.Context, event Event) error { cancel(); return nil }) }()
+	waitFor(t, func() bool { return client.Stats().Messages == 1 })
+	stats := client.Stats()
+	if stats.LastReceiveAt.IsZero() || !stats.LastEventAt.IsZero() {
+		t.Fatalf("ack stats = %+v", stats)
+	}
+	connection.reads <- readResult{payload: tradeFixture("meaningful")}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	stats = client.Stats()
+	if stats.LastEventAt.IsZero() || stats.LastReceiveAt.Before(stats.LastEventAt) {
+		t.Fatalf("event stats = %+v", stats)
+	}
+}
+
 func TestBoundedQueueDropsPublicEvents(t *testing.T) {
 	connection := newFakeConnection()
 	client := NewClient(Config{URL: "fixture", Topics: []string{"publicTrade.BTCUSDT"}, QueueSize: 1, Dial: func(context.Context, string) (Connection, error) { return connection, nil }, PingInterval: time.Hour, StaleAfter: time.Hour})

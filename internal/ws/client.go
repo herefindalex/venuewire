@@ -38,6 +38,8 @@ type Config struct {
 }
 
 type Stats struct {
+	LastReceiveAt time.Time
+	LastEventAt   time.Time
 	Reconnects    uint64
 	Messages      uint64
 	Dropped       uint64
@@ -46,6 +48,8 @@ type Stats struct {
 }
 
 type Client struct {
+	lastReceiveMS atomic.Int64
+	lastEventMS   atomic.Int64
 	config        Config
 	connected     atomic.Bool
 	reconnects    atomic.Uint64
@@ -87,7 +91,7 @@ func NewClient(config Config) *Client {
 }
 
 func (c *Client) Stats() Stats {
-	return Stats{Reconnects: c.reconnects.Load(), Messages: c.messages.Load(), Dropped: c.dropped.Load(), DecodeErrors: c.decodeErrors.Load(), Subscriptions: c.subscriptions.Load()}
+	return Stats{Reconnects: c.reconnects.Load(), Messages: c.messages.Load(), Dropped: c.dropped.Load(), DecodeErrors: c.decodeErrors.Load(), Subscriptions: c.subscriptions.Load(), LastReceiveAt: metricTime(c.lastReceiveMS.Load()), LastEventAt: metricTime(c.lastEventMS.Load())}
 }
 
 func (c *Client) Connected() bool { return c.connected.Load() }
@@ -161,6 +165,7 @@ func (c *Client) serve(parent context.Context, conn Connection, sink Sink) error
 				return
 			}
 			received := c.config.Now().UTC()
+			c.lastReceiveMS.Store(received.UnixMilli())
 			_ = conn.SetReadDeadline(received.Add(c.config.StaleAfter))
 			decoded, err := DecodePublic(payload, received)
 			if err != nil {
@@ -168,6 +173,9 @@ func (c *Client) serve(parent context.Context, conn Connection, sink Sink) error
 				continue
 			}
 			c.messages.Add(1)
+			if len(decoded) > 0 {
+				c.lastEventMS.Store(received.UnixMilli())
+			}
 			for _, event := range decoded {
 				select {
 				case events <- event:

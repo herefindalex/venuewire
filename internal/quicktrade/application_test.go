@@ -16,6 +16,8 @@ func TestApplicationConcurrentConfirmSubmitsExactlyOnce(t *testing.T) {
 	now := time.Now().UTC()
 	submitter := &recordingSubmitter{result: Submission{VenueOrderID: "venue-order-1", RawVenueStatus: "New", Accepted: true}}
 	application := fixtureApplication(t, now, submitter)
+	observations := make(chan SubmissionObservation, 1)
+	application.OnSubmission = func(observation SubmissionObservation) { observations <- observation }
 	quote, err := application.CreateQuote(context.Background(), CreateRequest{Identity: "shared-user", Venue: domain.VenueBybit, RouteID: "bybit-usdt-btc", SpendBudget: "100", AccountAlias: "bybit-test"})
 	if err != nil {
 		t.Fatal(err)
@@ -51,6 +53,10 @@ func TestApplicationConcurrentConfirmSubmitsExactlyOnce(t *testing.T) {
 	}
 	if submitter.Calls() != 1 {
 		t.Fatalf("submit calls = %d, want 1", submitter.Calls())
+	}
+	observation := <-observations
+	if observation.Venue != domain.VenueBybit || observation.IntentID != intentID || observation.VenueOrderID != "venue-order-1" || observation.Err != nil || !observation.AckAt.Equal(now) || observation.RequestRTT < 0 {
+		t.Fatalf("submission observation = %+v", observation)
 	}
 	stored, err := application.Store.GetQuickTrade(context.Background(), intentID)
 	if err != nil || stored.Status != intent.TradeAccepted || stored.VenueOrderID != "venue-order-1" {

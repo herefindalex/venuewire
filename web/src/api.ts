@@ -26,6 +26,7 @@ export interface AssetView {
   availableStatus: string;
   valuationQuantity?: string;
   quantityBasis: string;
+  exchangeReportedUsdValue?: string;
   usdValue?: string;
   priceSource?: string;
   priceAsOf?: string;
@@ -48,6 +49,18 @@ export interface AccountView {
 }
 
 export interface VenueStatus {
+  orderRequestRttMs?: number;
+  firstOrderEventLatencyMs?: number;
+  firstExecutionEventLatencyMs?: number;
+  orderRequestErrors: number;
+  rateLimitState: string;
+  reconciliationStatus: string;
+  publicReceiveAgeMs?: number;
+  privateReceiveAgeMs?: number;
+  publicEventAgeMs?: number;
+  privateEventAgeMs?: number;
+  publicReconnects: number;
+  privateReconnects: number;
   venue: string;
   rest: string;
   publicWs: string;

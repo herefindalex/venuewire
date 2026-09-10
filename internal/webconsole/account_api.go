@@ -26,18 +26,30 @@ type BuildMetadata struct {
 }
 
 type publicVenueStatus struct {
-	Venue           domain.Venue `json:"venue"`
-	REST            string       `json:"rest"`
-	PublicWS        string       `json:"publicWs"`
-	PrivateWS       string       `json:"privateWs"`
-	AccountSync     string       `json:"accountSync"`
-	AccountAgeMS    *int64       `json:"accountAgeMs,omitempty"`
-	MarketAgeMS     *int64       `json:"marketAgeMs,omitempty"`
-	Reconnects      uint64       `json:"reconnects"`
-	LastReconcileAt string       `json:"lastReconcileAt,omitempty"`
-	RequestErrors   uint64       `json:"requestErrors"`
-	LastRequestRTT  *int64       `json:"lastRequestRttMs,omitempty"`
-	Discrepancies   uint64       `json:"reconciliationDiscrepancies"`
+	OrderRequestRTTMS        *int64       `json:"orderRequestRttMs,omitempty"`
+	FirstOrderEventLatencyMS *int64       `json:"firstOrderEventLatencyMs,omitempty"`
+	FirstExecEventLatencyMS  *int64       `json:"firstExecutionEventLatencyMs,omitempty"`
+	OrderRequestErrors       uint64       `json:"orderRequestErrors"`
+	RateLimitState           string       `json:"rateLimitState"`
+	ReconciliationStatus     string       `json:"reconciliationStatus"`
+	PublicReceiveAgeMS       *int64       `json:"publicReceiveAgeMs,omitempty"`
+	PrivateReceiveAgeMS      *int64       `json:"privateReceiveAgeMs,omitempty"`
+	PublicEventAgeMS         *int64       `json:"publicEventAgeMs,omitempty"`
+	PrivateEventAgeMS        *int64       `json:"privateEventAgeMs,omitempty"`
+	PublicReconnects         uint64       `json:"publicReconnects"`
+	PrivateReconnects        uint64       `json:"privateReconnects"`
+	Venue                    domain.Venue `json:"venue"`
+	REST                     string       `json:"rest"`
+	PublicWS                 string       `json:"publicWs"`
+	PrivateWS                string       `json:"privateWs"`
+	AccountSync              string       `json:"accountSync"`
+	AccountAgeMS             *int64       `json:"accountAgeMs,omitempty"`
+	MarketAgeMS              *int64       `json:"marketAgeMs,omitempty"`
+	Reconnects               uint64       `json:"reconnects"`
+	LastReconcileAt          string       `json:"lastReconcileAt,omitempty"`
+	RequestErrors            uint64       `json:"requestErrors"`
+	LastRequestRTT           *int64       `json:"lastRequestRttMs,omitempty"`
+	Discrepancies            uint64       `json:"reconciliationDiscrepancies"`
 }
 
 func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
@@ -108,7 +120,37 @@ func (s *Server) publicStatuses(now time.Time) []publicVenueStatus {
 		status := publicVenueStatus{
 			Venue: item.Venue, REST: item.REST, PublicWS: item.PublicWS, PrivateWS: item.PrivateWS,
 			AccountSync: item.AccountSync, Reconnects: item.Reconnects, RequestErrors: item.RequestErrors,
-			Discrepancies: item.Discrepancies,
+			Discrepancies:    item.Discrepancies,
+			PublicReconnects: item.PublicReconnects, PrivateReconnects: item.PrivateReconnects,
+			OrderRequestErrors: item.OrderRequestErrors, RateLimitState: item.RateLimitState, ReconciliationStatus: item.ReconciliationStatus,
+		}
+		if item.OrderRequestRTT > 0 {
+			rtt := nonNegativeMilliseconds(item.OrderRequestRTT)
+			status.OrderRequestRTTMS = &rtt
+		}
+		if item.HasFirstOrderEvent {
+			latency := nonNegativeMilliseconds(item.FirstOrderEventLatency)
+			status.FirstOrderEventLatencyMS = &latency
+		}
+		if item.HasFirstExecutionEvent {
+			latency := nonNegativeMilliseconds(item.FirstExecutionEventLatency)
+			status.FirstExecEventLatencyMS = &latency
+		}
+		if !item.LastPublicReceiveAt.IsZero() {
+			age := nonNegativeMilliseconds(now.Sub(item.LastPublicReceiveAt))
+			status.PublicReceiveAgeMS = &age
+		}
+		if !item.LastPrivateReceiveAt.IsZero() {
+			age := nonNegativeMilliseconds(now.Sub(item.LastPrivateReceiveAt))
+			status.PrivateReceiveAgeMS = &age
+		}
+		if !item.LastPublicEventAt.IsZero() {
+			age := nonNegativeMilliseconds(now.Sub(item.LastPublicEventAt))
+			status.PublicEventAgeMS = &age
+		}
+		if !item.LastPrivateEventAt.IsZero() {
+			age := nonNegativeMilliseconds(now.Sub(item.LastPrivateEventAt))
+			status.PrivateEventAgeMS = &age
 		}
 		if !item.MarketEventAt.IsZero() {
 			age := nonNegativeMilliseconds(now.Sub(item.MarketEventAt))

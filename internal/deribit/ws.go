@@ -47,6 +47,8 @@ type WSConfig struct {
 }
 
 type WSMetrics struct {
+	LastReceiveAt time.Time
+	LastEventAt   time.Time
 	Connections   uint64
 	Reconnects    uint64
 	Messages      uint64
@@ -61,6 +63,8 @@ type WSMetrics struct {
 }
 
 type WSClient struct {
+	lastReceiveMS atomic.Int64
+	lastEventMS   atomic.Int64
 	httpClient    *Client
 	config        WSConfig
 	nextID        atomic.Uint64
@@ -282,8 +286,10 @@ func (c *WSClient) runConnection(ctx context.Context, conn WSConnection, generat
 		if err != nil {
 			return err
 		}
+		receivedAt := c.config.Now().UTC()
+		c.lastReceiveMS.Store(receivedAt.UnixMilli())
 		c.messages.Add(1)
-		_ = conn.SetReadDeadline(c.config.Now().Add(c.config.StaleAfter))
+		_ = conn.SetReadDeadline(receivedAt.Add(c.config.StaleAfter))
 		var message wsEnvelope
 		if err := json.Unmarshal(payload, &message); err != nil {
 			return errors.New("malformed Deribit WebSocket JSON-RPC message")
@@ -346,7 +352,8 @@ func (c *WSClient) runConnection(ctx context.Context, conn WSConnection, generat
 		if message.Method != "subscription" {
 			continue
 		}
-		event := WSNotification{Channel: message.Params.Channel, Data: message.Params.Data, ReceivedAt: c.config.Now().UTC(), Generation: generation}
+		event := WSNotification{Channel: message.Params.Channel, Data: message.Params.Data, ReceivedAt: receivedAt, Generation: generation}
+		c.lastEventMS.Store(receivedAt.UnixMilli())
 		if !ready {
 			if len(pendingNotifications) >= c.config.QueueSize {
 				return errors.New("Deribit WebSocket recovery buffer full before connection became ready")
@@ -367,10 +374,17 @@ func (c *WSClient) Metrics() WSMetrics {
 	codScope := c.codScope
 	codEnabled := c.codEnabled
 	c.errorMu.Unlock()
-	return WSMetrics{Connections: c.connections.Load(), Reconnects: c.reconnects.Load(), Messages: c.messages.Load(), Notifications: c.notifications.Load(), TestRequests: c.testRequests.Load(), QueueDepth: c.queueDepth.Load(), LastError: lastError, Ready: c.ready.Load(), CODQueried: codQueried, CODScope: codScope, CODEnabled: codEnabled}
+	return WSMetrics{Connections: c.connections.Load(), Reconnects: c.reconnects.Load(), Messages: c.messages.Load(), Notifications: c.notifications.Load(), TestRequests: c.testRequests.Load(), QueueDepth: c.queueDepth.Load(), LastError: lastError, Ready: c.ready.Load(), CODQueried: codQueried, CODScope: codScope, CODEnabled: codEnabled, LastReceiveAt: wsMetricTime(c.lastReceiveMS.Load()), LastEventAt: wsMetricTime(c.lastEventMS.Load())}
 }
 
 func (c *WSClient) Connected() bool { return c.connected.Load() }
+
+func wsMetricTime(milliseconds int64) time.Time {
+	if milliseconds <= 0 {
+		return time.Time{}
+	}
+	return time.UnixMilli(milliseconds).UTC()
+}
 
 func waitContext(ctx context.Context, duration time.Duration) error {
 	timer := time.NewTimer(duration)

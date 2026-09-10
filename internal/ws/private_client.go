@@ -37,12 +37,14 @@ type PrivateConfig struct {
 }
 
 type PrivateClient struct {
-	config       PrivateConfig
-	connected    atomic.Bool
-	reconnects   atomic.Uint64
-	messages     atomic.Uint64
-	queueDepth   atomic.Int64
-	sequenceRuns atomic.Uint64
+	lastReceiveMS atomic.Int64
+	lastEventMS   atomic.Int64
+	config        PrivateConfig
+	connected     atomic.Bool
+	reconnects    atomic.Uint64
+	messages      atomic.Uint64
+	queueDepth    atomic.Int64
+	sequenceRuns  atomic.Uint64
 }
 
 func NewPrivateClient(config PrivateConfig) *PrivateClient {
@@ -130,6 +132,7 @@ func (c *PrivateClient) authenticate(conn Connection) error {
 	if err != nil {
 		return fmt.Errorf("read private WebSocket authentication: %w", err)
 	}
+	c.lastReceiveMS.Store(c.config.Now().UTC().UnixMilli())
 	var response struct {
 		Success bool   `json:"success"`
 		Message string `json:"ret_msg"`
@@ -166,6 +169,7 @@ func (c *PrivateClient) serve(parent context.Context, conn Connection, sink Priv
 				return
 			}
 			received := c.config.Now().UTC()
+			c.lastReceiveMS.Store(received.UnixMilli())
 			_ = conn.SetReadDeadline(received.Add(c.config.StaleAfter))
 			decoded, err := DecodePrivate(payload, received)
 			if err != nil {
@@ -173,6 +177,9 @@ func (c *PrivateClient) serve(parent context.Context, conn Connection, sink Priv
 				return
 			}
 			c.messages.Add(1)
+			if len(decoded) > 0 {
+				c.lastEventMS.Store(received.UnixMilli())
+			}
 			for _, event := range decoded {
 				select {
 				case events <- event:
@@ -243,3 +250,7 @@ func (c *PrivateClient) Stats() (reconnects, messages uint64, queueDepth int64) 
 }
 
 func (c *PrivateClient) Connected() bool { return c.connected.Load() }
+
+func (c *PrivateClient) StreamTimes() (lastReceiveAt, lastEventAt time.Time) {
+	return metricTime(c.lastReceiveMS.Load()), metricTime(c.lastEventMS.Load())
+}

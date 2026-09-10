@@ -24,6 +24,16 @@ type Submission struct {
 	Accepted       bool
 }
 
+type SubmissionObservation struct {
+	Venue         domain.Venue
+	IntentID      string
+	ClientOrderID string
+	VenueOrderID  string
+	AckAt         time.Time
+	RequestRTT    time.Duration
+	Err           error
+}
+
 type RejectedError struct {
 	PublicMessage string
 	Err           error
@@ -94,13 +104,14 @@ func (c *QuoteCache) prune(now time.Time) {
 }
 
 type Application struct {
-	Quotes      *Service
-	Cache       *QuoteCache
-	Store       intent.Store
-	Submitters  map[domain.Venue]Submitter
-	Limits      intent.DemoLimits
-	Now         func() time.Time
-	NewIntentID func() (string, error)
+	Quotes       *Service
+	Cache        *QuoteCache
+	Store        intent.Store
+	Submitters   map[domain.Venue]Submitter
+	Limits       intent.DemoLimits
+	Now          func() time.Time
+	NewIntentID  func() (string, error)
+	OnSubmission func(SubmissionObservation)
 }
 
 type ConfirmRequest struct {
@@ -178,7 +189,14 @@ func (a *Application) Confirm(ctx context.Context, request ConfirmRequest) (Conf
 		return ConfirmResult{Trade: trade, Created: true}, err
 	}
 
+	submissionStarted := time.Now()
 	submission, submitErr := submitter.Submit(context.WithoutCancel(ctx), trade)
+	if a.OnSubmission != nil {
+		a.OnSubmission(SubmissionObservation{
+			Venue: venue, IntentID: trade.ID, ClientOrderID: trade.ClientOrderID, VenueOrderID: submission.VenueOrderID,
+			AckAt: a.now(), RequestRTT: time.Since(submissionStarted), Err: submitErr,
+		})
+	}
 	if submitErr != nil {
 		var rejected *RejectedError
 		if errors.As(submitErr, &rejected) {

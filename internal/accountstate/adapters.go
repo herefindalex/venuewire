@@ -52,7 +52,7 @@ func (p *BybitProvider) Snapshot(ctx context.Context) (Snapshot, error) {
 			quality = "unpriced"
 			result.UnpricedAssets = append(result.UnpricedAssets, asset)
 		}
-		result.Assets = append(result.Assets, Asset{Asset: asset, Balance: coin.WalletBalance, Equity: coin.Equity, Locked: coin.Locked, Liability: coin.BorrowAmount, AvailableToTrade: available, AvailableToTradeAsOf: now, AvailableStatus: status, ValuationQuantity: coin.WalletBalance, QuantityBasis: "wallet balance", USDValue: coin.USDValue, PriceSource: "Bybit wallet snapshot", PriceAsOf: now, Quality: quality})
+		result.Assets = append(result.Assets, Asset{Asset: asset, Balance: coin.WalletBalance, Equity: coin.Equity, Locked: coin.Locked, Liability: coin.BorrowAmount, AvailableToTrade: available, AvailableToTradeAsOf: now, AvailableStatus: status, ValuationQuantity: coin.WalletBalance, QuantityBasis: "wallet balance", ExchangeReportedUSDValue: coin.USDValue, USDValue: coin.USDValue, PriceSource: "Bybit wallet snapshot", PriceAsOf: now, Quality: quality})
 	}
 	return result, nil
 }

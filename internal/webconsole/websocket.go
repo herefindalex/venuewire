@@ -245,7 +245,14 @@ func (s *Server) browserEventPayload(ctx context.Context, event runtimeevent.Eve
 	case "venue.health.updated":
 		return map[string]any{"health": s.publicStatuses(s.now())}, event.Sequence, nil
 	case "valuation.updated":
-		return map[string]any{"venue": event.Venue}, event.Sequence, nil
+		if s.accounts == nil {
+			return nil, event.Sequence, errors.New("account service unavailable")
+		}
+		snapshot, ok := s.accounts.Snapshot(event.Venue)
+		if !ok {
+			return nil, event.Sequence, errors.New("account snapshot unavailable")
+		}
+		return map[string]any{"account": snapshot}, event.Sequence, nil
 	case "resync.required":
 		return map[string]any{"reason": "subscriber overflow"}, event.Sequence, nil
 	default:
