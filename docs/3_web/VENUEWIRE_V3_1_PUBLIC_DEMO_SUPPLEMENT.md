@@ -183,7 +183,7 @@ Every request accepted through the trusted reverse-proxy boundary must emit one 
 - elapsed milliseconds;
 - validated client IP supplied by the trusted proxy boundary.
 
-Access logs must never include query values, request or response bodies, usernames, passwords, cookies, authorization headers, CSRF tokens, session identifiers, or exchange credentials. Login-specific warnings may record the request ID and validated client IP, but not submitted credentials. Rejected trade operations may log the stable error code and redacted internal provider cause, but never the submitted payload. The existing JSON logger writes these events to server stderr so the operator can correlate a browser error with one request without enabling unsafe debug logging.
+Access logs must never include query values, request or response bodies, usernames, passwords, cookies, authorization headers, CSRF tokens, session identifiers, or exchange credentials. Login-specific warnings may record the request ID and validated client IP, but not submitted credentials. Rejected trade operations may log the stable error code and redacted internal provider cause, but never the submitted payload. In web mode the JSON logger appends to the git-ignored `log/venuewire.log` with file mode 0600 and mirrors events to server stderr, so the operator can correlate a browser error with one request without enabling unsafe debug logging.
 
 ## 4.3 Nginx Additional Gate
 

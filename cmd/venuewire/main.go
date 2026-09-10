@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -30,6 +32,7 @@ Web server mode:
   Without --env-file, VenueWire reads .env beside the binary, then its parent directory.
   OS environment values always win; the binary-directory .env wins over the parent .env.
   The Go server binds configured private HTTP for an HTTPS/WSS Nginx proxy; it does not terminate TLS.
+  Server JSON logs append to log/venuewire.log and are also written to stderr.
 
 Public REST:
   venuewire --venue bybit time
@@ -113,7 +116,19 @@ func runContext(ctx context.Context, args []string) int {
 	args = loadedArgs
 	args = normalizeVenueArgs(args)
 	cfg := config.Load()
-	logger := observability.NewJSON(os.Stderr, cfg.APISecret, cfg.Deribit.APISecret)
+	logOutput := io.Writer(os.Stderr)
+	var logFile *os.File
+	if len(args) > 0 && args[0] == "web" {
+		logPath := filepath.Join("log", "venuewire.log")
+		logFile, err = observability.OpenLogFile(logPath)
+		if err != nil {
+			observability.NewJSON(os.Stderr).Error("web log initialization failed", slog.String("path", logPath), slog.String("error", err.Error()))
+			return 2
+		}
+		defer logFile.Close()
+		logOutput = io.MultiWriter(os.Stderr, logFile)
+	}
+	logger := observability.NewJSON(logOutput, cfg.APISecret, cfg.Deribit.APISecret)
 
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprintln(os.Stdout, usage)

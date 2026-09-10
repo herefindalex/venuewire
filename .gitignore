@@ -3,8 +3,10 @@
 .env~
 !.env.example
 .idea/
+.gstack/
 *.pem
 *.key
+log/
 secrets/
 data/
 state/
@@ -12,3 +14,4 @@ bin/
 coverage.out
 web/node_modules/
 internal/webassets/dist/
+

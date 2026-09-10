@@ -3,12 +3,33 @@ package observability
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
 const redacted = "[REDACTED]"
+
+func OpenLogFile(path string) (*os.File, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, fmt.Errorf("log path is required")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, fmt.Errorf("create log directory: %w", err)
+	}
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("open log file: %w", err)
+	}
+	if err := file.Chmod(0o600); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("secure log file permissions: %w", err)
+	}
+	return file, nil
+}
 
 type redactingHandler struct {
 	next    slog.Handler
