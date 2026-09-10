@@ -22,3 +22,34 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradie
 .modal-testnet { position: absolute; right: 56px; top: 19px; font-weight: 700; }.modal-body { padding-top: 12px; }.review-heading, .drawer-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }.review-heading span { color: #647a91; }.review-heading strong { font-size: 20px; }.review-warning { margin-top: 12px; }.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }.submitting-state { padding: 50px 20px; text-align: center; }.submitting-state h3 { margin-top: 18px; }.submitting-state p { color: #71869d; }.result-account { margin-top: 8px; padding: 16px; border: 1px solid rgba(117, 153, 190, .18); border-radius: 10px; background: rgba(8, 17, 31, .55); }.result-account dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; margin: 12px 0 0; }.result-account dt { color: #65ddc0; font-weight: 700; }.result-account dd { margin: 0; text-align: right; }.recheck-button { margin: 18px 0 24px; }.trade-timeline { margin-top: 16px; }.architecture { padding: 18px; background: #08111f; color: #9ed9cb; border-radius: 10px; line-height: 1.6; overflow: auto; }
 @media (max-width: 900px) { .two-column { grid-template-columns: 1fr; }.wordmark-detail { display: none; }.topbar { padding: 0 18px; }.content { padding: 28px 18px 50px; }.hero-row { align-items: flex-start; flex-direction: column; }.hero-actions { width: 100%; justify-content: space-between; }.topbar-actions .ant-btn-text:first-of-type { display: none; } }
 @media (max-width: 560px) { .login-card { padding: 30px 24px; }.topbar { height: auto; padding-top: 12px; padding-bottom: 12px; }.topbar-actions { gap: 4px; }.venue-select { width: 105px; }.hero-actions { align-items: stretch; flex-direction: column; }.account-value { text-align: left; }.panel { padding: 16px; } }
+
+/* Accessible state colors on both the dark console and Ant Design's pale tags. */
+.ant-tag-default { color: #c2d0df; background: #14263a; border-color: #526a82; }
+.ant-tag-green { color: #1f6d04; }
+.ant-tag-gold { color: #7a4600; }
+.ant-empty-description { color: #9fb2c7 !important; }
+.ant-btn-primary { background: #0b63ce; }
+.ant-btn-primary:not(:disabled):hover { background: #084fAA; }
+
+/* Subtle row rhythm improves horizontal scanning without competing with status tags. */
+.ant-table-wrapper .ant-table-tbody > tr:nth-child(even) > td { background: rgba(111, 150, 190, .035); }
+.ant-table-wrapper .ant-table-tbody > tr:nth-child(odd) > td { background: rgba(4, 12, 22, .08); }
+.ant-table-wrapper .ant-table-tbody > tr:hover > td { background: rgba(55, 96, 130, .5) !important; }
+
+.panel, .two-column, .hero-row, .hero-actions { min-width: 0; }
+.ant-table-wrapper { width: 100%; min-width: 0; max-width: 100%; }
+.ant-table-wrapper .ant-table-content { scrollbar-color: #526a82 #0a1727; }
+.account-value strong { overflow-wrap: anywhere; }
+.ant-drawer-content-wrapper { max-width: calc(100vw - 16px); }
+
+@media (max-width: 900px) {
+  .ant-layout-header.topbar { height: auto; min-height: 68px; flex-wrap: wrap; gap: 10px 18px; padding-top: 12px; padding-bottom: 12px; }
+  .topbar-actions { flex: 1 1 560px; min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+}
+
+@media (max-width: 560px) {
+  .ant-layout-header.topbar { height: auto; min-height: 0; flex-direction: column; flex-wrap: nowrap; align-items: stretch; line-height: normal; padding-inline: 12px; }
+  .topbar-actions { flex: 0 0 auto; width: 100%; align-items: center; justify-content: flex-start; gap: 8px; line-height: normal; }
+  .content { padding-inline: 12px; }
+  .account-value strong { font-size: clamp(20px, 7vw, 29px); }
+}

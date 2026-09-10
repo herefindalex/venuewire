@@ -350,7 +350,7 @@ onBeforeUnmount(() => {
 
       <section class="panel section-gap">
         <div class="section-heading"><div><p class="eyebrow">BALANCES</p><h3>Assets</h3></div><a-button :loading="refreshingAccount" @click="refreshAccount">Refresh from venue</a-button></div>
-        <a-table :data-source="account?.assets ?? []" :pagination="false" row-key="asset" size="middle">
+        <a-table :data-source="account?.assets ?? []" :pagination="false" :scroll="{ x: 760 }" row-key="asset" size="middle">
           <a-table-column title="Asset" data-index="asset"><template #default="{ text }"><strong>{{ text }}</strong></template></a-table-column>
           <a-table-column title="Balance" data-index="balance"><template #default="{ text }">{{ displayDecimal(text) || '—' }}</template></a-table-column>
           <a-table-column title="Equity" data-index="equity"><template #default="{ text }">{{ displayDecimal(text) || '—' }}</template></a-table-column>
@@ -390,7 +390,7 @@ onBeforeUnmount(() => {
 
         <section class="panel">
           <div class="section-heading"><div><p class="eyebrow">ORDER LIFECYCLE</p><h3>Recent trades</h3></div><span class="muted">Shared demo history</span></div>
-          <a-table :data-source="trades" :pagination="false" row-key="intentId" size="small" :custom-row="(record: TradeView) => ({ onClick: () => showTrade(record) })">
+          <a-table :data-source="trades" :pagination="false" :scroll="{ x: 520 }" row-key="intentId" size="small" :custom-row="(record: TradeView) => ({ onClick: () => showTrade(record) })">
             <a-table-column title="Time" data-index="createdAt"><template #default="{ text }">{{ new Date(text).toLocaleTimeString() }}</template></a-table-column>
             <a-table-column title="Venue" data-index="venue" />
             <a-table-column title="Direction"><template #default="{ record }">{{ record.fromAsset }} → {{ record.toAsset }}</template></a-table-column>
