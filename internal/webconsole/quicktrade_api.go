@@ -125,7 +125,7 @@ func (s *Server) writeTradeError(w http.ResponseWriter, r *http.Request, err err
 			status = http.StatusBadRequest
 		case "DEMO_AMOUNT_LIMIT", "SESSION_TRADE_LIMIT", "HOURLY_TRADE_LIMIT":
 			status = http.StatusTooManyRequests
-		case "VENUE_UNAVAILABLE", "VENUE_WRITE_UNAVAILABLE":
+		case "VENUE_UNAVAILABLE", "VENUE_WRITE_UNAVAILABLE", "MARKET_UNAVAILABLE", "CAPACITY_UNAVAILABLE", "VENUE_RECOVERING":
 			status = http.StatusServiceUnavailable
 		}
 		writeError(w, status, strings.ToLower(quoteErr.Code), quoteErr.Error(), requestID(r))

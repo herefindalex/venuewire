@@ -80,6 +80,24 @@ Status: `LOCAL_VERIFIED_FOUNDATION`; authoritative Testnet account reads are wir
 | `npm --prefix web test -- --run` | PASS — 3 tests |
 | External Testnet account/API operations | `NOT_RUN` |
 
+### V3.1 Phase C2 — real Spot quote and submission adapters
+
+Status: `LOCAL_VERIFIED_FOUNDATION`; Web Quick Trade now uses real adapter implementations, while reconciliation-backed terminal lifecycle and startup recovery remain pending.
+
+- Added exact Bybit Spot instrument, depth, account fee-rate and no-borrow capacity reads. Orders use `category=spot`, Limit IOC and explicit `isLeverage=0` with the durable VenueWire client order ID.
+- Added exact Deribit `ETH_BTC` Spot instrument/order-book reads, metadata taker commission and conservative account capacity. Orders use `private/buy` or `private/sell` with `immediate_or_cancel` and the durable VenueWire label.
+- Metadata is cached with a bounded TTL and hashed revision. Missing/invalid precision, fee, capacity, instrument scope, book scope or timestamp fails closed.
+- Explicit venue/API rejections become `Rejected`; transport uncertainty and acknowledgements without an order ID remain `Unknown`. Neither adapter retries submissions.
+- Web startup now constructs the real four-route quote service, durable application, V3/V3.1 caps and global/session/concurrent Demo limits.
+- Public error codes now align to `STALE_MARKET_DATA`, `INSUFFICIENT_SPOT_BALANCE`, `QUOTE_CHANGED` and `ACCOUNT_BUSY`; private provider causes remain unwrap-able for diagnostics but are not sent to the Browser.
+
+| Check | Result |
+|---|---|
+| `go test ./...` | PASS — 340 tests, 21 packages |
+| `go vet ./...` | PASS |
+| `go build -tags webui -o /tmp/venuewire-web-spot ./cmd/venuewire` | PASS |
+| External Testnet market/account/order operations | `NOT_RUN` |
+
 ## Phase status
 
 | Phase | Status | Evidence |

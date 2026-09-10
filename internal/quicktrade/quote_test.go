@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,10 +72,10 @@ func TestTradeQuoteCapsAndFreshnessFailClosed(t *testing.T) {
 		{"venue cap", func(s *Service, _ map[domain.Venue]Provider) { s.Caps.ByVenueSource["bybit:USDT"] = "99" }, "100", "DEMO_AMOUNT_LIMIT"},
 		{"stale book", func(_ *Service, p map[domain.Venue]Provider) {
 			p[domain.VenueBybit].(*fixtureProvider).market.ObservedAt = now.Add(-4 * time.Second)
-		}, "100", "STALE_BOOK"},
+		}, "100", "STALE_MARKET_DATA"},
 		{"insufficient capacity", func(_ *Service, p map[domain.Venue]Provider) {
 			p[domain.VenueBybit].(*fixtureProvider).capacity["USDT"] = "1"
-		}, "100", "INSUFFICIENT_AVAILABLE_FUNDS"},
+		}, "100", "INSUFFICIENT_SPOT_BALANCE"},
 		{"metadata mismatch", func(_ *Service, p map[domain.Venue]Provider) {
 			p[domain.VenueBybit].(*fixtureProvider).market.Rules.BaseAsset = "ETH"
 		}, "100", "METADATA_MISMATCH"},
@@ -104,6 +105,28 @@ func TestUnknownFeeProducesNonExecutableReview(t *testing.T) {
 	}
 }
 
+func TestProviderFailuresHaveSafeStablePublicCodes(t *testing.T) {
+	now := time.Now().UTC()
+	providers := fixtureProviders(now)
+	service := fixtureService(now, providers)
+	provider := providers[domain.VenueBybit].(*fixtureProvider)
+	privateCause := errors.New("private upstream diagnostic")
+	provider.marketErr = privateCause
+	_, err := service.Create(context.Background(), CreateRequest{Identity: "shared-user", Venue: domain.VenueBybit, RouteID: "bybit-usdt-btc", SpendBudget: "100", AccountAlias: "bybit-test"})
+	assertQuoteCode(t, err, "MARKET_UNAVAILABLE")
+	if !errors.Is(err, privateCause) || strings.Contains(err.Error(), "private upstream") {
+		t.Fatalf("market error boundary = %q, unwrap=%t", err, errors.Is(err, privateCause))
+	}
+
+	provider.marketErr = nil
+	provider.capacityErr = privateCause
+	_, err = service.Create(context.Background(), CreateRequest{Identity: "shared-user", Venue: domain.VenueBybit, RouteID: "bybit-usdt-btc", SpendBudget: "100", AccountAlias: "bybit-test"})
+	assertQuoteCode(t, err, "CAPACITY_UNAVAILABLE")
+	if !errors.Is(err, privateCause) || strings.Contains(err.Error(), "private upstream") {
+		t.Fatalf("capacity error boundary = %q, unwrap=%t", err, errors.Is(err, privateCause))
+	}
+}
+
 func TestProtectedDepthWarnsWithoutIncreasingOrderQuantity(t *testing.T) {
 	now := time.Now().UTC()
 	providers := fixtureProviders(now)
@@ -120,17 +143,19 @@ func TestProtectedDepthWarnsWithoutIncreasingOrderQuantity(t *testing.T) {
 }
 
 type fixtureProvider struct {
-	market   MarketSnapshot
-	capacity map[string]string
-	fee      FeePolicy
-	feeErr   error
+	market      MarketSnapshot
+	marketErr   error
+	capacity    map[string]string
+	capacityErr error
+	fee         FeePolicy
+	feeErr      error
 }
 
 func (p *fixtureProvider) Market(context.Context, Route) (MarketSnapshot, error) {
-	return p.market, nil
+	return p.market, p.marketErr
 }
 func (p *fixtureProvider) Available(_ context.Context, _ Route, asset string) (Capacity, error) {
-	return Capacity{Available: p.capacity[asset], AccountRevision: 7, ObservedAt: p.market.ObservedAt}, nil
+	return Capacity{Available: p.capacity[asset], AccountRevision: 7, ObservedAt: p.market.ObservedAt}, p.capacityErr
 }
 func (p *fixtureProvider) Fee(context.Context, Route) (FeePolicy, error) { return p.fee, p.feeErr }
 

@@ -215,7 +215,7 @@ func (m *Manager) Capacity(venue domain.Venue, asset string) (string, uint64, ti
 		return "", 0, time.Time{}, false
 	}
 	for _, item := range snapshot.Assets {
-		if item.Asset == asset && item.AvailableStatus == "verified" && item.AvailableToTrade != "" {
+		if item.Asset == asset && (item.AvailableStatus == "verified" || item.AvailableStatus == "derived") && item.AvailableToTrade != "" {
 			return item.AvailableToTrade, snapshot.Revision, item.AvailableToTradeAsOf, true
 		}
 	}

@@ -199,7 +199,7 @@ func (s Store) ConfirmQuickTrade(ctx context.Context, confirmation QuickTradeCon
 			return &ConfirmError{Code: "HOURLY_TRADE_LIMIT", Err: errors.New("rolling hourly trade limit reached")}
 		}
 		if activeCount >= limits.MaxConcurrentTrades {
-			return &ConfirmError{Code: "DEMO_TRADE_BUSY", Err: errors.New("another demo trade is unresolved")}
+			return &ConfirmError{Code: "ACCOUNT_BUSY", Err: errors.New("another demo trade is unresolved")}
 		}
 
 		result = QuickTrade{

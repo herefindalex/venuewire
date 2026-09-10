@@ -100,11 +100,17 @@ type CreateRequest struct {
 }
 
 type Error struct {
-	Code string
-	Err  error
+	Code          string
+	PublicMessage string
+	Err           error
 }
 
-func (e *Error) Error() string { return e.Err.Error() }
+func (e *Error) Error() string {
+	if e.PublicMessage != "" {
+		return e.PublicMessage
+	}
+	return e.Err.Error()
+}
 func (e *Error) Unwrap() error { return e.Err }
 
 func Routes() []Route {
@@ -140,7 +146,7 @@ func (s *Service) Create(ctx context.Context, request CreateRequest) (intent.Qui
 
 	market, err := provider.Market(ctx, route)
 	if err != nil {
-		return intent.QuickTradeQuote{}, fmt.Errorf("load executable market: %w", err)
+		return intent.QuickTradeQuote{}, providerError("MARKET_UNAVAILABLE", "Executable Spot market data is unavailable.", err)
 	}
 	rules, err := parseRules(route, market.Rules)
 	if err != nil {
@@ -181,14 +187,14 @@ func (s *Service) Create(ctx context.Context, request CreateRequest) (intent.Qui
 	sourceDebit := sourceDebitUpperBound(route.Side, baseQuantity, limitPrice, fee.ChargeAsset, feeRate)
 	sourceCapacity, err := provider.Available(ctx, route, route.FromAsset)
 	if err != nil {
-		return intent.QuickTradeQuote{}, fmt.Errorf("load source asset capacity: %w", err)
+		return intent.QuickTradeQuote{}, providerError("CAPACITY_UNAVAILABLE", "Available-to-trade capacity could not be verified.", err)
 	}
 	available, err := nonNegativeDecimal("available to trade", sourceCapacity.Available)
 	if err != nil {
 		return intent.QuickTradeQuote{}, quoteError("CAPACITY_UNAVAILABLE", "available-to-trade capacity is invalid")
 	}
 	if sourceDebit.Cmp(available) > 0 {
-		return intent.QuickTradeQuote{}, quoteError("INSUFFICIENT_AVAILABLE_FUNDS", "the source amount exceeds available funds")
+		return intent.QuickTradeQuote{}, quoteError("INSUFFICIENT_SPOT_BALANCE", "the source amount exceeds available Spot funds")
 	}
 
 	depthQuantity, grossDestination := executableEstimate(route.Side, baseQuantity, limitPrice, book)
@@ -248,14 +254,14 @@ func (s *Service) ValidateForConfirm(ctx context.Context, quote intent.QuickTrad
 	}
 	market, err := provider.Market(ctx, route)
 	if err != nil {
-		return fmt.Errorf("refresh executable market: %w", err)
+		return providerError("MARKET_UNAVAILABLE", "Executable Spot market data is unavailable.", err)
 	}
 	rules, err := parseRules(route, market.Rules)
 	if err != nil {
 		return err
 	}
 	if market.Rules.MetadataRevision == "" || market.Rules.MetadataRevision != quote.MetadataRevision {
-		return quoteError("QUOTE_REVIEW_REQUIRED", "instrument rules changed; review a new quote")
+		return quoteError("QUOTE_CHANGED", "instrument rules changed; review a new quote")
 	}
 	book, err := parseBook(market, now, s.BookMaxAge)
 	if err != nil {
@@ -276,7 +282,7 @@ func (s *Service) ValidateForConfirm(ctx context.Context, quote intent.QuickTrad
 		return quoteError("INVALID_QUOTE", "the quote no longer meets minimum notional")
 	}
 	if (route.Side == domain.SideBuy && book.bestAsk.Cmp(limit) > 0) || (route.Side == domain.SideSell && book.bestBid.Cmp(limit) < 0) {
-		return quoteError("QUOTE_REVIEW_REQUIRED", "the protected limit is no longer marketable; review a new quote")
+		return quoteError("QUOTE_CHANGED", "the protected limit is no longer marketable; review a new quote")
 	}
 	debit, err := positiveDecimal("source debit upper bound", quote.SourceDebitUpperBound)
 	if err != nil {
@@ -284,26 +290,26 @@ func (s *Service) ValidateForConfirm(ctx context.Context, quote intent.QuickTrad
 	}
 	capacity, err := provider.Available(ctx, route, route.FromAsset)
 	if err != nil {
-		return fmt.Errorf("refresh source asset capacity: %w", err)
+		return providerError("CAPACITY_UNAVAILABLE", "Available-to-trade capacity could not be verified.", err)
 	}
 	available, err := nonNegativeDecimal("available to trade", capacity.Available)
 	if err != nil || debit.Cmp(available) > 0 {
-		return quoteError("INSUFFICIENT_AVAILABLE_FUNDS", "available funds changed; review a new quote")
+		return quoteError("INSUFFICIENT_SPOT_BALANCE", "available Spot funds changed; review a new quote")
 	}
 	fee, err := provider.Fee(ctx, route)
 	if err != nil {
 		return quoteError("FEE_MODEL_UNAVAILABLE", "fee information could not be revalidated")
 	}
 	if _, err := parseFeePolicy(route, fee); err != nil || len(quote.EstimatedFees) != 1 || quote.EstimatedFees[0].Source != fee.Source {
-		return quoteError("QUOTE_REVIEW_REQUIRED", "fee information changed; review a new quote")
+		return quoteError("QUOTE_CHANGED", "fee information changed; review a new quote")
 	}
 	if fee.ChargeAsset == "third" {
 		if len(quote.ThirdAssetReserves) != 1 || quote.ThirdAssetReserves[0].Asset != strings.ToUpper(fee.ThirdAsset) || quote.ThirdAssetReserves[0].Amount != fee.ThirdAssetAmount {
-			return quoteError("QUOTE_REVIEW_REQUIRED", "fee reserve changed; review a new quote")
+			return quoteError("QUOTE_CHANGED", "fee reserve changed; review a new quote")
 		}
 		thirdCapacity, err := provider.Available(ctx, route, fee.ThirdAsset)
 		if err != nil {
-			return fmt.Errorf("refresh fee asset capacity: %w", err)
+			return providerError("CAPACITY_UNAVAILABLE", "Fee-asset capacity could not be verified.", err)
 		}
 		thirdAvailable, parseErr := nonNegativeDecimal("fee asset capacity", thirdCapacity.Available)
 		thirdRequired, requiredErr := positiveDecimal("fee asset reserve", fee.ThirdAssetAmount)
@@ -360,7 +366,7 @@ func parseRules(route Route, rules InstrumentRules) (parsedRules, error) {
 
 func parseBook(market MarketSnapshot, now time.Time, maxAge time.Duration) (parsedBook, error) {
 	if market.ObservedAt.IsZero() || now.Sub(market.ObservedAt) > maxAge || market.ObservedAt.After(now.Add(time.Second)) {
-		return parsedBook{}, quoteError("STALE_BOOK", "market data is stale")
+		return parsedBook{}, quoteError("STALE_MARKET_DATA", "market data is stale")
 	}
 	bids, err := parseLevels("bid", market.Bids)
 	if err != nil {
@@ -486,7 +492,7 @@ func feeEstimate(ctx context.Context, provider Provider, route Route, policy Fee
 		}
 		capacity, err := provider.Available(ctx, route, policy.ThirdAsset)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("load third-asset fee capacity: %w", err)
+			return nil, nil, nil, providerError("CAPACITY_UNAVAILABLE", "Fee-asset capacity could not be verified.", err)
 		}
 		available, err := nonNegativeDecimal("third asset available", capacity.Available)
 		if err != nil || available.Cmp(third) < 0 {
@@ -599,4 +605,8 @@ func decimalString(value *big.Rat) string {
 
 func quoteError(code, message string) error {
 	return &Error{Code: code, Err: errors.New(message)}
+}
+
+func providerError(code, message string, cause error) error {
+	return &Error{Code: code, PublicMessage: message, Err: cause}
 }

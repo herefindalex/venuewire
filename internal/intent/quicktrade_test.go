@@ -69,7 +69,7 @@ func TestUnknownRetainsGlobalConcurrentSlotUntilResolved(t *testing.T) {
 
 	second := quickConfirmation("intent-2", "session-2", "request-2", "quote-2", now.Add(2*time.Second))
 	_, _, err := store.ConfirmQuickTrade(context.Background(), second, limits, now.Add(2*time.Second))
-	assertConfirmCode(t, err, "DEMO_TRADE_BUSY")
+	assertConfirmCode(t, err, "ACCOUNT_BUSY")
 
 	if _, err := store.UpdateQuickTrade(context.Background(), first.IntentID, QuickTradeUpdate{Status: TradeFilled, ResultStatus: "FILLED", Checked: true}, now.Add(3*time.Second)); err != nil {
 		t.Fatal(err)

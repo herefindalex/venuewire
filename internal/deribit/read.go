@@ -22,7 +22,10 @@ type Instrument struct {
 	QuoteCurrency       string         `json:"quote_currency"`
 	TickSize            json.Number    `json:"tick_size"`
 	TickSizeSteps       []TickSizeStep `json:"tick_size_steps,omitempty"`
+	AmountStep          json.Number    `json:"amount_step"`
 	MinTradeAmount      json.Number    `json:"min_trade_amount"`
+	MakerCommission     json.Number    `json:"maker_commission"`
+	TakerCommission     json.Number    `json:"taker_commission"`
 	ContractSize        json.Number    `json:"contract_size"`
 	IsActive            bool           `json:"is_active"`
 	InstrumentID        int64          `json:"instrument_id"`

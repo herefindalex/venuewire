@@ -69,6 +69,8 @@ type Instrument struct {
 		MaxOrderQty string `json:"maxOrderQty"`
 		QtyStep     string `json:"qtyStep"`
 		MinNotional string `json:"minNotionalValue"`
+		MinOrderAmt string `json:"minOrderAmt"`
+		MaxOrderAmt string `json:"maxOrderAmt"`
 	} `json:"lotSizeFilter"`
 }
 
@@ -88,6 +90,7 @@ type PlaceOrderRequest struct {
 	Price       string `json:"price,omitempty"`
 	TimeInForce string `json:"timeInForce,omitempty"`
 	OrderLinkID string `json:"orderLinkId"`
+	IsLeverage  *int   `json:"isLeverage,omitempty"`
 	ReduceOnly  bool   `json:"reduceOnly,omitempty"`
 }
 

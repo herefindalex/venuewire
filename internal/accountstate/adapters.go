@@ -105,11 +105,13 @@ func (p *DeribitProvider) Snapshot(ctx context.Context) (Snapshot, error) {
 		if asset == "" {
 			continue
 		}
-		available, status := summary.AvailableFunds.String(), "verified"
-		if !validNonNegative(available) {
-			available, status = "", "unknown"
+		balance, balanceOK := nonNegativeRat(summary.Balance.String())
+		availableFunds, availableOK := nonNegativeRat(summary.AvailableFunds.String())
+		available, status := "", "unknown"
+		if balanceOK && availableOK {
+			available, status = decimal(minimumRat(balance, availableFunds)), "derived"
 		}
-		result.Assets = append(result.Assets, Asset{Asset: asset, Balance: summary.Balance.String(), Equity: summary.Equity.String(), Liability: "0", AvailableToTrade: available, AvailableToTradeAsOf: now, AvailableStatus: status, ValuationQuantity: summary.Equity.String(), QuantityBasis: "account equity", Quality: "unpriced"})
+		result.Assets = append(result.Assets, Asset{Asset: asset, Balance: summary.Balance.String(), Equity: summary.Equity.String(), Locked: summary.InitialMargin.String(), AvailableToTrade: available, AvailableToTradeAsOf: now, AvailableStatus: status, ValuationQuantity: summary.Equity.String(), QuantityBasis: "account equity", Quality: "unpriced"})
 		result.UnpricedAssets = append(result.UnpricedAssets, asset)
 	}
 	return result, nil
@@ -128,6 +130,13 @@ func rat(value string) (*big.Rat, bool) {
 func nonNegativeRat(value string) (*big.Rat, bool) {
 	result, ok := rat(value)
 	return result, ok && result.Sign() >= 0
+}
+
+func minimumRat(left, right *big.Rat) *big.Rat {
+	if left.Cmp(right) <= 0 {
+		return new(big.Rat).Set(left)
+	}
+	return new(big.Rat).Set(right)
 }
 
 func decimal(value *big.Rat) string {

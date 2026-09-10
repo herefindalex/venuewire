@@ -49,7 +49,7 @@ func TestManagerRefreshCachesSortedCopyAndCapacity(t *testing.T) {
 		venue: domain.VenueBybit,
 		snapshot: Snapshot{Assets: []Asset{
 			{Asset: "USDT", AvailableToTrade: "100", AvailableToTradeAsOf: now, AvailableStatus: "verified", Quality: "snapshot"},
-			{Asset: "BTC", AvailableToTrade: "0.5", AvailableToTradeAsOf: now, AvailableStatus: "verified", Quality: "snapshot"},
+			{Asset: "BTC", AvailableToTrade: "0.5", AvailableToTradeAsOf: now, AvailableStatus: "derived", Quality: "snapshot"},
 		}},
 	}
 	manager, err := NewManager([]Provider{provider}, time.Second, 5*time.Second)

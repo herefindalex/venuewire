@@ -114,6 +114,7 @@ func TestDeribitProviderNormalizesAvailabilityAndPreservesUnknown(t *testing.T) 
 			{Currency: "ETH", Balance: json.Number("0"), Equity: json.Number("0"), AvailableFunds: json.Number("0")},
 			{Currency: "USDC", Balance: json.Number("2"), Equity: json.Number("2"), AvailableFunds: json.Number("")},
 			{Currency: "USDT", Balance: json.Number("2"), Equity: json.Number("2"), AvailableFunds: json.Number("-1")},
+			{Currency: "SOL", Balance: json.Number(""), Equity: json.Number("2"), AvailableFunds: json.Number("1")},
 			{Currency: " ", Balance: json.Number("999"), AvailableFunds: json.Number("999")},
 		}},
 		AccountAlias: "demo-deribit",
@@ -127,13 +128,17 @@ func TestDeribitProviderNormalizesAvailabilityAndPreservesUnknown(t *testing.T) 
 	if snapshot.AccountAlias != "demo-deribit" || !snapshot.SnapshotAsOf.Equal(now) {
 		t.Fatalf("snapshot metadata = %+v", snapshot)
 	}
-	if len(snapshot.Assets) != 4 || len(snapshot.UnpricedAssets) != 4 {
-		t.Fatalf("asset counts = %d/%d, want 4/4", len(snapshot.Assets), len(snapshot.UnpricedAssets))
+	if len(snapshot.Assets) != 5 || len(snapshot.UnpricedAssets) != 5 {
+		t.Fatalf("asset counts = %d/%d, want 5/5", len(snapshot.Assets), len(snapshot.UnpricedAssets))
 	}
-	assertAvailability(t, snapshot.Assets[0], "BTC", "0.8", "verified")
-	assertAvailability(t, snapshot.Assets[1], "ETH", "0", "verified")
+	assertAvailability(t, snapshot.Assets[0], "BTC", "0.8", "derived")
+	assertAvailability(t, snapshot.Assets[1], "ETH", "0", "derived")
 	assertAvailability(t, snapshot.Assets[2], "USDC", "", "unknown")
 	assertAvailability(t, snapshot.Assets[3], "USDT", "", "unknown")
+	assertAvailability(t, snapshot.Assets[4], "SOL", "", "unknown")
+	if snapshot.Assets[0].Liability != "" {
+		t.Fatalf("Deribit liability = %q, want unknown", snapshot.Assets[0].Liability)
+	}
 }
 
 func TestDeribitProviderPropagatesReaderFailure(t *testing.T) {
