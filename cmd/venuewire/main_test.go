@@ -68,13 +68,18 @@ func TestUsageListsEveryImplementedCommand(t *testing.T) {
 		"fix connect-testnet",
 	}
 	for _, command := range commands {
-		if !strings.Contains(usage, "venuewire "+command) {
+		if !strings.Contains(usage, "venuewire --venue bybit "+command) {
 			t.Errorf("help does not list %q", command)
 		}
 	}
 	for _, command := range []string{
+		"venuewire --venue bybit <command> [options]",
+		"venuewire --venue deribit <command> [options]",
+		"venuewire --venue all <command> [options]",
 		"venuewire --venue deribit fix mock-demo",
 		"venuewire --venue deribit fix connect-testnet",
+		"--venue must appear before the command",
+		"Omitting --venue preserves legacy Bybit routing",
 		"--enable-connection-cod --confirm",
 	} {
 		if !strings.Contains(usage, command) {
@@ -83,6 +88,9 @@ func TestUsageListsEveryImplementedCommand(t *testing.T) {
 	}
 	if strings.Contains(usage, "added phase-by-phase") {
 		t.Error("help still contains the Phase 0 placeholder")
+	}
+	if strings.Contains(usage, "venuewire venue ") {
+		t.Error("help advertises unsupported positional venue syntax")
 	}
 }
 
