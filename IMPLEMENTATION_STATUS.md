@@ -184,6 +184,27 @@ Status: `LOCAL_VERIFIED`; all 15 V3.1 supplement section 23 scenarios now have d
 | `go build -tags webui -o /tmp/venuewire-web-c6 ./cmd/venuewire` | PASS |
 | External Testnet order/deployment operations | `NOT_RUN` |
 
+### V3.1 Phase C7 — release documentation and reproducible build handoff
+
+Status: `LOCAL_VERIFIED`; local implementation and documentation are complete. External Testnet Web flow, split-host deployment and real sanitized screenshots/recordings remain `NOT_RUN`.
+
+- Rewrote README around the Browser-first VenueWire V3.1 product, safe build/start flow, explicit venue CLI examples and accurate prototype/non-goal wording. Removed obsolete claims that the project has no Web UI, accepts only CLI orders or requires shell-sourcing `.env`.
+- Synchronized root and V3 package `.env.example` byte-for-byte: all secrets empty, venues/write gates disabled, V3 names retained, quote TTL five seconds and V3.1 Demo limits present.
+- Updated the Browser REST/WebSocket API contract and added V3.1 account/valuation/Spot/recovery protocol notes.
+- Added canonical split-host deployment and safe interviewer demo guides. Nginx/private bind/ACL verification and Testnet writes are procedures, not falsely reported execution evidence.
+- Added requirement-by-requirement `TEST_REPORT_V3.md` with all 15 section 23 failure fixtures and section 24 acceptance evidence.
+- Added Traditional Chinese V3/V3.1 handoff with build/start commands, configuration, operator verification sequence, explicit limitations and `NOT_RUN` external work.
+- Repaired `V3_1_GAP_ANALYSIS.md`, which had been stored as an unreadable serialized string, into a normal baseline/target/evidence matrix with the confirmed section 26 decisions.
+
+| Check | Result |
+|---|---|
+| `make build` | PASS — locked frontend install/build plus `webui` binary at `bin/venuewire` |
+| `./bin/venuewire help` | PASS — VenueWire Web and explicit `--venue` examples shown |
+| `go test ./internal/security ./internal/config -count=1 -timeout=120s` | PASS — 48 tests, 2 packages |
+| root vs V3 package `.env.example` | PASS — byte-identical |
+| `git diff --check` | PASS |
+| External Testnet/Nginx/firewall/deployment/screenshot operations | `NOT_RUN` |
+
 ## Phase status
 
 | Phase | Status | Evidence |

@@ -1,8 +1,8 @@
 # V3 部署附註：既有 Nginx SSL → 另一台 Go
 
-本包是變更規格與部署範例，**不是已完成的程式碼或已部署的服務**。實作及正式驗收以 `../TRADING_CONSOLE_V3_CHANGE_SPEC.md` 為準。
+本文件是 V3.1 split-host 部署參考。程式已完成本機實作與 fixture 驗證，但尚未操作真實 Nginx／防火牆／憑證或部署主機；外部部署狀態仍是 `NOT_RUN`。正式驗收以 `../TRADING_CONSOLE_V3_CHANGE_SPEC.md` 為準。
 
-V3.1 同時適用 `../VENUEWIRE_V3_1_PUBLIC_DEMO_SUPPLEMENT.md` §26：共用交易紀錄、全站滾動每小時與並行限額、`Unknown` 保留名額及重啟恢復。設定範例以 `../.env.example` 為準，沿用 `WEB_TRUSTED_PROXY_CIDRS`、`QUICK_TRADE_SLIPPAGE_BPS`，並使用 `QUOTE_TTL=5s`。
+V3.1 同時適用 `../VENUEWIRE_V3_1_PUBLIC_DEMO_SUPPLEMENT.md` §26：共用交易紀錄、全站滾動每小時與並行限額、`Unknown` 保留名額及重啟恢復。設定範例以根目錄 `.env.example` 為 canonical；`../.env.example` 保持完全相同。沿用 `WEB_TRUSTED_PROXY_CIDRS`、`QUICK_TRADE_SLIPPAGE_BPS`，並使用 `QUOTE_TTL=5s`。
 
 ## 1. 需要填入的值
 
