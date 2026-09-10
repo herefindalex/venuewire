@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
 import { api, APIError, setCSRF, type AccountView, type QuoteView, type SessionView, type TradeView, type VenueStatus, type VenueView } from './api';
+import { accountScopeLabel } from './accountPresentation';
 import { displayDecimal } from './decimal';
 
 const session = ref<SessionView>();
@@ -334,11 +335,11 @@ onBeforeUnmount(() => {
           <p class="eyebrow">{{ selectedVenue.toUpperCase() }} · TESTNET ACCOUNT</p>
           <h2>Account overview</h2>
           <p class="muted">Snapshot {{ account?.snapshotAsOf ? new Date(account.snapshotAsOf).toLocaleTimeString() : 'unavailable' }}</p>
-          <p v-if="account" class="muted">{{ account.accountType }} · liabilities {{ account.liabilityStatus }} · derivatives {{ account.hasDerivativePositions == null ? 'unknown' : account.hasDerivativePositions ? 'present' : 'none' }}</p>
+          <p v-if="account" class="muted">{{ accountScopeLabel(account.accountType, account.liabilityStatus, account.hasDerivativePositions) }}</p>
         </div>
         <div class="hero-actions">
         <div class="account-value"><span>Local USD mark</span><strong>{{ account?.totalUsd || account?.pricedSubtotalUsd ? `$${displayDecimal(account.totalUsd || account.pricedSubtotalUsd)}` : '—' }}</strong><small>{{ account?.completeness ?? 'Unavailable' }}{{ account?.pricedSubtotalUsd && !account?.totalUsd ? ' · priced subtotal' : '' }}</small></div>
-        <div class="account-value"><span>Exchange-reported total</span><strong>{{ account?.exchangeReportedTotalUsd ? `$${displayDecimal(account.exchangeReportedTotalUsd)}` : '—' }}</strong><small>Venue snapshot · not locally recalculated</small></div>
+        <div v-if="account?.exchangeReportedTotalUsd" class="account-value"><span>Exchange-reported total</span><strong>${{ displayDecimal(account.exchangeReportedTotalUsd) }}</strong><small>Venue snapshot · not locally recalculated</small></div>
           <a-button type="primary" size="large" :disabled="!account" @click="openQuickTrade">Quick Trade</a-button>
         </div>
       </div>

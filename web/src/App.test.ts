@@ -191,7 +191,8 @@ describe('VenueWire console', () => {
     expect(text).toContain('priced subtotal');
     expect(text).toContain('Exchange-reported total');
     expect(text).toContain('$55900');
-    expect(text).toContain('liabilities none · derivatives unknown');
+    expect(text).toContain('UNIFIED · liabilities none');
+    expect(text).not.toContain('derivatives unknown');
     expect(text).toContain('Account scope caution');
     expect(text).toContain('STALE');
     expect(text).toContain('LIMITED');
