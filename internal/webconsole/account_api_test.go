@@ -181,6 +181,47 @@ func TestSystemStatusUsesRuntimeHealthAndSafeBuildMetadata(t *testing.T) {
 	}
 }
 
+func TestSystemStatusKeepsHeartbeatLiveWhileSurfacingStaleAccountAndMarket(t *testing.T) {
+	now := time.Date(2026, 9, 10, 20, 0, 0, 0, time.UTC)
+	service := &fakeAccountService{health: []accountstate.VenueHealth{{
+		Venue:                domain.VenueBybit,
+		REST:                 "LIVE",
+		PublicWS:             "STALE",
+		PrivateWS:            "LIVE",
+		AccountSync:          "STALE",
+		LastPublicReceiveAt:  now.Add(-500 * time.Millisecond),
+		LastPrivateReceiveAt: now.Add(-250 * time.Millisecond),
+		LastPublicEventAt:    now.Add(-8 * time.Second),
+		PublicReconnects:     2,
+		PrivateReconnects:    1,
+	}}}
+	server := newTestServer(t)
+	server.now = func() time.Time { return now }
+	server.accounts = service
+	cookie, _ := loginSession(t, server)
+	response := performRequest(server, http.MethodGet, "/api/system/status", "", cookie, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("status response = %d %s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Venues []publicVenueStatus `json:"venues"`
+	}
+	decodeBody(t, response, &body)
+	if len(body.Venues) != 1 {
+		t.Fatalf("status venues = %+v", body.Venues)
+	}
+	status := body.Venues[0]
+	if status.PublicWS != "STALE" || status.PrivateWS != "LIVE" || status.AccountSync != "STALE" {
+		t.Fatalf("stale/live states = %+v", status)
+	}
+	if status.PublicReceiveAgeMS == nil || *status.PublicReceiveAgeMS != 500 || status.PrivateReceiveAgeMS == nil || *status.PrivateReceiveAgeMS != 250 || status.PublicEventAgeMS == nil || *status.PublicEventAgeMS != 8000 {
+		t.Fatalf("stream ages = %+v", status)
+	}
+	if status.PublicReconnects != 2 || status.PrivateReconnects != 1 {
+		t.Fatalf("reconnect counters = %+v", status)
+	}
+}
+
 func loginSession(t *testing.T, server *Server) (*http.Cookie, string) {
 	t.Helper()
 	response := performRequest(server, http.MethodPost, "/api/auth/login", `{"username":"alex","password":"fixture-password"}`, nil, "")

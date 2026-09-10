@@ -139,6 +139,42 @@ func TestUnknownWithoutEvidenceStaysActiveAndRetainsSlot(t *testing.T) {
 	}
 }
 
+func TestUnknownReconcilesToEveryAuthoritativeTerminalOutcome(t *testing.T) {
+	now := time.Date(2026, 9, 10, 14, 15, 0, 0, time.UTC)
+	tests := []struct {
+		name       string
+		venueState string
+		wantStatus intent.TradeStatus
+		wantResult string
+	}{
+		{name: "filled", venueState: "Filled", wantStatus: intent.TradeFilled, wantResult: "FILLED"},
+		{name: "cancelled", venueState: "Cancelled", wantStatus: intent.TradeCancelled, wantResult: "CANCELLED_NO_FILL"},
+		{name: "rejected", venueState: "Rejected", wantStatus: intent.TradeRejected, wantResult: "REJECTED"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store, trade := activeTrade(t, now, domain.VenueBybit, "Buy", "USDT", "BTC", "BTCUSDT", "1")
+			if _, err := store.UpdateQuickTrade(context.Background(), trade.ID, intent.QuickTradeUpdate{Status: intent.TradeUnknown, PublicError: "Outcome unknown."}, now); err != nil {
+				t.Fatal(err)
+			}
+			accounts := &fakeAccountRefresh{}
+			service := &Service{Store: store, Bybit: &fakeBybit{orders: []rest.Order{{
+				OrderID: trade.VenueOrderID, OrderLinkID: trade.ClientOrderID, OrderStatus: test.venueState,
+			}}}, Accounts: accounts}
+			updated, err := service.RecheckTrade(context.Background(), trade.ID, now.Add(time.Second))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if updated.Status != test.wantStatus || updated.ResultStatus != test.wantResult || updated.LastPublicError != "" || updated.TerminalAt == nil {
+				t.Fatalf("reconciled trade = %+v", updated)
+			}
+			if !slices.Equal(accounts.statuses, []string{"RUNNING", "SYNCED"}) || !slices.Equal(accounts.discrepancies, []bool{false, true}) {
+				t.Fatalf("reconciliation observations = statuses %v discrepancies %v", accounts.statuses, accounts.discrepancies)
+			}
+		})
+	}
+}
+
 func TestLaterFillEvidenceSupersedesCancelledState(t *testing.T) {
 	now := time.Date(2026, 9, 10, 14, 30, 0, 0, time.UTC)
 	store, trade := activeTrade(t, now, domain.VenueBybit, "Sell", "BTC", "USDT", "BTCUSDT", "1")

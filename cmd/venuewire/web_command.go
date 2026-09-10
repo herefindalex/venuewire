@@ -102,16 +102,7 @@ func executeWebCommand(ctx context.Context, cfg config.Config, logger *slog.Logg
 		},
 	}
 	tradeApplication.OnSubmission = func(observation quicktrade.SubmissionObservation) {
-		rateLimited := false
-		var bybitError *rest.APIError
-		if errors.As(observation.Err, &bybitError) && (bybitError.HTTPStatus == 429 || bybitError.Code == 10006) {
-			rateLimited = true
-		}
-		var deribitError *deribit.RPCError
-		if errors.As(observation.Err, &deribitError) && deribitError.Code == 10028 {
-			rateLimited = true
-		}
-		accounts.RecordOrderSubmission(observation.Venue, observation.ClientOrderID, observation.VenueOrderID, observation.AckAt, observation.RequestRTT, observation.Err == nil && observation.VenueOrderID != "", rateLimited)
+		recordSubmissionObservation(accounts, observation)
 	}
 	rechecker := &tradereconcile.Service{Store: tradeStore, Accounts: accounts}
 	rechecker.OnEvent = func(eventType string, venue domain.Venue, intentID string, at time.Time) {
@@ -133,6 +124,30 @@ func executeWebCommand(ctx context.Context, cfg config.Config, logger *slog.Logg
 		webconsole.WithTradeRechecker(rechecker),
 		webconsole.WithEventBroker(events),
 	).ListenAndServe(ctx)
+}
+
+func recordSubmissionObservation(accounts *accountstate.Manager, observation quicktrade.SubmissionObservation) {
+	if accounts == nil {
+		return
+	}
+	accounts.RecordOrderSubmission(
+		observation.Venue,
+		observation.ClientOrderID,
+		observation.VenueOrderID,
+		observation.AckAt,
+		observation.RequestRTT,
+		observation.Err == nil && observation.VenueOrderID != "",
+		submissionRateLimited(observation.Err),
+	)
+}
+
+func submissionRateLimited(err error) bool {
+	var bybitError *rest.APIError
+	if errors.As(err, &bybitError) && (bybitError.HTTPStatus == 429 || bybitError.Code == 10006) {
+		return true
+	}
+	var deribitError *deribit.RPCError
+	return errors.As(err, &deribitError) && deribitError.Code == 10028
 }
 
 func runQuickTradeRecovery(ctx context.Context, interval time.Duration, rechecker *tradereconcile.Service, logger *slog.Logger) {

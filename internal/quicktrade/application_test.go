@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"venuewire/internal/accountstate"
 	"venuewire/internal/domain"
 	"venuewire/internal/intent"
 )
@@ -119,12 +120,58 @@ func TestApplicationSubmissionOutlivesBrowserCancellation(t *testing.T) {
 	}
 }
 
+func TestApplicationPrivateDisconnectBeforeAckDoesNotLoseSubmission(t *testing.T) {
+	now := time.Date(2026, 9, 10, 18, 30, 0, 0, time.UTC)
+	accounts, err := accountstate.NewManager([]accountstate.Provider{applicationAccountProvider{}}, time.Second, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	submitter := &recordingSubmitter{
+		result: Submission{VenueOrderID: "venue-order-after-disconnect", RawVenueStatus: "New", Accepted: true},
+		beforeReturn: func() {
+			accounts.UpdatePrivateWS(domain.VenueBybit, "RECONNECTING", time.Time{}, 1)
+		},
+	}
+	application := fixtureApplication(t, now, submitter)
+	application.OnSubmission = func(observation SubmissionObservation) {
+		accounts.RecordOrderSubmission(observation.Venue, observation.ClientOrderID, observation.VenueOrderID, observation.AckAt, observation.RequestRTT, observation.Err == nil, false)
+	}
+	quote, err := application.CreateQuote(context.Background(), CreateRequest{
+		Identity: "shared-user", Venue: domain.VenueBybit, RouteID: "bybit-usdt-btc", SpendBudget: "100", AccountAlias: "bybit-test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := application.Confirm(context.Background(), ConfirmRequest{
+		Identity: "shared-user", SessionID: "session-1", QuoteID: quote.ID, ClientRequestID: "request-disconnect-before-ack",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Trade.Status != intent.TradeAccepted || result.Trade.VenueOrderID != "venue-order-after-disconnect" || submitter.Calls() != 1 {
+		t.Fatalf("submission after private disconnect = %+v calls=%d", result.Trade, submitter.Calls())
+	}
+	accounts.RecordOrderEvent(domain.VenueBybit, result.Trade.ClientOrderID, result.Trade.VenueOrderID, "order", now.Add(50*time.Millisecond))
+	health := accounts.Health()[0]
+	if health.PrivateWS != "RECONNECTING" || !health.HasFirstOrderEvent || health.FirstOrderEventLatency != 50*time.Millisecond {
+		t.Fatalf("post-reconnect observation = %+v", health)
+	}
+}
+
+type applicationAccountProvider struct{}
+
+func (applicationAccountProvider) Venue() domain.Venue { return domain.VenueBybit }
+func (applicationAccountProvider) Snapshot(context.Context) (accountstate.Snapshot, error) {
+	return accountstate.Snapshot{}, nil
+}
+
 type recordingSubmitter struct {
 	mu                 sync.Mutex
 	calls              int
 	result             Submission
 	err                error
 	requireLiveContext bool
+	beforeReturn       func()
 }
 
 func (s *recordingSubmitter) Submit(ctx context.Context, _ intent.QuickTrade) (Submission, error) {
@@ -133,6 +180,9 @@ func (s *recordingSubmitter) Submit(ctx context.Context, _ intent.QuickTrade) (S
 	s.calls++
 	if s.requireLiveContext && ctx.Err() != nil {
 		return Submission{}, errors.New("submission inherited browser cancellation")
+	}
+	if s.beforeReturn != nil {
+		s.beforeReturn()
 	}
 	return s.result, s.err
 }

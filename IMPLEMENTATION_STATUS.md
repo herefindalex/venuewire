@@ -162,6 +162,28 @@ Status: `LOCAL_VERIFIED`; deterministic failure-scenario coverage, Browser E2E a
 | `go build -tags webui -o /tmp/venuewire-web-c5 ./cmd/venuewire` | PASS |
 | External Testnet valuation/order/deployment operations | `NOT_RUN` |
 
+### V3.1 Phase C6 — deterministic failure scenarios and UI state fixtures
+
+Status: `LOCAL_VERIFIED`; all 15 V3.1 supplement section 23 scenarios now have deterministic local evidence. Real browser-engine, Testnet and split-host deployment verification remain separate final acceptance work.
+
+- Added explicit rate-limit classification fixtures for Bybit HTTP 429/code 10006 and Deribit code 10028, including wrapped venue rejections, and verified that the normalized System Status becomes `LIMITED` without exposing the private error.
+- Added a submission fixture in which the private stream enters reconnecting before the venue ACK returns. The detached submission completes exactly once, retains its venue order ID and correlates the first order event after reconnect.
+- Added table-driven `Unknown` reconciliation fixtures for authoritative Filled, Cancelled and Rejected outcomes. Every terminal transition clears the public uncertainty, records terminal time, refreshes account state and increments the discrepancy observation once.
+- Added an API fixture proving a healthy private heartbeat remains `LIVE` while stale account and public-market states stay independently visible with receive/event ages.
+- Added Vue/jsdom component fixtures for pre-login VenueWire/Testnet prototype branding and the authenticated console's partial local valuation, separate exchange total, stale/rate-limited System Status and persisted `Unknown` trade presentation.
+- Audited all section 23 scenarios against named tests; the requirement-by-requirement mapping is recorded in `docs/v3/TEST_REPORT_V3.md` during final documentation.
+
+| Check | Result |
+|---|---|
+| `go test -race ./... -count=1 -timeout=240s` | PASS — 388 tests, 23 packages |
+| `go test ./... -count=1 -timeout=180s` | PASS — 388 tests, 23 packages |
+| `go vet ./...` | PASS |
+| `npm --prefix web run typecheck` | PASS |
+| `npm --prefix web test` | PASS — 5 tests, 2 files |
+| `npm --prefix web run build` | PASS |
+| `go build -tags webui -o /tmp/venuewire-web-c6 ./cmd/venuewire` | PASS |
+| External Testnet order/deployment operations | `NOT_RUN` |
+
 ## Phase status
 
 | Phase | Status | Evidence |
