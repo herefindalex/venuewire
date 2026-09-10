@@ -1,163 +1,164 @@
-# Bybit → Bybit + Deribit：多交易所增量改版規格
+# Bybit → Bybit + Deribit: Incremental Multi-Venue Upgrade Specification
 
-**版本：2.0 · 日期：2026-09-09 · 交付對象：Codex**  
-**適用專案：使用者已完成、可運行的 Bybit Go 專案**  
-**目標：在原專案加入 Deribit，而不是重新建立兩套互不相干的示範程式。**
+**Version: 2.0 · Date: 2026-09-09 · Intended for: Codex**
+**Applicable project: User's existing, completed, runnable Bybit Go project**
+**Goal: Add Deribit to the existing project instead of creating two unrelated demo applications.**
 
-> 本文件是開發要求，不是已實作或已通過測試的證明。
-> 已知使用者的 Bybit 程式已完成；本文件撰寫時未取得該程式原始碼。
-> Codex 必須先檢查實際儲存庫，確認 CLI、dashboard、儲存方式、REST／WebSocket／FIX 與測試現況，再做最小必要修改。
-> 不得把先前 Bybit 規格中的每項要求，直接當成程式已實作的功能。
-
----
-
-## 0. Codex 執行指令
-
-先讀取儲存庫的 `AGENTS.md`、`README.md`、原始規格、交接文件與本文件。接著執行 Phase 0 基線盤點，再依序實作。除需要使用者提供新憑證、外部授權或不可逆資料操作以外，不要只交付計畫就停止。
-
-必須遵守：
-
-1. **增量擴充、不重寫 Bybit。** 保留現有指令、設定、畫面、資料與已修正行為。
-2. **只使用 Testnet。** 不使用對話中曾貼出的憑證、不接 Mainnet、不入金、不提款、不修改帳戶槓桿或保證金模式。
-3. **先實作 Deribit HTTP + WebSocket，再處理 Deribit FIX。** 核心版本不因 FIX 外部存取問題停擺。
-4. **區分實作、模擬測試與外部驗證。** 沒有憑證時繼續做本機測試，但外部測試必須標為 `BLOCKED` 或 `NOT_RUN`，不能標成通過。
-5. **不自動跨交易所補單或避險。** 多交易所功能先提供明確路由、獨立恢復與唯讀彙總。
-6. 每一階段執行相關測試及 Bybit 回歸測試，更新 `IMPLEMENTATION_STATUS.md`。
-7. 文件列出的新路徑及指令是建議介面；以現有儲存庫結構為優先，記錄實際對應，不為了符合目錄範例搬動整個專案。
-
-### 規格優先順序
-
-安全與資料完整性要求 > 已驗證的官方協定／實際回應 > 本文件的改版要求 > 舊規格中的理想化架構。
-
-官方文件與 Testnet 行為不一致時：保留去識別化證據、記錄差異、縮小受影響功能的支援範圍；不得猜參數、猜單位或默默使用正式環境。
+> This document defines development requirements. It is not proof that the features have already been implemented or tested successfully.
+> The user's Bybit implementation is known to be complete; the source code was not available when this document was written.
+> Codex must first inspect the actual repository and confirm the current state of the CLI, dashboard, storage, REST/WebSocket/FIX implementations, and tests before making the minimum necessary changes.
+> Requirements from the previous Bybit specification must not be assumed to have already been implemented.
 
 ---
 
-## 1. 版本目標與範圍
+## 0. Codex Execution Instructions
 
-### 1.1 R1：核心多交易所版本，必須完成
+First read the repository's `AGENTS.md`, `README.md`, previous specifications, handoff documents, and this document. Then perform the Phase 0 baseline audit before implementing the remaining phases in order. Except where new user credentials, external authorization, or irreversible data operations are required, do not stop after delivering only a plan.
 
-- 原有 Bybit 功能持續可用。
-- Deribit Testnet：HTTP JSON-RPC 查詢與下單／改單／取消。
-- Deribit Testnet：WebSocket JSON-RPC 查詢、下單及私人訂閱。
-- 公開行情、訂單簿、私人訂單、成交、部位與帳戶摘要。
-- 共用訂單意圖、事件、成交去重、持久化及恢復流程，但保留交易所差異。
-- 兩家交易所同時運行；其中一家失效不拖垮另一家。
-- 唯讀的跨交易所訂單、部位、帳戶與健康狀態檢視。
-- 現有 dashboard 若存在，增量加入交易所選擇與資料隔離；不存在則不另建完整前端。
-- 兩家各自的外部驗證結果與證據清單。
+Mandatory rules:
 
-### 1.2 R2：Deribit FIX，接續完成
+1. **Extend incrementally; do not rewrite Bybit.** Preserve existing commands, configuration, UI, data, and previously corrected behavior.
+2. **Use Testnet only.** Do not use credentials previously pasted in the conversation, do not connect to Mainnet, do not deposit or withdraw funds, and do not change account leverage or margin mode.
+3. **Implement Deribit HTTP + WebSocket first, then Deribit FIX.** The core release must not be blocked by external FIX access issues.
+4. **Distinguish implementation, simulated/local testing, and external validation.** When credentials are unavailable, continue local testing, but external tests must be marked `BLOCKED` or `NOT_RUN`, never passed.
+5. **Do not automatically re-submit or hedge across venues.** Initial multi-venue functionality should provide explicit routing, independent recovery, and read-only aggregation.
+6. Run relevant tests and Bybit regression tests at the end of each phase, and update `IMPLEMENTATION_STATUS.md`.
+7. New paths and commands listed here are suggested interfaces. Prefer the existing repository structure, record the actual mapping, and do not move the entire project merely to match directory examples.
 
-- 重用適合共用的 FIX framing／codec／TLS／測試工具。
-- 獨立 Deribit FIX dialect：Logon、心跳、訂單、回報、序號與恢復。
-- Deribit 專屬 mock／fixture／失敗情境測試。
-- 帳戶及網路允許時，執行真正的 Testnet Logon、下單、取消與回報驗證。
-- 若外部條件阻擋，保留已完成實作與本機測試，明列阻擋原因；不得宣稱完成外部 FIX 整合。
+### Specification Priority
 
-### 1.3 第一版的商品範圍
+Safety and data-integrity requirements > verified official protocol behavior / actual responses > requirements in this upgrade specification > idealized architecture from older specifications.
 
-**Deribit 可交易支援先限縮到 metadata 驗證通過的 `BTC-PERPETUAL`、`ETH-PERPETUAL` 反向永續合約。** 未列入允許清單的商品只能查詢，不可下單。
-
-到期期貨：支援發現及保存到期日等 metadata，暫不要求交易。選擇權、線性商品、組合單、現貨轉送交易、股票／商品衍生品，不在第一版寫入範圍。不要因名稱看起來相近就套用反向永續合約的數量規則。[R4][R5]
-
-Bybit 保留現有已支援商品，不把現有 Spot 功能改成 Linear，也不要求為本次改版補齊所有 Bybit 商品。
-
-### 1.4 明確排除
-
-不做策略、自動套利、自動跨所重送、資金轉帳、智慧路由、投資組合保證金引擎、選擇權定價、完整通用 FIX 引擎或 HFT 效能宣稱。
+If official documentation and Testnet behavior differ: retain sanitized evidence, document the discrepancy, and reduce support for the affected feature. Do not guess parameters, guess units, or silently fall back to production.
 
 ---
 
-## 2. Phase 0：先盤點現有程式
+## 1. Release Goals and Scope
 
-建立 `docs/upgrade/BASELINE_AUDIT.md`，至少記錄：
+### 1.1 R1: Core Multi-Venue Release — Mandatory
 
-| 項目 | 要確認的內容 |
+- Existing Bybit functionality remains operational.
+- Deribit Testnet: HTTP JSON-RPC queries plus place/edit/cancel orders.
+- Deribit Testnet: WebSocket JSON-RPC queries, order submission, and private subscriptions.
+- Public market data, order book, private orders, executions, positions, and account summaries.
+- Shared order intents, events, execution deduplication, persistence, and recovery flows while preserving venue-specific behavior.
+- Both venues can run at the same time; failure of one must not bring down the other.
+- Read-only cross-venue views of orders, positions, accounts, and health.
+- If an existing dashboard exists, incrementally add venue selection and data isolation. If none exists, do not build a full frontend solely for this release.
+- Separate external validation results and evidence lists for each venue.
+
+### 1.2 R2: Deribit FIX — Follow-On Mandatory Work
+
+- Reuse FIX framing/codec/TLS/test utilities where reuse is appropriate.
+- Implement a separate Deribit FIX dialect: Logon, heartbeat, order messages, reports, sequence handling, and recovery.
+- Deribit-specific mocks, fixtures, and failure-scenario tests.
+- When account/network access allows, perform real Testnet Logon, order, cancel, and report validation.
+- If external conditions block validation, keep the implementation and local tests, explicitly record the blocker, and do not claim external FIX integration is complete.
+
+### 1.3 Instrument Scope for the First Release
+
+**Deribit trading support is initially limited to metadata-validated inverse perpetual contracts `BTC-PERPETUAL` and `ETH-PERPETUAL`.** Instruments outside the allowlist may be queried but not traded.
+
+Dated futures: support discovery and persistence of metadata such as expiration, but trading is not required. Options, linear products, combination orders, spot-forward trades, equity/commodity derivatives, and other product types are out of scope for the first release. Do not apply inverse-perpetual quantity rules merely because another product has a similar name. [R4][R5]
+
+Keep the currently supported Bybit product scope unchanged. Do not convert existing Spot functionality to Linear, and do not require this upgrade to complete support for every Bybit product category.
+
+### 1.4 Explicit Exclusions
+
+Do not implement strategies, automated arbitrage, automatic cross-venue re-submission, fund transfers, smart routing, portfolio margin engines, options pricing, a complete generic FIX engine, or HFT performance claims.
+
+---
+
+## 2. Phase 0: Audit the Existing Code First
+
+Create `docs/upgrade/BASELINE_AUDIT.md` and record at least:
+
+| Item | What to verify |
 |---|---|
-| 工作樹 | 目前 commit／分支、未提交修改；不可覆蓋使用者工作 |
-| Go | module 名稱、Go 版本、相依套件、實際 main packages |
-| CLI | `venuewire` 或其他入口、旗標、預設交易所及輸出格式 |
-| Bybit | 哪些 REST／WS／FIX 功能有程式、哪些有真實 Testnet 證據 |
-| 商品 | Spot／Linear／Inverse 等實際範圍、數量單位、手續費處理 |
-| 訂單 | ID、狀態更新、成交去重、取消／成交競爭的處理方式 |
-| 儲存 | JSON／SQLite／其他；格式版本、寫入者、鎖、啟動恢復 |
-| UI | dashboard、API、推播、下單表單是否存在 |
-| 運維 | 設定來源、遮罩、限流、重連、關閉流程 |
-| 測試 | 單元／整合／race／建置結果及已存在的失敗 |
+| Working tree | Current commit/branch and uncommitted changes; do not overwrite user work |
+| Go | Module name, Go version, dependencies, actual main packages |
+| CLI | `venuewire` or other entry points, flags, default venue, and output format |
+| Bybit | Which REST/WS/FIX features have code and which have real Testnet evidence |
+| Products | Actual Spot/Linear/Inverse scope, quantity units, fee handling |
+| Orders | IDs, state updates, execution deduplication, cancel/fill race behavior |
+| Storage | JSON/SQLite/other; schema version, writer model, locks, startup recovery |
+| UI | Whether dashboard, API, push updates, and order forms exist |
+| Operations | Configuration source, redaction, rate limiting, reconnect, shutdown flow |
+| Tests | Unit/integration/race/build results and existing known failures |
 
-**基線工作不得下單。** 先執行不需要憑證及不會修改帳戶的測試。
+**The baseline audit must not submit orders.** First run tests that require no credentials and do not modify account state.
 
-建議命令，依實際專案調整：
+Suggested commands; adapt them to the actual project:
 
 ```bash
 git status --short
 go list ./...
 go test ./...
 go vet ./...
-# 僅在支援的平台與工具鏈執行；不支援時明列原因。
+# Run only when supported by the platform and toolchain; otherwise document the reason.
 go test -race ./...
 ```
 
-建置必須提供明確的二進位檔路徑，不能只寫 `go build ./...`：
+The build instructions must specify an explicit binary path rather than only `go build ./...`:
 
 ```bash
 mkdir -p bin
 go build -o ./bin/venuewire ./cmd/venuewire
 ```
 
-以上 main package 只在儲存庫確實有該入口時使用；否則改為實際路徑並更新文件。
+Use the above main package only if it actually exists in the repository; otherwise use the real path and update the documentation.
 
-### 基線保護
+### Baseline Protection
 
-- 對現有 Bybit 簽章、訂單查詢、成交與費用計算新增／保留回歸測試。
-- 若現有 dashboard 已能顯示成交量與扣費後餘額，保留該差別，不得把淨入帳量當成成交量。
-- 不硬編碼測試環境費率；實際費用及幣別以交易回報為準。[R28]
-- Deribit 未啟用或未設定憑證時，原 Bybit 命令仍能獨立工作。
-- 原資料的 category／account 無法可靠判斷時，停止該筆資料遷移並要求明確對應，不能全部猜成 `linear`。
+- Add or preserve regression tests for existing Bybit signing, order queries, executions, and fee calculations.
+- If the existing dashboard already distinguishes execution volume from post-fee balance, preserve that distinction. Do not treat net credited amount as traded amount.
+- Do not hard-code Testnet fee rates; use actual execution reports for fee amount and fee currency. [R28]
+- When Deribit is disabled or credentials are missing, existing Bybit commands must continue to work independently.
+- If category/account cannot be reliably inferred for old data, stop migration for those records and require an explicit mapping. Do not guess that everything is `linear`.
 
 ---
 
-## 3. 架構：共用業務語意，不共用錯誤假設
+## 3. Architecture: Share Business Semantics, Not Incorrect Assumptions
 
-### 3.1 元件關係（文字示意）
+### 3.1 Component Relationship
 
 ```text
-現有 CLI / 現有 dashboard
+Existing CLI / existing dashboard
             |
-    應用服務與明確 venue 路由
+    Application services + explicit venue routing
             |
-   訂單意圖 / 事件處理 / 儲存
-        /                 \
-Bybit Adapter         Deribit Adapter
-既有 REST / WS        HTTP JSON-RPC / WS JSON-RPC
-既有 FIX dialect      Deribit FIX dialect
-        \                 /
-     共用健康監控、測試工具、唯讀彙總
+   Order intents / event processing / storage
+        /                               \
+Bybit Adapter                       Deribit Adapter
+existing REST / WS                  HTTP JSON-RPC / WS JSON-RPC
+existing FIX dialect                Deribit FIX dialect
+        \                               /
+     Shared health monitoring, test utilities,
+              and read-only aggregation
 ```
 
-不要建立一個要求每種 transport 都有完全相同方法的大型介面。以能力拆分：
+Do not create one large interface that forces every transport to expose identical methods. Split by capability:
 
-| 邊界 | 職責 |
+| Boundary | Responsibility |
 |---|---|
-| `InstrumentCatalog` | 查商品、metadata、允許的單位與下單能力 |
-| `OrderCommands` | 建立、修改、取消訂單；回傳已知狀態及可能附帶的成交 |
-| `OrderQueries` | 個別訂單、開放訂單、歷史、成交分頁 |
-| `AccountQueries` | 部位與餘額，保持幣別與語意 |
-| `MarketEventSource` | 公開行情及訂單簿 |
-| `PrivateEventSource` | 訂單、成交、部位更新 |
-| `VenueRecovery` | 該交易所／帳戶的恢復協調 |
-| `Capabilities` | 商品 × transport × 操作的支援矩陣 |
+| `InstrumentCatalog` | Discover instruments, metadata, valid units, and trading capabilities |
+| `OrderCommands` | Place, edit, and cancel orders; return known state and any executions included in the response |
+| `OrderQueries` | Individual orders, open orders, history, execution pagination |
+| `AccountQueries` | Positions and balances while preserving currency and semantics |
+| `MarketEventSource` | Public market data and order book |
+| `PrivateEventSource` | Order, execution, and position updates |
+| `VenueRecovery` | Recovery coordination for a venue/account |
+| `Capabilities` | Support matrix by instrument × transport × operation |
 
-交易所識別不得靠 symbol 推導。所有送單服務必須拿到明確的 venue、environment、account、instrument 與 transport。
+Do not derive venue identity from symbols. Every write path must receive an explicit venue, environment, account, instrument, and transport.
 
-### 3.2 建議新增區域
+### 3.2 Suggested New Areas
 
 ```text
-internal/venue/                  # 共用邊界；若既有 domain 已適用則沿用
+internal/venue/                  # Shared boundaries; reuse existing domain if appropriate
 internal/deribit/
     config.go
-    rpc.go                       # JSON-RPC envelope、錯誤、request ID
+    rpc.go                       # JSON-RPC envelope, errors, request IDs
     http.go
     auth.go
     ws.go
@@ -167,24 +168,24 @@ internal/deribit/
     subscriptions.go
     normalize.go
     recovery.go
-    fix/                         # Deribit 專屬 dialect
+    fix/                         # Deribit-specific dialect
 internal/deribitmock/
 docs/upgrade/
-testdata/deribit/                 # 只放去識別化或合成資料
+testdata/deribit/                # Sanitized or synthetic data only
 ```
 
-Bybit 原目錄可以完全不搬動。只有兩家實際需要共用的部分才抽出；不要先為未來十家交易所建框架。
+The existing Bybit directory structure may remain unchanged. Extract shared code only where both venues actually need it; do not build a framework for ten hypothetical future exchanges.
 
 ---
 
-## 4. 設定、憑證與 Testnet 防護
+## 4. Configuration, Credentials, and Testnet Guardrails
 
-### 4.1 新設定
+### 4.1 New Configuration
 
-沿用現有 Bybit 變數；新增獨立的 Deribit 設定，不共用 key／secret：
+Keep existing Bybit variables. Add separate Deribit configuration; do not share key/secret values:
 
 ```dotenv
-# 範例檔只放空值，不能放真實憑證。
+# Example files must contain empty values only, never real credentials.
 DERIBIT_ENABLED=false
 DERIBIT_ENV=testnet
 DERIBIT_ACCOUNT_ALIAS=deribit-test
@@ -194,47 +195,47 @@ DERIBIT_FIX_ENABLED=false
 DERIBIT_FIX_SENDER_COMP_ID=venuewire
 ```
 
-本機建議預設（本專案政策，不是交易所規定）：
+Recommended local defaults (project policy, not exchange requirements):
 
-- 新增的多交易所下單入口預設僅預覽，執行須明確確認。
-- 只使用 `BTC-PERPETUAL`、`ETH-PERPETUAL` 允許清單。
-- 送單前必須設定／通過非零風險上限，不以「未設定」代表無上限。
-- 不自動修改帳戶層級 Cancel-on-Disconnect 設定。
-- `DERIBIT_ENABLED=false` 時不初始化 Deribit 私人連線。
+- New multi-venue order-entry paths default to preview-only; execution requires explicit confirmation.
+- Only allowlisted `BTC-PERPETUAL` and `ETH-PERPETUAL` are tradable.
+- A non-zero risk limit must be configured and validated before order submission; an unset value must not mean unlimited.
+- Do not automatically modify account-level Cancel-on-Disconnect settings.
+- When `DERIBIT_ENABLED=false`, do not initialize Deribit private connections.
 
-不要因新增這些設定，要求現有 Bybit 使用者無條件重建 `.env`。
+Do not require existing Bybit users to rebuild their `.env` merely because these settings are added.
 
-### 4.2 允許的遠端位置
+### 4.2 Allowed Remote Locations
 
-| 用途 | Testnet 位置 |
+| Purpose | Testnet endpoint |
 |---|---|
 | Deribit HTTP | `https://test.deribit.com/api/v2/{method}` |
 | Deribit WS | `wss://test.deribit.com/ws/api/v2` |
-| Deribit FIX | `fix-test.deribit.com:9883`，TLS |
+| Deribit FIX | `fix-test.deribit.com:9883`, TLS |
 
-帳號與 key 必須屬於獨立 Testnet 環境。[R1][R2][R19]
+Accounts and keys must belong to the separate Testnet environment. [R1][R2][R19]
 
-只接受完整主機名稱白名單，不用字串 `contains("test")` 判斷。驗證 scheme、hostname、port；禁止跟隨 redirect 把憑證送到其他主機。正式環境、IP 替代位址、明文 FIX 連線均不作為失敗後的 fallback。
+Use exact hostname allowlists. Do not rely on checks such as `contains("test")`. Validate scheme, hostname, and port. Do not follow redirects that could send credentials to another host. Production endpoints, IP-address substitutions, and plaintext FIX connections must not be used as failure fallbacks.
 
-測試可注入 `httptest`／本機 TLS server；這是測試用 dependency injection，不是在正式 CLI 加任意 host 的安全繞過旗標。
+Tests may inject `httptest` or a local TLS server; this is test dependency injection, not a production CLI flag that bypasses host safety.
 
-### 4.3 權限與機密
+### 4.3 Permissions and Secrets
 
-核心查詢／交易使用最小必要權限：讀帳戶、讀寫交易；涉及修改 connection-scope COD 時才需要對應帳戶寫入權限。不得要求提款權限。[R3][R13]
+Core query/trading operations should use minimum necessary permissions: account read and trade read/write. Only connection-scope COD modification should require the corresponding account-write permission. Withdrawal permissions must never be required. [R3][R13]
 
-以下內容不得出現在 log、fixture、錯誤字串、dashboard、URL access log 或報告：client secret、access token、refresh token、Authorization、FIX Password、完整 Logon／auth frame。
+The following must never appear in logs, fixtures, error strings, dashboards, URL access logs, or reports: client secret, access token, refresh token, Authorization header, FIX Password, full Logon/auth frame.
 
-FIX Logon 回應可能回送敏感欄位，因此**接收方向也必須遮罩**。機密不得放進命令列旗標。既有對話中貼過的 Bybit 憑證不能複製到程式或新文件。
+FIX Logon responses may echo sensitive fields, so **inbound messages must also be redacted**. Secrets must not be passed through command-line flags. Bybit credentials previously pasted in conversation must not be copied into code or new documentation.
 
 ---
 
-## 5. 識別碼、商品及數量單位
+## 5. Identifiers, Instruments, and Quantity Units
 
-### 5.1 複合鍵
+### 5.1 Composite Keys
 
-禁止用單獨的 `order_id`、`symbol` 或 `trade_id` 作為全域鍵。
+Do not use a standalone `order_id`, `symbol`, or `trade_id` as a global key.
 
-至少具備：
+At minimum use:
 
 ```text
 MarketKey     = venue + environment + market_kind + native_instrument
@@ -244,11 +245,11 @@ ExecutionKey  = AccountKey + native_trade_namespace + native_trade_id
 PositionKey   = AccountKey + MarketKey + native_position_side_or_index
 ```
 
-`native_*_namespace` 必須覆蓋該交易所 ID 的實際作用範圍，例如 currency／category／instrument。帳戶別名需穩定且對應單一實際帳戶；改 key 但未改帳戶，不應生成另一套持倉。
+`native_*_namespace` must cover the true identifier scope for that venue, for example currency/category/instrument. The account alias must be stable and map to one actual account. Rotating a key without changing the account must not create a second logical set of positions.
 
-### 5.2 商品 metadata
+### 5.2 Instrument Metadata
 
-每個商品保存原始 metadata 以及正規化欄位：
+Store raw metadata plus normalized fields for every instrument:
 
 ```text
 venue / native_instrument / kind / contract_style
@@ -259,21 +260,21 @@ price_tick / tick_size_steps / expiration_timestamp
 is_active / native_state / fetched_at / source
 ```
 
-從 `public/get_instruments`／`public/get_instrument` 發現商品，不在原始碼硬寫數量步進或 tick。metadata 只列出商品，不自動賦予交易能力；unsupported contract style 必須拒絕送單。[R5]
+Discover instruments through `public/get_instruments` / `public/get_instrument`. Do not hard-code quantity steps or ticks. Metadata availability does not automatically grant trading capability; unsupported contract styles must reject order submission. [R5]
 
-**`contract_size`、最小委託量及數量步進是不同概念。** 不因某一個商品數值剛好相同，就用同一欄位代表三件事。保留官方欄位語意，對目標商品建立明確測試。
+**`contract_size`, minimum order amount, and quantity increment are different concepts.** Do not reuse one field for all three just because values happen to coincide for one instrument. Preserve official semantics and create explicit tests for target instruments.
 
-### 5.3 Deribit 數量不可直接套用 Bybit
+### 5.3 Do Not Apply Bybit Quantity Semantics to Deribit
 
-本版目標 `BTC-PERPETUAL`／`ETH-PERPETUAL` 的反向合約，HTTP／WS `amount` 以 USD 面額表示；不是買幾顆 BTC／ETH。其他商品類型不保證同樣單位。[R4]
+For this release's target inverse `BTC-PERPETUAL` / `ETH-PERPETUAL` contracts, HTTP/WS `amount` is expressed in USD notional, not in BTC/ETH units. Other product types are not guaranteed to use the same unit. [R4]
 
-因此禁止：
+Therefore this is forbidden:
 
 ```text
-Bybit qty=1 → 原封不動轉成 Deribit amount=1
+Bybit qty=1 -> send Deribit amount=1 unchanged
 ```
 
-內部請求必須帶單位，例如：
+Internal requests must carry units, for example:
 
 ```text
 instrument = BTC-PERPETUAL
@@ -281,100 +282,100 @@ native_amount = 100
 native_amount_unit = USD
 ```
 
-這只是資料語意範例，不是固定下單值。實際大小與價格必須經過最新 metadata、餘額及本機限制檢查。
+This is a semantic example only, not a fixed order value. Actual quantity and price must be validated against current metadata, balances, and local risk limits.
 
-第一版不要同時傳 `amount` 與 `contracts`；先選擇一種清楚驗證的表示法。其他表示法只有完成換算與協定測試後才啟用。
+For the first release, do not send both `amount` and `contracts`. Choose one clearly validated representation. Enable other representations only after conversion and protocol tests are complete.
 
-### 5.4 精度
+### 5.4 Precision
 
-沿用專案既有可靠 decimal 型別；沒有時選擇固定精度或成熟 decimal 實作。不得用 `float64` 做數量合法性、金額、費用或部位累加。
+Reuse the project's existing reliable decimal type. If none exists, adopt fixed precision or a mature decimal implementation. Do not use `float64` for quantity validation, monetary values, fees, or position accumulation.
 
-Deribit JSON 數值須以 `json.Number`／等價 decimal decoder 保留精度，送出時產生合法 JSON number，不能因內部儲存用字串，就把所有參數發成 JSON string。
+Deribit JSON numbers must retain precision via `json.Number` or equivalent decimal decoding. When transmitting, emit valid JSON numbers; do not send all numeric parameters as JSON strings merely because internal storage uses strings.
 
-數量不合法時預設拒絕並提供合法建議，不默默四捨五入放大訂單。價格採用分段 tick 時，在邊界上下各加測試。
+When quantity is invalid, reject it and provide a valid suggestion. Do not silently round upward into a larger order. For stepped tick schedules, add tests immediately above and below each boundary.
 
-### 5.5 費用與成交
+### 5.5 Fees and Executions
 
-保存 `gross_fill_amount`、`fee_amount`、`fee_currency`、`liquidity_role`；費用可以包含回扣，不能任意取絕對值。
+Persist `gross_fill_amount`, `fee_amount`, `fee_currency`, and `liquidity_role`. Fees may include rebates, so do not arbitrarily take absolute values.
 
-現貨淨餘額變化不等於成交量；衍生品成交量也不等於買入該數量的現貨。不同幣別的手續費分開呈現，沒有有時效的匯率就不輸出一個看似精確的 USD 總數。[R4][R28]
-
----
-
-## 6. Deribit JSON-RPC 與驗證
-
-### 6.1 共用 RPC 層
-
-Deribit 提供 JSON-RPC over HTTP／WebSocket。HTTP 支援 GET 與 POST；本專案私人操作優先採 POST JSON body，避免把憑證或交易參數放在 URL。[R1][R2]
-
-使用官方 method 路徑 `/api/v2/{method}`，fixture 及外部測試確認實際 envelope，不直接複製文件產生器中的 GET-body 範例。
-
-RPC 層要求：
-
-- 解讀 `jsonrpc`、`id`、`result`、`error.code`、`error.message`、`error.data`。
-- HTTP 200 不代表業務成功。
-- 限制 response／frame 最大尺寸，超過限制視為協定錯誤。
-- WS request ID 在連線世代內唯一；pending map 有上限及 timeout 清理。
-- 同一 WS 上回應可不依送出順序抵達，以 ID 對應，不能 FIFO 配對。
-- `method=subscription`、`method=heartbeat` 與一般 RPC 回應分流。
-- 重連增加 connection generation；舊連線的遲到回應不能完成新連線的 request。
-- 定義 typed error：`Auth`、`Permission`、`Validation`、`RateLimited`、`Unavailable`、`OutcomeUnknown`、`Unsupported`。
-
-### 6.2 Token 管理
-
-第一版使用 `public/auth` 的 `client_credentials`，支援 `refresh_token` 續期。HTTP 用 Bearer header；WS 使用已驗證的連線／token scope，並依官方方式攜帶 access token。不可假設 HTTP token 能無條件跨所有連線重用。[R3][R6]
-
-要求：
-
-1. 依回應 `expires_in` 計算到期，不能硬寫一年。
-2. 同一 token scope 的續期需 single-flight，避免每個 goroutine 同時 refresh。
-3. 原子更新新 access／refresh token；機密只存在受控記憶體。
-4. refresh 失敗可重新驗證，但不得因此自動重送結果不明的下單。
-5. 讀取 granted scope，缺權限立即顯示；不以不斷重連掩蓋權限錯誤。
-6. 明確區分 connection scope、session scope 及所用 token 的生命週期。
-
-### 6.3 限流
-
-Deribit 有 credit-based 限流；`10028 / too_many_requests` 可能伴隨斷線。不能直接套用 Bybit 的 rate-limit headers 或每秒額度。[R7]
-
-每個 venue／account 使用獨立 limiter，涵蓋 HTTP、WS RPC 及會共同消耗帳戶額度的活動；保留訂閱／心跳／恢復的控制容量。限流後 cooldown + backoff + jitter，不立即登入風暴。metadata 要快取，不能每個 tick 重新抓商品清單。
+Spot net balance change is not equal to execution volume; derivatives execution volume is also not equivalent to acquiring that amount of spot asset. Keep fees in different currencies separate. Without a timely FX rate, do not output a seemingly precise aggregate USD fee. [R4][R28]
 
 ---
 
-## 7. Deribit HTTP 功能
+## 6. Deribit JSON-RPC and Authentication
 
-以下是本版需要的功能對應；每個方法的參數、scope、分頁與支援商品須以官方頁面確認，並記錄在 `docs/upgrade/PROTOCOL_NOTES.md`。[R4][R5][R14–R18][R29–R33]
+### 6.1 Shared RPC Layer
 
-| 功能 | 方法 |
+Deribit provides JSON-RPC over HTTP/WebSocket. HTTP supports GET and POST; this project should prefer POST JSON bodies for private operations so credentials or trading parameters do not appear in URLs. [R1][R2]
+
+Use the official method path `/api/v2/{method}`. Fixtures and external tests must confirm the actual envelope. Do not blindly reproduce GET-body examples from documentation generators.
+
+RPC requirements:
+
+- Parse `jsonrpc`, `id`, `result`, `error.code`, `error.message`, and `error.data`.
+- HTTP 200 does not imply business success.
+- Limit maximum response/frame size; oversized input is a protocol error.
+- WS request IDs must be unique within a connection generation; the pending-request map must be bounded and cleaned up on timeout.
+- Responses on the same WS may arrive out of order; correlate by ID, not FIFO.
+- Route `method=subscription`, `method=heartbeat`, and normal RPC responses separately.
+- Increment connection generation after reconnect; late responses from an old connection must not complete requests on a new connection.
+- Define typed errors: `Auth`, `Permission`, `Validation`, `RateLimited`, `Unavailable`, `OutcomeUnknown`, `Unsupported`.
+
+### 6.2 Token Management
+
+The first release should use `public/auth` with `client_credentials` and support renewal through `refresh_token`. HTTP uses a Bearer header; WS uses the authenticated connection/token scope according to documented behavior. Do not assume an HTTP token can always be reused across every connection. [R3][R6]
+
+Requirements:
+
+1. Calculate expiry from returned `expires_in`; do not hard-code a one-year lifetime.
+2. Token refresh for the same scope must be single-flight to avoid every goroutine refreshing at once.
+3. Atomically replace new access/refresh tokens; secrets stay only in controlled memory.
+4. If refresh fails, re-authentication is allowed, but it must not automatically re-submit an order whose outcome is unknown.
+5. Inspect granted scopes and surface missing permissions immediately; do not mask permission errors by reconnecting repeatedly.
+6. Explicitly distinguish connection scope, session scope, and the lifetime of the token in use.
+
+### 6.3 Rate Limits
+
+Deribit uses credit-based rate limits; `10028 / too_many_requests` may also cause disconnects. Do not apply Bybit rate-limit headers or requests-per-second assumptions. [R7]
+
+Use an independent limiter per venue/account covering HTTP, WS RPC, and other activity consuming the same account quota. Preserve capacity for subscriptions, heartbeat, and recovery control traffic. After rate limiting, use cooldown + backoff + jitter; do not create a login storm. Cache metadata instead of fetching instrument lists on every tick.
+
+---
+
+## 7. Deribit HTTP Features
+
+The following method mapping is required for this release. Confirm parameters, scope, pagination, and product support against the official documentation and record them in `docs/upgrade/PROTOCOL_NOTES.md`. [R4][R5][R14–R18][R29–R33]
+
+| Capability | Method |
 |---|---|
-| 連線／時間診斷 | `public/test`、`public/get_time` |
-| 商品資訊 | `public/get_instruments`、`public/get_instrument` |
-| 行情快照 | `public/ticker`、`public/get_order_book` |
-| 驗證／續期 | `public/auth` |
-| 買／賣 | `private/buy`、`private/sell` |
-| 取消／改單 | `private/cancel`、`private/edit` |
-| 訂單 | `private/get_order_state`、`private/get_open_orders_by_instrument` |
-| 依 label 搜尋 | `private/get_order_state_by_label` |
-| 訂單歷史 | `private/get_order_history_by_instrument` |
-| 成交查詢 | `private/get_user_trades_by_instrument`、`private/get_user_trades_by_order` |
-| 部位 | `private/get_positions` |
-| 帳戶 | `private/get_account_summary` |
+| Connectivity/time diagnostics | `public/test`, `public/get_time` |
+| Instrument information | `public/get_instruments`, `public/get_instrument` |
+| Market snapshot | `public/ticker`, `public/get_order_book` |
+| Authentication/refresh | `public/auth` |
+| Buy/sell | `private/buy`, `private/sell` |
+| Cancel/edit | `private/cancel`, `private/edit` |
+| Order | `private/get_order_state`, `private/get_open_orders_by_instrument` |
+| Search by label | `private/get_order_state_by_label` |
+| Order history | `private/get_order_history_by_instrument` |
+| Execution queries | `private/get_user_trades_by_instrument`, `private/get_user_trades_by_order` |
+| Positions | `private/get_positions` |
+| Account | `private/get_account_summary` |
 
-核心示範：啟動私人 WS → 以 HTTP 下小額限價單 → 處理 HTTP 的訂單／成交資料 → 收私人事件 → 改單或取消 → 查詢確認。
+Core demo: start private WS -> place a small limit order via HTTP -> process order/execution data in the HTTP response -> receive private events -> edit or cancel -> query to confirm.
 
-Deribit 的下單結果可以已包含 `order` 與 `trades`；不能把所有交易所回應都降級成 Bybit 式的純 ACK。回應附帶的成交與後續推播必須走同一去重管道。[R4][R27]
+A Deribit order response may already contain both `order` and `trades`; do not reduce every venue response to a Bybit-style pure ACK. Executions embedded in the response and later push events must pass through the same deduplication pipeline. [R4][R27]
 
 ---
 
-## 8. WebSocket 行情、交易與私人資料
+## 8. WebSocket Market Data, Trading, and Private Data
 
-### 8.1 連線分離
+### 8.1 Connection Separation
 
-預設兩條 Deribit WS：公開行情連線，以及私人交易／事件連線。這是本專案的隔離設計，避免大量 orderbook 訊息阻塞私人回報。帳戶限流仍要共用，不把多開連線當成增加額度。
+Use two Deribit WS connections by default: one for public market data and one for private trading/events. This is a project isolation choice to prevent high-volume order-book traffic from blocking private execution reports. Account rate limits remain shared; do not treat additional connections as additional quota.
 
-### 8.2 公開訂閱
+### 8.2 Public Subscriptions
 
-以 `public/subscribe` 訂閱第一批商品：
+Use `public/subscribe` for first-release instruments:
 
 ```text
 ticker.BTC-PERPETUAL.100ms
@@ -382,97 +383,97 @@ trades.BTC-PERPETUAL.100ms
 book.BTC-PERPETUAL.100ms
 ```
 
-ETH 可依允許清單加入。先用 `100ms`，不把需要額外授權的 `raw` 當成預設。[R1][R8]
+ETH may be added through the allowlist. Use `100ms` by default; do not make permission-gated `raw` feeds the default. [R1][R8]
 
-### 8.3 訂單簿正確性
+### 8.3 Order Book Correctness
 
-`book.{instrument}.{interval}` 提供初始 snapshot 與增量變更，增量有 `change_id`／`prev_change_id`；更新含 `new`、`change`、`delete`。[R8]
+`book.{instrument}.{interval}` provides an initial snapshot and incremental updates. Deltas contain `change_id` / `prev_change_id`, and entries include `new`, `change`, `delete`. [R8]
 
-必須實作：
+Mandatory behavior:
 
-- snapshot 原子取代該 instrument 的完整 book。
-- delta 只在 `prev_change_id == last_change_id` 時正常套用；不要求 ID 每次加一。
-- 重複訊息可丟棄並計數；失序／缺口必須把 book 標為不可信。
-- 發現缺口後停止使用該 book 做送單預覽／風險檢查，重訂閱並等新 snapshot。
-- 重連後清除舊連線 generation 的 delta。
-- 不把缺口後的 delta 硬接到任意時間抓到的 HTTP snapshot；除非實作並驗證明確的序號銜接演算法。
-- 每個商品 book 設大小與記憶體限制；完整 book 超限時停止／降級顯示，不能偷偷截斷後仍自稱完整。
+- Snapshot atomically replaces the entire local book for that instrument.
+- Apply a delta normally only when `prev_change_id == last_change_id`; do not require IDs to increment by exactly one.
+- Duplicate messages may be dropped and counted; out-of-order or gapped data must mark the book untrusted.
+- After a gap, stop using the book for order preview/risk validation; resubscribe and wait for a fresh snapshot.
+- On reconnect, discard deltas belonging to the previous connection generation.
+- Do not attach post-gap deltas to an arbitrary HTTP snapshot unless a verified sequence-bridging algorithm has been implemented.
+- Set per-instrument book size and memory limits; if the full book exceeds limits, stop or degrade the display rather than silently truncating while claiming it is complete.
 
-### 8.4 心跳
+### 8.4 Heartbeat
 
-使用 `public/set_heartbeat` 啟用應用層心跳；收到 `test_request` 必須呼叫 `public/test`。WS control ping／pong 不代替這個流程。[R9]
+Use `public/set_heartbeat` for application-layer heartbeat. On `test_request`, call `public/test`. WS control ping/pong does not replace this behavior. [R9]
 
-心跳、RPC 回應及私人控制訊息使用保留容量，不因行情 queue 塞滿而卡死。沒有成交不代表私人連線過期；健康檢測結合心跳、讀寫狀態及恢復結果，不能只看最後一筆 trade 的時間。
+Heartbeat, RPC responses, and private control messages need reserved capacity so market-data queue saturation cannot block them. Lack of executions does not mean the private connection is stale; health checks should combine heartbeat, read/write state, and recovery results instead of looking only at the last trade time.
 
-### 8.5 私人訂閱
+### 8.5 Private Subscriptions
 
-第一版使用 `private/subscribe` 訂閱：
+For the first release, use `private/subscribe` with:
 
 ```text
 user.changes.BTC-PERPETUAL.100ms
 user.changes.ETH-PERPETUAL.100ms
 ```
 
-只訂閱實際啟用的商品。解析同一訊息中的 `orders`、`trades`、`positions` 陣列，不假設各只有一筆。[R10]
+Subscribe only to enabled instruments. Parse the `orders`, `trades`, and `positions` arrays in each message and do not assume only one element per array. [R10]
 
-帳戶餘額以 `private/get_account_summary` 做啟動及有節制的定期快照；需要即時餘額時再接 `user.portfolio.{currency}`。不把 derivatives position 當成現貨 balance。[R18][R26]
+Use `private/get_account_summary` for startup and periodically throttled balance snapshots. Add `user.portfolio.{currency}` only if real-time balance updates are needed. Do not treat derivatives positions as spot balances. [R18][R26]
 
-### 8.6 WS 下單
+### 8.6 WS Order Entry
 
-WS 下單／改單／取消是 R1 必需，不只接收行情。共用 §7 的 method 與商業驗證，但用 request ID 做 RPC 配對。[R2][R4]
+WS place/edit/cancel is mandatory for R1, not just market-data consumption. Reuse the methods/business validation from §7, but correlate requests by WS request ID. [R2][R4]
 
-私人事件可能先於 RPC 回應抵達；同一訂單的回報也可能被 HTTP 查詢、WS notification 和 FIX 重複觀察。所有來源都要能重入同一事件 reducer。
+Private events may arrive before the RPC response. The same order may also be observed through HTTP queries, WS notifications, and FIX. All sources must be safe to replay into the same event reducer.
 
-### 8.7 斷線即取消（COD）
+### 8.7 Cancel on Disconnect (COD)
 
-Deribit COD 作用於特定連線所建立的訂單；不是帳戶所有 transport 的總開關。HTTP 訂單不因另一條 WS 斷線而獲得相同保護。`private/logout` 的正常登出也不能當成一定會觸發 COD。[R13]
+Deribit COD applies to orders created on a specific connection; it is not an account-wide guarantee across all transports. HTTP orders do not automatically gain the same protection because another WS disconnects. A normal `private/logout` should not be assumed to trigger COD. [R13]
 
-本版規則：
+Rules for this release:
 
-- 啟動時查詢並展示有效 COD 設定。
-- 只在使用者選擇時啟用 connection-scope COD；不自動改 account scope。
-- 自動化 WS 交易測試可要求 COD 開啟；若無權限，該測試標明阻擋，不偷偷修改帳戶權限。
-- 記錄每張訂單來自哪個 transport／connection generation。
-- COD 開啟也不是同步取消保證；斷線後仍需查詢訂單及成交。
-- 關閉程式前如要取消，明確取消本程式擁有的訂單並確認；不依賴 Logout 的副作用。
+- Query and display the effective COD setting at startup.
+- Enable connection-scope COD only when explicitly requested by the user; do not automatically modify account scope.
+- Automated WS trading tests may require COD to be enabled; if permission is missing, mark the test blocked rather than silently modifying account permissions.
+- Record the transport and connection generation used to create every order.
+- Even with COD enabled, disconnect does not guarantee synchronous cancellation; still query orders and executions after disconnect.
+- On shutdown, if cancellation is desired, explicitly cancel orders owned by this application and confirm the result. Do not rely on Logout side effects.
 
 ---
 
-## 9. 訂單意圖、冪等與狀態機
+## 9. Order Intents, Idempotency, and State Machines
 
-### 9.1 三種識別分開
-
-```text
-IntentID      = 本程式持久化的唯一業務意圖
-RequestID     = 一次 HTTP／WS／FIX 嘗試的 correlation
-NativeOrderID = 交易所回傳的訂單 ID
-```
-
-新 IntentID 使用不含個資的短識別，例如 `cx-` + 26 字元隨機 ID；映射至 Bybit `orderLinkId` 或 Deribit `label`，但保留各自原值。
-
-**Deribit `label` 可以對應多張訂單，不是交易所保證的唯一鍵，也不是 exactly-once 保證。** 依 label 查詢回傳多筆時必須列為異常，不能隨便選第一筆。[R11][R12]
-
-### 9.2 Write-ahead intent
-
-送單前先持久化：venue、account、instrument、side、原生數量與單位、價格、選項、IntentID、attempt 與建立時間。
-
-同一 IntentID 不能被不同 goroutine／CLI 程序並行送出。依現有架構選擇單一寫入程序、檔案鎖或既有資料庫交易；不以記憶體 mutex 冒充跨程序保護。
-
-### 9.3 結果不明時
+### 9.1 Keep Three Identifier Types Separate
 
 ```text
-持久化意圖 → 已嘗試送出 → 逾時／斷線 → OutcomeUnknown
-                                        |
-                                  查訂單／成交／歷史
+IntentID      = unique persisted business intent owned by this application
+RequestID     = correlation ID for one HTTP/WS/FIX attempt
+NativeOrderID = exchange-issued order ID
 ```
 
-收到 timeout 不能假設拒單。禁止把 WS 訂單逾時自動轉送 HTTP，也禁止改到另一家交易所送同一經濟意圖。
+Create new IntentIDs using short non-PII values such as `cx-` + a 26-character random ID. Map them to Bybit `orderLinkId` or Deribit `label` while preserving the native values.
 
-恢復依據：NativeOrderID；未知時依 label 加完整參數比對；配合私人事件及近期／歷史查詢。暫時查不到不證明沒下成功。經有限次查詢仍無法確定，保持 `OutcomeUnknown / NeedsReview`，暫停該意圖後續寫入。
+**Deribit `label` may map to multiple orders. It is not guaranteed by the venue to be unique and is not an exactly-once mechanism.** If a label query returns multiple orders, mark the result anomalous and do not arbitrarily choose the first record. [R11][R12]
 
-本版不對未知結果自動建立第二張訂單。使用者需先完成核對，才能明確建立新意圖。
+### 9.2 Write-Ahead Intent
 
-### 9.4 ExchangeState 與 CommandState 分開
+Persist before submission: venue, account, instrument, side, native quantity and unit, price, options, IntentID, attempt, and creation time.
+
+The same IntentID must not be submitted concurrently by different goroutines/CLI processes. Depending on the existing architecture, use a single writer, file lock, or database transaction. Do not pretend an in-memory mutex provides cross-process safety.
+
+### 9.3 Unknown Outcomes
+
+```text
+persist intent -> submission attempted -> timeout/disconnect -> OutcomeUnknown
+                                                |
+                                      query order/execution/history
+```
+
+A timeout must not be treated as rejection. Do not automatically retry a WS order over HTTP, and do not submit the same economic intent to another venue.
+
+Recovery priority: NativeOrderID; if unknown, use label plus full-parameter matching; combine private events and recent/history queries. Temporary absence from queries does not prove the order was never accepted. If bounded reconciliation cannot determine the result, remain in `OutcomeUnknown / NeedsReview` and block further writes for that intent.
+
+Do not automatically create a second order for an unknown outcome. The user must resolve the state before explicitly creating a new intent.
+
+### 9.4 Separate ExchangeState and CommandState
 
 ```text
 ExchangeState:
@@ -482,124 +483,124 @@ CommandState:
     Idle / Submitting / Amending / Cancelling / OutcomeUnknown
 ```
 
-Deribit `open` 且 `0 < filled_amount < amount` 可正規化為 `PartiallyFilled`；保留 `raw_order_state`。不支援的 untriggered／其他類型只保存並標示不支援，不錯誤當成 Open。[R4][R29]
+A Deribit order that is `open` with `0 < filled_amount < amount` may normalize to `PartiallyFilled`; preserve `raw_order_state`. Unsupported untriggered/other states should be stored and marked unsupported, not incorrectly mapped to Open. [R4][R29]
 
-取消被拒不代表原訂單 Rejected。取消途中仍可能成交；取消成功也可能保留部分成交。`Cancelled` 不可把已成交數量歸零。
+A rejected cancellation does not mean the original order is Rejected. Fills may occur while cancellation is pending; successful cancellation may still preserve partial executions. `Cancelled` must not reset already-filled quantity to zero.
 
-### 9.5 事件合併
+### 9.5 Event Merge
 
-- 成交以穩定 ExecutionKey 去重，持久化去重紀錄與游標。
-- 訂單累計成交量與逐筆成交加總是兩種觀察，不可再彼此相加。
-- HTTP 回應已含成交時先入帳；同筆 WS／FIX 回報不再次增加成交量或費用。
-- 原生 revision／時間戳／事件種類共同判斷新舊；不要只靠狀態名稱排序。
-- 改單會改變總量；`max(cum_qty)` 不能單獨構成完整訂單 reducer。
-- 衝突且無可靠先後時，標記 discrepancy 並查詢，不默默覆蓋。
-- 帳戶部位 snapshot 與本地成交推導分開，避免把同筆成交算到部位兩次。
+- Deduplicate executions by stable ExecutionKey and persist dedup records/cursors.
+- Cumulative order filled quantity and the sum of individual executions are two observations; never add them together again.
+- If an HTTP response already contains an execution, persist it immediately; the same WS/FIX execution must not add volume or fees again.
+- Determine event recency using native revision/time/event type together; do not sort only by state name.
+- Amendments can change total quantity; `max(cum_qty)` alone is not a complete order reducer.
+- If conflicting observations have no reliable ordering, mark a discrepancy and query the venue instead of silently overwriting.
+- Keep account-position snapshots separate from locally derived execution deltas to avoid applying the same execution twice.
 
 ---
 
-## 10. 恢復與分頁
+## 10. Recovery and Pagination
 
-### 10.1 每個 venue／account 獨立恢復
+### 10.1 Recover Each Venue/Account Independently
 
-啟動、私人 WS 重連、FIX session 改變、人工命令均可觸發。相同帳戶只允許一個 recovery run；新觸發可合併但不能無限排隊。
+Recovery may be triggered by startup, private WS reconnect, FIX session changes, or manual commands. Only one recovery run per account may be active; new triggers may be coalesced but must not queue indefinitely.
 
-狀態：
+States:
 
 ```text
-Disconnected → Authenticating → Subscribing → Recovering → Ready
-                                    └────────→ Degraded / NeedsReview
+Disconnected -> Authenticating -> Subscribing -> Recovering -> Ready
+                                    \---------> Degraded / NeedsReview
 ```
 
-恢復中，停止該帳戶增加曝險的新單；允許有明確 ID、能力及最新資料支持的取消操作。健康的另一交易所不受此帳戶的 circuit breaker 連帶封鎖。
+During recovery, block new orders that increase exposure for that account. Allow cancellation only when it has a known ID, supported capability, and sufficiently fresh data. A circuit breaker on one venue must not block a healthy venue.
 
-### 10.2 不可只抓 open orders
+### 10.2 Do Not Rely Only on Open Orders
 
-訂單不在 open list，可能已成交、取消、過期、查詢漏頁或尚未可見；不是自動 Cancelled。
+An order missing from the open-order list may have been filled, cancelled, expired, skipped by pagination, or not yet indexed. It must not be automatically marked Cancelled.
 
-恢復至少使用：本地未完成意圖、open orders、個別 state、近期／歷史 orders、trade history、positions、account summary。[R14–R18]
+Recovery should use at least: local unfinished intents, open orders, individual order state, recent/history orders, trade history, positions, and account summary. [R14–R18]
 
-### 10.3 Snapshot 與即時事件銜接
+### 10.3 Bridging Snapshots and Live Events
 
-1. 登入及訂閱成功後開始把私人事件放入有界恢復緩衝區，記錄 generation。
-2. 取得查詢快照及從最後持久化游標開始的成交資料。
-3. 先寫入去重後成交，再合併訂單與部位觀察，重播緩衝事件。
-4. 對仍衝突的活動訂單重查，不假設 HTTP 多次查詢構成原子快照。
-5. 全部必要查詢成功、緩衝已追上且沒有影響送單的未知狀態，才進入 Ready。
-6. 緩衝超限／再次斷線時維持 Degraded，重跑恢復；不能丟掉私人事件後顯示 Ready。
+1. After login and subscription succeed, begin buffering private events in a bounded recovery buffer and record connection generation.
+2. Fetch query snapshots and execution data starting from the last persisted cursor.
+3. Persist deduplicated executions first, merge order/position observations, then replay buffered live events.
+4. Re-query still-conflicting active orders; do not assume several HTTP calls form an atomic snapshot.
+5. Enter Ready only when required queries succeed, the buffer is caught up, and there are no unknown states that affect safe order submission.
+6. If the recovery buffer overflows or another disconnect occurs, remain Degraded and restart recovery. Do not drop private events and still display Ready.
 
-本版不宣稱跨交易所原子快照。彙總輸出必須帶每家 `as_of`、完整性及資料年齡。
+This release does not claim a cross-venue atomic snapshot. Aggregated output must include each venue's `as_of`, completeness, and data age.
 
-### 10.4 分頁與歷史資料
+### 10.4 Pagination and Historical Data
 
-Deribit 有近期與 `historical=true` 查詢路徑；歷史索引可能延後出現。長時間停機不能只查近期預設範圍。[R16]
+Deribit has recent and `historical=true` query paths, and historical indexing may be delayed. Long outages cannot be recovered using only default recent windows. [R16]
 
-- 實作各 method 專屬分頁，不設一個適用所有 API 的假 cursor。
-- 成交優先使用 instrument scope 的 `trade_seq`／官方支援游標；保存 scope，不當成全交易所連續編號。[R15]
-- 時間範圍查詢要處理同毫秒多筆成交，不使用單純 `last_timestamp + 1` 跳頁。
-- 邊界重疊查詢並依 TradeID 去重，直到 `has_more`／continuation 完成。
-- 訂單歷史查詢要包含尚未成交即取消的訂單，依方法設定相關選項。[R14]
-- 無法取齊全部資料時回傳 `Partial` 及缺口；不得把部分資料標記為完整。
-- 只有資料成功落盤後才推進 recovery cursor。
-- 恢復不建立新單、不自動平倉、不取消不屬於本程式的訂單。
-
----
-
-## 11. 儲存與相容性遷移
-
-沿用現有儲存技術，不為第二家交易所強制引入 Kafka、資料庫或新服務。
-
-如果現有 JSON 結構無版本，加入 `schema_version`。遷移必須：
-
-1. 備份原資料，不覆蓋唯一副本。
-2. dry-run 顯示將補上的 venue／environment／account／category。
-3. 依可驗證基線設定補上 Bybit 身分；不明欄位停止遷移。
-4. 原子寫入新格式，保留回復方式。
-5. 重跑遷移結果相同；不能重複生成訂單／成交。
-6. 未支援的未來版本明確拒讀，不當成空資料啟動。
-
-下列內容必須持久化：意圖、原生 order ID 對應、成交、費用、恢復游標、必要 order state、帳戶映射與 schema 版本。公開行情可不持久化。
-
-多個 CLI／dashboard 同時讀寫時不得 lost update。單檔 atomic rename 不等於跨程序交易鎖；需要明確單寫者或鎖協定。
+- Implement method-specific pagination; do not invent one universal cursor for every API.
+- For executions, prefer instrument-scoped `trade_seq` or an officially supported cursor and persist the cursor scope; do not treat it as globally continuous across the exchange. [R15]
+- Time-range pagination must handle multiple executions in the same millisecond; do not page with only `last_timestamp + 1`.
+- Query overlapping boundaries and deduplicate by TradeID until `has_more` / continuation completes.
+- Order history queries must include cancelled-without-fill orders where supported by the method. [R14]
+- If all data cannot be retrieved, return `Partial` plus the missing range; never label incomplete data as complete.
+- Advance recovery cursors only after durable persistence succeeds.
+- Recovery must not create new orders, auto-close positions, or cancel orders not owned by this application.
 
 ---
 
-## 12. 多交易所檢視與風險界線
+## 11. Backward-Compatible Storage Migration
 
-### 12.1 R1 必需的唯讀檢視
+Reuse the existing storage technology. Do not force Kafka, a database, or a new service merely because a second venue is added.
 
-顯示 venue、environment、account、原生 instrument、contract style、原生數量、單位、方向、mark／index、幣別、最後更新、連線狀態與恢復狀態。
+If the current JSON structure has no version, add `schema_version`. Migration must:
 
-`--venue all` 只適用查詢、唯讀彙總與恢復；對 place／amend／cancel 等寫入操作必須拒絕。取消 ID 屬於別家時回傳明確錯誤，不尝試別家同號訂單。
+1. Back up existing data; never overwrite the only copy.
+2. Dry-run the venue/environment/account/category values that will be added.
+3. Populate Bybit identity fields only from verifiable baseline information; stop on unknown values.
+4. Atomically write the new format and keep a rollback path.
+5. Re-running migration must produce the same result without duplicating orders/executions.
+6. Reject unsupported future schema versions explicitly instead of starting with empty state.
 
-### 12.2 不可錯誤相加
+The following must be persisted: intents, native order-ID mappings, executions, fees, recovery cursors, required order state, account mappings, and schema version. Public market data does not need persistence.
 
-禁止直接把 Bybit 的 BTC 數量加上 Deribit 的 USD 面額；也不能把 BTC 餘額、USDT 餘額與 USD 損益放進同一 `balance`。
-
-第一版預設顯示原生值及分組小計。若加上估計名目曝險：
-
-- 每個商品必須有已驗證的換算規則。
-- 明列估值價格、幣別、時間、FX 來源與完整性。
-- 沒有有效 USDT／USD 等匯率時，不暗設 1:1 後輸出正式總額。
-- 反向合約 `USD notional / price` 最多作為明確標示的基礎幣等值估算，不命名為完整 delta 或可跨所抵銷的保證金。
-- 交易所保證金彼此獨立；名目多空抵銷不代表單邊不會被清算。
-- 未支援的部位保留可見，不能排除後仍說總曝險完整。
-
-這是唯讀觀測功能，不是用來自動調整避險的風險引擎。
-
-### 12.3 故障隔離
-
-任一家 auth／限流／queue／重連失敗，只改變該 venue 的狀態。`all` 查詢可回傳成功部分，但整體必須標記 Partial，不能把失效 venue 的部位顯示為零。
+Multiple CLI/dashboard writers must not cause lost updates. Atomic rename of a single file is not a cross-process transaction lock; use an explicit single-writer model or lock protocol.
 
 ---
 
-## 13. CLI 與既有 dashboard
+## 12. Multi-Venue Views and Risk Boundaries
 
-### 13.1 相容性
+### 12.1 Required Read-Only Views for R1
 
-沿用既有 binary 名稱。可新增全域 `--venue bybit|deribit`；舊指令沒有該參數時維持原來 Bybit 行為。新增 generic alias 可列為非必要，不能強制改名破壞腳本。
+Display venue, environment, account, native instrument, contract style, native quantity, unit, direction, mark/index, currency, last update, connection state, and recovery state.
 
-下列為目標能力範例，不代表目前已有這些子命令：
+`--venue all` is read-only and may be used for queries, aggregation, and recovery. It must be rejected for writes such as place/amend/cancel. If a cancellation ID belongs to another venue, return an explicit error and do not try the same ID on the other venue.
+
+### 12.2 Do Not Add Incompatible Values
+
+Do not add Bybit BTC quantity directly to Deribit USD notional. Likewise, do not combine BTC balance, USDT balance, and USD PnL into one generic `balance`.
+
+Default display should show native values and grouped subtotals. If estimated notional exposure is added:
+
+- Each instrument must have a validated conversion rule.
+- Display valuation price, currency, timestamp, FX source, and completeness.
+- Without a valid USDT/USD or other FX rate, do not silently assume 1:1 and output an authoritative-looking total.
+- For inverse contracts, `USD notional / price` may be shown only as a clearly labeled base-asset-equivalent estimate, not as full delta or margin that can be netted across venues.
+- Venue margin is independent; offsetting notional directions do not imply one venue cannot liquidate.
+- Unsupported positions must remain visible; do not exclude them and still claim exposure is complete.
+
+This is a read-only observability feature, not an automated hedge/risk engine.
+
+### 12.3 Failure Isolation
+
+Authentication/rate-limit/queue/reconnect failure on one venue must affect only that venue's state. `all` queries may return partial success but must mark the aggregate `Partial`; never display failed-venue positions as zero.
+
+---
+
+## 13. CLI and Existing Dashboard
+
+### 13.1 Compatibility
+
+Keep the existing binary name. You may add a global `--venue bybit|deribit`; existing commands without the flag must preserve previous Bybit behavior. Generic aliases are optional and must not break existing scripts.
+
+The following are target capability examples and do not imply these subcommands already exist:
 
 ```bash
 ./bin/venuewire --venue deribit doctor
@@ -614,49 +615,49 @@ Deribit 有近期與 `historical=true` 查詢路徑；歷史索引可能延後�
 ./bin/venuewire --venue all portfolio
 ```
 
-`doctor` 可做讀取／連線驗證，但不可下單、改設定、改 COD、取消或平倉。
+`doctor` may perform read/connectivity diagnostics but must not place orders, modify settings, change COD, cancel, or close positions.
 
-### 13.2 新送單流程
+### 13.2 New Order Submission Flow
 
-新多交易所入口採兩階段：`plan` → 明確 `execute`。能沿用既有安全確認介面時，不需再做重複 UI。
+New multi-venue order entry should use two stages: `plan` -> explicit `execute`. Reuse an existing safe confirmation interface when available rather than duplicating it.
 
-plan 至少輸出：venue／Testnet／帳戶、商品、數量及單位、價格、有效 tick、預估面額、上限、transport、COD 是否涵蓋、metadata／價格時間及到期時間。
+A plan should display at least: venue/Testnet/account, instrument, quantity and unit, price, valid tick, estimated notional, limits, transport, COD coverage, metadata/price timestamp, and expiration.
 
-可提供 `min-valid` 數量策略及 passive 價格策略，但計算須依 metadata 與最新行情；不得硬寫當天 BTC 價格或保證非成交。限價不得跑到交易所限制之外。
+A `min-valid` quantity strategy and passive-price strategy may be provided, but calculations must use metadata and current market data. Do not hard-code today's BTC price or promise a passive order will not fill. Limit prices must remain within exchange rules.
 
-execute 要重新檢查 plan 的時效、商品狀態、資料健康與風險限制。過期或數量換算不明就拒絕。明確選擇 HTTP 或 WS，不因失敗換 transport 重送。
+`execute` must revalidate plan freshness, instrument status, data health, and risk limits. Reject expired plans or ambiguous quantity conversion. Explicitly choose HTTP or WS; never switch transports and re-submit because of failure.
 
-### 13.3 Dashboard 存在時
+### 13.3 When a Dashboard Exists
 
-- 預設仍顯示原本 Bybit；新增 venue／account 選擇。
-- 每一行訂單、成交、持倉都帶 venue，前端 row key 也用複合鍵。
-- 表單依商品顯示 `amount (USD)` 或實際單位，不統一寫成「數量 BTC」。
-- all 模式唯讀；任何寫入要求重新確認單一交易所。
-- 顯示 `Recovering / Stale / Partial / NeedsReview`，不只 Connected 綠點。
-- 沿用現有推播架構，勿為每個瀏覽器頁籤建立一整組交易所私人連線。
-- log 遮罩、內部錯誤、token 都不能經由 UI API 外洩。
+- Preserve the existing Bybit default and add venue/account selection.
+- Every order, execution, and position row must include venue, and frontend row keys must use composite identifiers.
+- Forms must display the actual unit, e.g. `amount (USD)`, rather than labeling every field as "BTC quantity."
+- `all` mode is read-only; every write requires reconfirming a single venue.
+- Display `Recovering / Stale / Partial / NeedsReview`, not only a green Connected indicator.
+- Reuse the existing push architecture; do not create a complete set of venue-private connections for every browser tab.
+- Logs, internal errors, and tokens must not leak through UI APIs.
 
-若目前沒有 dashboard，完成 CLI 即可，不額外擴大範圍。
+If no dashboard exists, completing the CLI is sufficient; do not expand scope by building a new one.
 
 ---
 
-## 14. Deribit FIX：獨立 dialect，不能只換主機
+## 14. Deribit FIX: Separate Dialect — Do Not Just Change the Host
 
-### 14.1 版本與文件
+### 14.1 Version and Documentation
 
-本版鎖定官方目前標示的 **production/classic FIX 4.4 subset** 文件，連線仍只用 Testnet。`production` 是文件的現行協定分支，不代表允許使用真錢環境。[R19]
+This release targets the official currently documented **production/classic FIX 4.4 subset**, while all actual connections remain Testnet-only. `production` here refers to the current protocol-documentation branch and does not authorize real-money endpoints. [R19]
 
-不要把 `/upcoming/` 或 Starbase 另一套規格混進現行 codec。若 Testnet 已切換版本，先用非交易診斷確認、記錄版本及對應文件，再實作相應 dialect；版本不明禁止下單。
+Do not mix `/upcoming/` or Starbase protocol details into the current codec. If Testnet has already migrated to a different version, first verify through non-trading diagnostics, record the version/documentation mapping, then implement the correct dialect. When version is unknown, order entry is prohibited.
 
-### 14.2 可共用與不可共用
+### 14.2 What May Be Shared and What Must Not Be Shared
 
-可共用：SOH framing、BodyLength、CheckSum、TLS transport、時鐘／隨機數注入、session 測試工具。
+May be shared: SOH framing, BodyLength, CheckSum, TLS transport, injectable clock/randomness, session test utilities.
 
-不可直接共用：Bybit RSA 驗證、Bybit 自訂 tags、OrderQty 單位、ClOrdID 回報對應、是否重傳、sequence reset 規則及 cancel-on-disconnect 行為。[R19–R25][R34]
+Must not be directly reused: Bybit RSA authentication, Bybit custom tags, OrderQty units, ClOrdID report semantics, resend behavior, sequence-reset rules, or cancel-on-disconnect behavior. [R19–R25][R34]
 
 ### 14.3 Logon
 
-使用 TLS `fix-test.deribit.com:9883`；`TargetCompID=DERIBITSERVER`。驗證最小邏輯：[R19][R20]
+Use TLS at `fix-test.deribit.com:9883`; `TargetCompID=DERIBITSERVER`. Minimum authentication logic: [R19][R20]
 
 ```text
 nonce_bytes = cryptographically_secure_random(32 bytes)
@@ -667,30 +668,30 @@ Username(553) = client_id
 Password(554) = Base64(SHA256(bytes(RawData) || bytes(client_secret)))
 ```
 
-這不是 Bybit 的 RSA，也不是把 SHA256 改成 HMAC。不要把 Base64 的十六進位字串誤當原始 digest。
+This is not Bybit RSA authentication and is not HMAC-SHA256. Do not encode the SHA256 digest as a hex string before Base64 when the protocol expects raw digest bytes.
 
-採測試可注入的時鐘與隨機來源，驗證同毫秒重試、時鐘倒退、換 key、拒絕登入及敏感回應遮罩。安全 timestamp 水位可持久化但不能包含 secret。
+Use injectable clock and randomness in tests. Test retries within the same millisecond, clock rollback, key changes, rejected login, and redaction of sensitive responses. A safe timestamp watermark may be persisted but must never contain secrets.
 
-明確設定 `HeartBtInt` 及 COD 政策。不要假設未填 tag 的預設值在所有帳戶一致。
+Explicitly configure `HeartBtInt` and COD policy. Do not assume omitted-tag defaults are identical across all accounts.
 
-### 14.4 Session 與恢復
+### 14.4 Session and Recovery
 
-Deribit 現行文件列出 `ResendRequest(2)`、`SequenceReset(4)`，與 Bybit 的無標準重送路線不同。Deribit 的 reset 回覆及序號規則也有場域特有語意。[R21][R22]
+Current Deribit documentation includes `ResendRequest(2)` and `SequenceReset(4)`, unlike Bybit's no-standard-resend recovery path. Deribit reset responses and sequence semantics are venue-specific. [R21][R22]
 
-要求：
+Requirements:
 
-- 獨立 `DeribitSessionPolicy`，不能把 Bybit「發現 gap 就重連、全部歸 1」套入同一 session。
-- 支援辨識 Heartbeat、TestRequest、Logout、Reject、ResendRequest、SequenceReset。
-- 驗證 outbound sequence、server resend 要求及 reset 只能前進等實際行為。
-- inbound sequence 不能假定與 outbound 有相同模型；記錄使用的 logon 選項及排序保證。
-- 不假設 Deribit 必然提供跨 socket 的永久歷史重播；重新登入後仍做 HTTP 業務狀態核對。
-- 本版對序號異常採 fail-closed：暫停新單、記錄缺口、執行已驗證的 session 恢復或關閉／重新登入，然後核對訂單。
-- 不對結果不明的 `NewOrderSingle` 自動 replay。若未完成安全的重傳處理，明確拒絕該恢復分支並重新登入／核對，不能宣稱支援完整 FIX replay。
-- 這個有限範圍必須在能力矩陣及 README 顯示，不得靠 generic FIX engine 的預設行為猜測。
+- Implement a separate `DeribitSessionPolicy`; do not apply Bybit's "reconnect on gap and reset everything to 1" logic to the same session model.
+- Recognize Heartbeat, TestRequest, Logout, Reject, ResendRequest, and SequenceReset.
+- Validate actual outbound sequence behavior, server resend requests, and the rule that reset may only advance sequence as applicable.
+- Do not assume inbound sequence semantics equal outbound sequence semantics; record the Logon options and ordering guarantees in use.
+- Do not assume Deribit provides permanent historical replay across sockets; after re-login, still reconcile business state through HTTP.
+- On sequence anomalies, fail closed: pause new orders, record the gap, perform verified session recovery or reconnect/re-login, then reconcile orders.
+- Do not automatically replay a `NewOrderSingle` whose result is unknown. If safe resend handling is not implemented, explicitly reject that recovery branch and re-login/reconcile instead of claiming full FIX replay support.
+- This limited support scope must appear in the capability matrix and README, not be hidden behind generic FIX-engine defaults.
 
-### 14.5 訂單與回報
+### 14.5 Orders and Reports
 
-至少處理：[R23–R25]
+At minimum handle: [R23–R25]
 
 ```text
 NewOrderSingle       35=D
@@ -700,131 +701,131 @@ ExecutionReport      35=8
 OrderCancelReject    35=9
 ```
 
-重要差異：
+Important differences:
 
-- Deribit 現行 ExecutionReport 的 `ClOrdID(11)` 不可一律當成客戶原始 ID；對照 `OrderID(37)`、`OrigClOrdID(41)` 等欄位建立 mapping。[R25]
-- JSON `amount` 與 FIX `OrderQty(38)` 不可直接假定同單位。先從 FIX SecurityList／相應商品規格取得 multiplier，證明輸入、回報及 JSON 核對的換算一致，才允許 FIX 下單。[R23][R25]
-- 回報可能有訂單狀態與成交通知兩種用途。完整處理選定 fill 格式；可以明確使用官方支持的 `ReportFillsAsExecReports(9015)` 模式，但需要對照 fixture 及外部回應驗證，不能因 parser 不支援 groups 而漏掉成交。[R20]
-- codec 不可用一個 `map[tag]value` 就丟掉重複群組。未知 tags 保留，未知群組明確拒絕／降級，不靜默誤解析。
-- FIX 與 JSON 沒有已驗證的一對一 trade ID 對應時，不用價格＋數量＋毫秒猜同一筆成交。把 FIX 視為 order-state evidence，帳務去重以可核對的 canonical JSON trade ID 為準。
+- In Deribit current ExecutionReport semantics, `ClOrdID(11)` must not always be treated as the original client ID; correlate using `OrderID(37)`, `OrigClOrdID(41)`, and other relevant fields. [R25]
+- JSON `amount` and FIX `OrderQty(38)` must not be assumed to share the same unit. Obtain multiplier/contract details from FIX SecurityList or the corresponding instrument specification and prove consistent conversion between input, reports, and JSON reconciliation before enabling FIX order entry. [R23][R25]
+- Reports may serve both order-state and fill-notification purposes. Fully implement the selected fill-reporting mode. The officially supported `ReportFillsAsExecReports(9015)` mode may be used, but fixtures and external responses must confirm it; do not lose fills simply because the parser does not support groups. [R20]
+- The codec must not collapse repeating groups into a simple `map[tag]value`. Preserve unknown tags; unknown groups must be explicitly rejected/degraded rather than silently misparsed.
+- If there is no verified one-to-one trade-ID mapping between FIX and JSON, do not guess identity from price + quantity + millisecond. Treat FIX as order-state evidence and use canonical JSON trade IDs for accounting deduplication where reconciliation requires it.
 
-### 14.6 驗證層級
+### 14.6 Validation Levels
 
 ```text
-IMPLEMENTED           有程式
-LOCAL_TESTED          fixture/mock 通過
-TESTNET_LOGON         真正登入成功
-TESTNET_ORDER_FLOW    真正下單/取消/回報可對照
+IMPLEMENTED           code exists
+LOCAL_TESTED          fixture/mock tests passed
+TESTNET_LOGON         real Testnet login succeeded
+TESTNET_ORDER_FLOW    real order/cancel/report flow reconciled successfully
 ```
 
-每一層分開記錄。登入成功不能代表下單成功；mock 通過不能代表 Deribit 接受該 dialect。
+Track every level separately. Successful Logon does not prove order entry works; mock success does not prove Deribit accepts the dialect.
 
 ---
 
-## 15. 觀測、失敗隔離與關閉
+## 15. Observability, Failure Isolation, and Shutdown
 
-所有結構化紀錄含 venue、environment、account alias、transport、connection generation、method/topic、IntentID／order ID、耗時、錯誤類別。敏感欄位一律遮罩。
+Every structured log must include venue, environment, account alias, transport, connection generation, method/topic, IntentID/order ID, duration, and error class. Sensitive fields must always be redacted.
 
-至少有：
+At minimum observe:
 
-- 各 venue RPC 成功／失敗／延遲、限流及 token refresh。
-- WS 重連、pending RPC、各 queue 深度、book gaps。
-- 私人資料的 Recovering／Ready／Degraded。
-- 重複成交、未知送單結果、reconcile 差異及最後成功時間。
-- FIX session、sequence anomaly、reject、Logon 與 order-flow 驗證狀態。
+- Per-venue RPC success/failure/latency, rate limiting, and token refresh.
+- WS reconnects, pending RPC count, queue depth, order-book gaps.
+- Private-data state: Recovering/Ready/Degraded.
+- Duplicate executions, unknown submission outcomes, reconciliation discrepancies, and last successful reconciliation.
+- FIX session state, sequence anomalies, rejects, Logon validation level, and order-flow validation level.
 
-queue、goroutine、pending map、recovery buffer 都有上限。私人資料不可靜默丟棄；發生 overload 時標記該 venue 不可靠並恢復。
+Queues, goroutines, pending maps, and recovery buffers must be bounded. Private data must never be silently dropped; overload must mark the venue unreliable and trigger recovery/degradation.
 
-RPC round-trip 用本機 monotonic clock。exchange timestamp 到本機的差只能標記為估計事件年齡，不能在未校時情況稱為精確網路延遲。
+Measure RPC round-trip using the local monotonic clock. Differences between exchange timestamps and local receipt time may be labeled estimated event age, not precise network latency unless clocks are synchronized.
 
-SIGINT／SIGTERM：停止新意圖 → 對不明的在途寫入持久化狀態 → 依明確設定取消本程式訂單 → 寫入狀態／游標 → 正常關閉連線，整體有 timeout。取消或 flush 失敗不可回報「已清空所有訂單」。
+SIGINT/SIGTERM flow: stop new intents -> persist unknown in-flight write states -> cancel application-owned orders only if explicitly configured -> persist state/cursors -> cleanly close connections, all under a bounded timeout. Failure to cancel or flush must not be reported as "all orders cleared."
 
 ---
 
-## 16. 開發階段與閘門
+## 16. Development Phases and Gates
 
-| Phase | 工作 | 通過條件 |
+| Phase | Work | Exit criteria |
 |---|---|---|
-| 0 | 盤點、基線、回歸測試 | audit 完成，已知失敗與本次新增失敗可區分 |
-| 1 | venue routing、複合鍵、設定、必要資料遷移 | Bybit 不回歸；Deribit 未啟用不影響 Bybit |
-| 2 | Deribit metadata、HTTP RPC、auth、帳戶查詢 | 精度／權限／token／限流測試通過；讀取 smoke test |
-| 3 | 公開 WS、book、心跳、私人 WS | 缺口、重連、事件分流及多筆訊息通過 |
-| 4 | HTTP + WS 訂單、意圖、去重 | 限價／改單／取消與未知結果測試；受控外部驗證 |
-| 5 | 持久化、重啟、歷史分頁、恢復 | 斷線／索引延遲／分頁重複／同毫秒多筆可恢復 |
-| 6 | 多所同跑、CLI／既有 UI | 隔離與唯讀彙總正確，輸出單位及 freshness |
-| 7 | R1 驗收 | 核心測試綠燈、外部證據或明列阻擋項 |
-| 8 | Deribit FIX dialect／mock | 驗證、session、訊息與單位測試通過 |
-| 9 | FIX Testnet 驗證 | 能連則完成；不能則記錄具體阻擋，禁止偽造成功 |
-| 10 | 最終文件與交接 | build、demo、能力矩陣、已知限制與完整結果 |
+| 0 | Audit, baseline, regression tests | Audit complete; existing failures distinguished from new failures |
+| 1 | Venue routing, composite keys, config, required migration | No Bybit regression; disabled Deribit does not affect Bybit |
+| 2 | Deribit metadata, HTTP RPC, auth, account queries | Precision/permission/token/rate-limit tests pass; read-only smoke test |
+| 3 | Public WS, book, heartbeat, private WS | Gap/reconnect/event-routing/multi-element-message tests pass |
+| 4 | HTTP + WS orders, intents, deduplication | Limit/edit/cancel/unknown-outcome tests; controlled external validation |
+| 5 | Persistence, restart, historical pagination, recovery | Recoverable across disconnect/index delay/pagination overlap/same-ms trades |
+| 6 | Both venues running, CLI/existing UI | Correct isolation + read-only aggregation with units/freshness |
+| 7 | R1 acceptance | Core tests green; external evidence present or blockers explicitly recorded |
+| 8 | Deribit FIX dialect/mock | Auth/session/message/unit tests pass |
+| 9 | FIX Testnet validation | Complete when possible; otherwise record exact blocker and never fake success |
+| 10 | Final docs and handoff | Build/demo/capability matrix/known limits/results complete |
 
-每個 Phase 結束更新 status：改動檔案、測試命令、結果、失敗、偏離規格原因、下一步。沒有外部權限不應阻止離線階段繼續，也不應使外部驗收自動算通過。
+At the end of every phase update status with: changed files, test commands, results, failures, reasons for deviations, and next steps. Missing external access must not block offline implementation, and it must not make external acceptance count as passed.
 
 ---
 
-## 17. 必需測試矩陣
+## 17. Mandatory Test Matrix
 
-CI 不使用外部憑證；外部 Testnet 測試獨立 opt-in。
+CI must not use external credentials; external Testnet tests are separate opt-in suites.
 
-| ID | 情境 | 必須得到的結果 |
+| ID | Scenario | Required result |
 |---|---|---|
-| B01 | Deribit 不啟用／缺 key | Bybit 舊命令與測試仍可用 |
-| B02 | 原 Spot／費用案例回歸 | 成交量、淨餘額及費用幣別不混淆 |
-| B03 | 舊 JSON／DB 資料升級 | 備份、可重跑、無重複、可回復 |
-| N01 | 同號 order ID 來自兩家 | 不覆蓋、不跨所取消 |
-| N02 | 同商品但不同帳戶／category | 資料與部位完整隔離 |
-| A01 | token 到期、同時多筆請求 | 一次續期、原子更新、沒有 auth storm |
-| A02 | auth／refresh／FIX 回應進 log | secret、token、password 不出現 |
-| A03 | 錯環境、redirect、惡意 hostname | 在送出憑證前拒絕 |
-| R01 | HTTP 200 + RPC error | 業務失敗，不是假成功 |
-| R02 | WS 回應倒序、夾雜 notification | 正確對應 pending request |
-| R03 | 舊 connection 遲到回應 | 不能完成新 connection request |
-| R04 | private order event 先於 ACK | 只建立一張本地訂單，之後合併 |
-| M01 | amount USD 與 BTC 混用 | 本地拒絕，不送交易所 |
-| M02 | 分段 tick／非法步進 | 正確判定，禁止默默放大數量 |
-| M03 | 欄位是高精度 JSON number | 無 float64 捨入造成的金額差異 |
-| M04 | 未支援合約／expired metadata | 可查詢但不能交易 |
-| W01 | heartbeat test_request | 及時呼叫 public/test |
-| W02 | snapshot + delta + duplicate | book 正確且不重複套用 |
-| W03 | prev_change_id 不連續 | book stale，等新 snapshot 才恢復 |
-| W04 | 私人 queue／recovery buffer 滿 | 該 venue degraded，不靜默丟資料 |
-| O01 | 同一 IntentID 兩程序送出 | 至多一個獲准進入寫入流程 |
-| O02 | 交易所接受後 socket 斷線 | OutcomeUnknown，不自動重送 |
-| O03 | 同 label 查到多張單 | NeedsReview，不選第一張 |
-| O04 | RPC 回應與 WS 含同一成交 | 成交與費用只入帳一次 |
-| O05 | Partial fill 後取消 | Cancelled + 保留已成交量 |
-| O06 | Fill 與 cancel／amend 競爭 | 保留交易所最後可靠狀態，無歸零 |
-| O07 | 改單失敗 | 原訂單不被改成 Rejected |
-| C01 | 已下單但未持久化 ACK 即 crash | 重啟由持久化意圖核對，不再建第二單 |
-| C02 | 分頁有重複、同毫秒多筆 | 不漏成交、不重複計算 |
-| C03 | 近期已移除、歷史尚未索引 | 保持未知／部分，重試有界 |
-| C04 | 停機期間訂單由外部取消 | 重啟查詢修復本地狀態 |
-| C05 | recovery 途中又有成交／重連 | 不以舊 snapshot 覆蓋新可靠資料 |
-| C06 | 重複執行 reconcile | 相同結果，沒有額外交易 |
-| D01 | WS COD 開啟、HTTP 訂單存在 | 不假設 HTTP 訂單也會被取消 |
-| D02 | graceful logout／真正斷線 | 區分政策與實際取消結果 |
-| V01 | Bybit 網路／驗證失敗 | Deribit 不崩潰且狀態獨立 |
-| V02 | Deribit 限流重連 | 不連帶重連 Bybit、不形成登入風暴 |
-| V03 | 任一家資料不完整 | portfolio 顯示 Partial，不當成零 |
-| V04 | BTC、USD、USDT 原生值 | 不直接相加；換算來源不足就不總計 |
-| F01 | Deribit FIX Logon fixture | digest、timestamp、nonce、tags 正確 |
-| F02 | Bybit／Deribit FIX 同時測試 | dialect 不互相污染 |
-| F03 | 拆包／黏包／checksum／groups | 可解析或明確拒絕，不 panic／漏填單 |
-| F04 | ResendRequest／SequenceReset | 依 Deribit 政策處理，不誤用 Bybit |
-| F05 | ExecReport tag11 被替換 | 仍能正確關聯本地意圖與 tag37 |
-| F06 | JSON／FIX 數量換算不明 | 禁止 live FIX order，標記阻擋 |
-| F07 | FIX 成交與 JSON 核對 | ID 已證實才去重，不以價格時間猜 |
-| S01 | SIGTERM 有在途訂單 | 落盤未知狀態、無無限等待 |
-| S02 | Mainnet／提款／all venue 寫入 | 明確拒絕 |
+| B01 | Deribit disabled / missing key | Existing Bybit commands/tests still work |
+| B02 | Existing Spot/fee case regression | Execution volume, net balance, and fee currency remain distinct |
+| B03 | Old JSON/DB data upgrade | Backup, repeatable migration, no duplicates, reversible |
+| N01 | Same numeric order ID from both venues | No overwrite and no cross-venue cancellation |
+| N02 | Same instrument but different account/category | Data and positions fully isolated |
+| A01 | Token expiry with concurrent requests | Single refresh, atomic replacement, no auth storm |
+| A02 | Auth/refresh/FIX response enters logs | Secret/token/password absent |
+| A03 | Wrong environment/redirect/malicious hostname | Rejected before credentials are sent |
+| R01 | HTTP 200 + RPC error | Business failure, not false success |
+| R02 | Out-of-order WS responses mixed with notifications | Correct pending-request correlation |
+| R03 | Late response from old connection | Cannot complete a new-connection request |
+| R04 | Private order event arrives before ACK | One local order only, merged later |
+| M01 | USD amount confused with BTC quantity | Rejected locally, not sent |
+| M02 | Stepped tick / invalid increment | Correct validation, no silent upward rounding |
+| M03 | High-precision JSON number | No float64 rounding affecting monetary values |
+| M04 | Unsupported contract / expired metadata | Query allowed, trading rejected |
+| W01 | Heartbeat test_request | `public/test` called promptly |
+| W02 | Snapshot + delta + duplicate | Correct book without duplicate application |
+| W03 | Broken prev_change_id chain | Book becomes stale until fresh snapshot |
+| W04 | Private queue/recovery buffer full | Venue degraded, no silent loss |
+| O01 | Same IntentID submitted by two processes | At most one write path proceeds |
+| O02 | Venue accepts order then socket disconnects | OutcomeUnknown; no automatic resubmit |
+| O03 | Label query returns multiple orders | NeedsReview; do not pick first |
+| O04 | Same execution appears in RPC response and WS | Execution/fee accounted once |
+| O05 | Partial fill then cancel | Cancelled while preserving filled quantity |
+| O06 | Fill races with cancel/amend | Preserve latest reliable venue state; do not zero fill |
+| O07 | Amend fails | Original order not changed to Rejected |
+| C01 | Crash after submission before ACK persisted | Restart reconciles persisted intent; does not create second order |
+| C02 | Pagination overlap + same-ms multiple trades | No missed or duplicated executions |
+| C03 | Removed from recent index but not yet in history | Remain unknown/partial with bounded retry |
+| C04 | Order cancelled externally while application offline | Restart query repairs local state |
+| C05 | Execution/reconnect during recovery | Old snapshot cannot overwrite newer reliable data |
+| C06 | Reconcile run repeatedly | Same result; no extra trading |
+| D01 | WS COD enabled while HTTP order exists | Do not assume HTTP order is also cancelled |
+| D02 | Graceful logout vs actual disconnect | Distinguish policy from actual cancellation result |
+| V01 | Bybit network/auth failure | Deribit remains running and isolated |
+| V02 | Deribit rate-limit reconnect | Does not reconnect Bybit and does not create login storm |
+| V03 | One venue incomplete | Portfolio marked Partial, not zero |
+| V04 | BTC/USD/USDT native values | Not directly added; no aggregate when FX source is insufficient |
+| F01 | Deribit FIX Logon fixture | Correct digest, timestamp, nonce, and tags |
+| F02 | Bybit + Deribit FIX tests together | Dialects do not contaminate each other |
+| F03 | Split/combined frames/checksum/groups | Parsed or explicitly rejected; no panic or missed fill |
+| F04 | ResendRequest/SequenceReset | Deribit policy used, not Bybit policy |
+| F05 | ExecReport tag11 replaced | Still correlates local intent through tag37/other mapping |
+| F06 | JSON/FIX quantity conversion unclear | Live FIX order prohibited and marked blocked |
+| F07 | FIX execution reconciled with JSON | Deduplicate only with verified IDs, never price/time guessing |
+| S01 | SIGTERM with in-flight orders | Persist unknown state; no unbounded wait |
+| S02 | Mainnet/withdrawal/`all` venue writes | Explicitly rejected |
 
-對有支援的環境執行 `go test -race ./...`。對 FIX framing／RPC decode 增加 fuzz seed 與有界 fuzz 測試；不得以測試過程開無限網路連線。
+Run `go test -race ./...` on supported environments. Add fuzz seeds and bounded fuzz tests for FIX framing/RPC decode; tests must not create unbounded external network connections.
 
 ---
 
-## 18. 外部 Testnet 驗證與證據
+## 18. External Testnet Validation and Evidence
 
-### 18.1 開關分離
+### 18.1 Separate Opt-In Flags
 
-建議沿用既有整合測試慣例，新增等價的分離開關：
+Recommended additions following existing integration-test conventions:
 
 ```dotenv
 RUN_DERIBIT_READ_TESTS=0
@@ -832,58 +833,58 @@ RUN_DERIBIT_TRADING_TESTS=0
 RUN_DERIBIT_FIX_TESTS=0
 ```
 
-read 開關不能下單；FIX 開關不自動代表允許交易，寫入仍需 trading 開關及明確確認。新憑證由使用者自行配置到本機環境，本文件不提供任何值。
+The read flag must never place orders. Enabling FIX tests does not automatically authorize trading; write operations still require the trading flag and explicit confirmation. Users provide new credentials locally; this document provides no credential values.
 
-### 18.2 R1 外部驗證
+### 18.2 R1 External Validation
 
-1. 商品 metadata、時間、token、帳戶摘要與 positions 讀取成功。
-2. 公開 WS 與私人 WS 同時運作；證明心跳及重訂閱。
-3. HTTP 建立一張 metadata 驗證的小額限價單，取得私人事件，改單／取消並查詢。
-4. WS 另外建立一張新意圖，完成相同生命週期。
-5. 在設定的測試風險與價格上限內觀察至少一筆真實 Testnet execution，與 order／trade history／本地帳務比對。
-6. 停機期間由另一個明確操作改變訂單，重啟並修復。
-7. Bybit 與 Deribit 同時工作，注入單所故障，另一所持續可用。
+1. Instrument metadata, time, token, account summary, and positions can be read successfully.
+2. Public WS and private WS operate simultaneously; heartbeat and resubscription are demonstrated.
+3. Place one metadata-valid small limit order via HTTP, receive private events, edit/cancel it, and query to confirm.
+4. Create a separate new intent via WS and complete the same lifecycle.
+5. Within configured Testnet risk/price limits, observe at least one real Testnet execution and reconcile it against order/trade history and local accounting.
+6. Modify an order through another explicit action while the application is offline, restart, and repair state.
+7. Run Bybit and Deribit together; inject a single-venue fault and confirm the other remains available.
 
-測試環境流動性不足時，第 5 項可保持 `BLOCKED_LIQUIDITY`；mock fill 測試仍必需，但不能拿 mock 代替真實 execution 證據。不為了得到成交去取消風控、繞過自成交保護、放大面額、改 Mainnet 或無上限追價。
+If Testnet liquidity prevents step 5, mark it `BLOCKED_LIQUIDITY`; mock fill tests remain mandatory but cannot replace real execution evidence. Do not disable risk controls, bypass self-trade protection, increase notional excessively, switch to Mainnet, or chase prices without limit just to obtain a fill.
 
-測試清理只碰本次明確擁有的訂單。若意外形成部位，先報告；有事先授權的受限 reduce-only 清理才可執行，不能全帳戶平倉。
+Cleanup may only touch orders explicitly owned by this test. If a position is accidentally created, report it first. A bounded reduce-only cleanup may be executed only with prior authorization; never close the entire account.
 
-### 18.3 證據格式
+### 18.3 Evidence Format
 
-建立 `docs/upgrade/VALIDATION_REPORT.md`，每一項記錄：
+Create `docs/upgrade/VALIDATION_REPORT.md`. For each item record:
 
 ```text
 Test ID / UTC time / commit / build
 Venue / Testnet / account alias / transport
 Instrument / amount + unit / metadata timestamp
 Command / expected result / actual result
-Native order ID / trade ID（分享前可遮罩）
+Native order ID / trade ID (may be masked before sharing)
 Result: PASS | FAIL | BLOCKED | NOT_RUN
-Evidence: sanitized log / fixture / screenshot（若已有 UI）
+Evidence: sanitized log / fixture / screenshot (if UI exists)
 ```
 
-不得在報告附完整 auth frame、token 或帳戶個資。
+Never attach full auth frames, tokens, or account-identifying secrets.
 
-### 18.4 完成定義
+### 18.4 Definition of Completion
 
-**R1 程式完成：** 必需離線測試與 Bybit 回歸通過；HTTP、WS、意圖／恢復／多所隔離皆有實作，文件與 build 可用。
+**R1 implementation complete:** required offline tests and Bybit regressions pass; HTTP, WS, intent/recovery, and multi-venue isolation are implemented; docs and build instructions are usable.
 
-**R1 外部驗證完成：** 上述核心 Testnet 驗證有真實證據。某項 BLOCKED 時，寫「程式完成、外部驗證未完成」，不能簡稱全部完成。
+**R1 external validation complete:** the core Testnet validation above has real evidence. If any item is BLOCKED, state "implementation complete, external validation incomplete" rather than saying everything is complete.
 
-**R2 FIX 外部整合完成：** 不只 TCP／TLS 成功；必須有真實 Logon 與訂單／回報流程，並可用 JSON 查詢核對。
+**R2 FIX external integration complete:** requires more than TCP/TLS. It must include real Logon and a real order/report flow that can be reconciled through JSON queries.
 
 ---
 
-## 19. 交付物
+## 19. Deliverables
 
-Codex 最後交付：
+Codex final delivery:
 
 ```text
-現有專案中的增量程式與測試
-可執行的 build 指令及 bin 路徑
-更新後的 README.md
-更新後的 .env.example / .gitignore
-更新後的 IMPLEMENTATION_STATUS.md
+Incremental code and tests in the existing project
+Executable build command and binary path
+Updated README.md
+Updated .env.example / .gitignore
+Updated IMPLEMENTATION_STATUS.md
 
 docs/upgrade/BASELINE_AUDIT.md
 docs/upgrade/PROTOCOL_NOTES.md
@@ -894,111 +895,120 @@ docs/upgrade/CAPABILITY_MATRIX.md
 docs/upgrade/CODEX_HANDOFF.md
 ```
 
-`CODEX_HANDOFF.md` 用繁體中文說明：改了什麼、怎麼 build／啟動、Bybit 是否保留、Deribit 哪些真測過、FIX 到哪一層、阻擋項與下一步。不得把模板內所有核取方塊自動勾滿。
+`CODEX_HANDOFF.md` must be written in Traditional Chinese and explain: what changed, how to build/start, whether Bybit remained intact, which Deribit features were tested against real Testnet, the FIX validation level, blockers, and next steps. Do not automatically mark every template checkbox complete.
 
-**期待最終專案能證明的是：兩個真實 Testnet 的連線與訂單生命週期，以及可解釋、可測試的故障恢復。不是接了兩個 URL 就稱為多交易所交易平台。**
+**The final project should demonstrate two real Testnet integrations with order lifecycles plus explainable and testable failure recovery. Merely connecting to two URLs is not enough to call it a multi-venue trading platform.**
 
 ---
 
-## 20. 官方資料來源與核對規則
+## 20. Official Sources and Verification Rules
 
-以下來源於 2026-09-09 查閱。實作時再次核對對應 method，保存核對日期、現行／upcoming 分支與去識別化回應證據。只用官方文件確認協定；範例數值不是永久商品規格。
+The following sources were reviewed on 2026-09-09. Re-check the relevant method during implementation and preserve the verification date, current/upcoming documentation branch, and sanitized response evidence. Use official documentation for protocol confirmation; example values are not permanent instrument specifications.
 
-- **[R1]** Deribit Quickstart：介面、獨立 Testnet、端點及範例。  
+- **[R1]** Deribit Quickstart: interfaces, independent Testnet, endpoints, and examples.
   https://docs.deribit.com/articles/deribit-quickstart
-- **[R2]** Deribit JSON-RPC 協定：HTTP／WS、envelope、transport 限制。  
+- **[R2]** Deribit JSON-RPC protocol: HTTP/WS, envelope, transport constraints.
   https://docs.deribit.com/articles/json-rpc-overview
-- **[R3]** Authentication／public auth：token、scope 與續期。  
-  https://docs.deribit.com/articles/authentication  
+- **[R3]** Authentication/public auth: tokens, scope, and refresh.
+  https://docs.deribit.com/articles/authentication
   https://docs.deribit.com/api-reference/authentication/public-auth
-- **[R4]** Buy：amount 語意、回應 order／trades、訂單選項。  
+- **[R4]** Buy: amount semantics, order/trades response, order options.
   https://docs.deribit.com/api-reference/trading/private-buy
-- **[R5]** 商品 metadata。  
-  https://docs.deribit.com/api-reference/market-data/public-get_instruments  
+- **[R5]** Instrument metadata.
+  https://docs.deribit.com/api-reference/market-data/public-get_instruments
   https://docs.deribit.com/api-reference/market-data/public-get_instrument
-- **[R6]** Connection management：scope、心跳與生命週期。  
+- **[R6]** Connection management: scope, heartbeat, lifecycle.
   https://docs.deribit.com/articles/connection-management-best-practices
-- **[R7]** Rate limits：credit model、10028 與帳戶額度。  
+- **[R7]** Rate limits: credit model, 10028, account quota.
   https://docs.deribit.com/articles/rate-limits
-- **[R8]** Orderbook snapshot／delta／change ID。  
+- **[R8]** Order book snapshot/delta/change ID.
   https://docs.deribit.com/subscriptions/orderbook/bookinstrument_nameinterval
-- **[R9]** WebSocket heartbeat／test_request。  
+- **[R9]** WebSocket heartbeat/test_request.
   https://docs.deribit.com/api-reference/session-management/public-set_heartbeat
-- **[R10]** Private changes：orders／trades／positions。  
+- **[R10]** Private changes: orders/trades/positions.
   https://docs.deribit.com/subscriptions/user/userchangesinstrument_nameinterval
-- **[R11]** 依 label 查多筆近期訂單。  
+- **[R11]** Query multiple recent orders by label.
   https://docs.deribit.com/api-reference/trading/private-get_order_state_by_label
-- **[R12]** Edit by label：只在剛好一張開放訂單時適用。  
+- **[R12]** Edit by label: valid only when exactly one open order matches.
   https://docs.deribit.com/api-reference/trading/private-edit_by_label
-- **[R13]** Cancel on Disconnect 設定與作用範圍。  
-  https://docs.deribit.com/api-reference/session-management/private-enable_cancel_on_disconnect  
+- **[R13]** Cancel-on-Disconnect settings and scope.
+  https://docs.deribit.com/api-reference/session-management/private-enable_cancel_on_disconnect
   https://docs.deribit.com/api-reference/session-management/private-get_cancel_on_disconnect
-- **[R14]** 訂單歷史、未成交取消單與分頁。  
+- **[R14]** Order history, cancelled-unfilled orders, pagination.
   https://docs.deribit.com/api-reference/trading/private-get_order_history_by_currency
-- **[R15]** 成交依商品查詢及分頁。  
+- **[R15]** Execution query by instrument and pagination.
   https://docs.deribit.com/api-reference/trading/private-get_user_trades_by_instrument
-- **[R16]** 近期／歷史查詢、索引延遲。  
+- **[R16]** Recent/historical queries and indexing delay.
   https://docs.deribit.com/articles/accessing-historical-trades-orders
-- **[R17]** Derivatives positions。  
+- **[R17]** Derivatives positions.
   https://docs.deribit.com/api-reference/account-management/private-get_positions
-- **[R18]** Account summary。  
+- **[R18]** Account summary.
   https://docs.deribit.com/api-reference/account-management/private-get_account_summary
-- **[R19]** 現行 FIX overview、Testnet TLS 與標頭。  
+- **[R19]** Current FIX overview, Testnet TLS, headers.
   https://docs.deribit.com/fix-api/production/overview
-- **[R20]** Deribit FIX Logon、認證與選項。  
+- **[R20]** Deribit FIX Logon, authentication, options.
   https://docs.deribit.com/fix-api/production/logon
-- **[R21]** Deribit FIX Resend Request。  
+- **[R21]** Deribit FIX Resend Request.
   https://docs.deribit.com/fix-api/production/resend-request
-- **[R22]** Deribit FIX Sequence Reset。  
+- **[R22]** Deribit FIX Sequence Reset.
   https://docs.deribit.com/fix-api/production/sequence-reset
-- **[R23]** Deribit FIX New Order Single。  
+- **[R23]** Deribit FIX New Order Single.
   https://docs.deribit.com/fix-api/production/new-order-single
-- **[R24]** Deribit FIX Cancel／Replace。  
-  https://docs.deribit.com/fix-api/production/order-cancel-request  
+- **[R24]** Deribit FIX Cancel/Replace.
+  https://docs.deribit.com/fix-api/production/order-cancel-request
   https://docs.deribit.com/fix-api/production/order-cancel-replace
-- **[R25]** Deribit FIX Execution Reports、ID 及數量欄位。  
+- **[R25]** Deribit FIX Execution Reports, IDs, and quantity fields.
   https://docs.deribit.com/fix-api/production/execution-reports
-- **[R26]** Currency 參數與 spot／derivatives 的帳戶差異。  
+- **[R26]** Currency parameters and spot/derivatives account differences.
   https://docs.deribit.com/articles/currency-parameter
-- **[R27]** Bybit 下單 ACK、orderLinkId 及商品參數。  
+- **[R27]** Bybit order ACK, orderLinkId, and product parameters.
   https://bybit-exchange.github.io/docs/v5/order/create-order
-- **[R28]** Bybit execution／fees。  
+- **[R28]** Bybit execution/fees.
   https://bybit-exchange.github.io/docs/v5/websocket/private/execution
-- **[R29]** Deribit cancel。  
+- **[R29]** Deribit cancel.
   https://docs.deribit.com/api-reference/trading/private-cancel
-- **[R30]** Deribit edit。  
+- **[R30]** Deribit edit.
   https://docs.deribit.com/api-reference/trading/private-edit
-- **[R31]** Deribit open orders by instrument。  
+- **[R31]** Deribit open orders by instrument.
   https://docs.deribit.com/api-reference/trading/private-get_open_orders_by_instrument
-- **[R32]** Deribit trades by order。  
+- **[R32]** Deribit trades by order.
   https://docs.deribit.com/api-reference/trading/private-get_user_trades_by_order
-- **[R33]** Deribit ticker。  
+- **[R33]** Deribit ticker.
   https://docs.deribit.com/api-reference/market-data/public-ticker
-- **[R34]** Bybit FIX，僅作差異核對，不套用到 Deribit。  
+- **[R34]** Bybit FIX, for comparison only; do not apply to Deribit.
   https://bybit-exchange.github.io/docs/fix-api/guide
 
 ---
 
-## 附錄：交給 Codex 的起始提示
+## Appendix: Starting Prompt for Codex
 
 ```text
-請先閱讀本儲存庫的 AGENTS.md、README、現有規格、交接文件，以及
-DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md。
+First read this repository's AGENTS.md, README, existing specifications,
+handoff documents, and DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md.
 
-這是已有 Bybit 程式的增量改版，請勿重新開一個不相干的專案。
-先完成 Phase 0 基線盤點，確認真實功能與測試狀況，再依序加入 Deribit。
-保留 Bybit 指令、設定、儲存資料和既有 dashboard（若有）。
+This is an incremental upgrade to an existing Bybit implementation.
+Do not create a separate unrelated project.
+First complete the Phase 0 baseline audit to determine the actual
+features and test status, then add Deribit in order.
+Preserve existing Bybit commands, configuration, stored data, and
+dashboard if one exists.
 
-先完成 Deribit HTTP JSON-RPC + WebSocket、訂單意圖／去重／恢復、
-多交易所隔離及唯讀彙總，再接續 Deribit FIX dialect 與測試。
-不要把 Deribit label 當成交易所冪等鍵，不要混用 USD 面額與 BTC 數量，
-不要直接套用 Bybit 的 FIX 認證與恢復規則。
+First complete Deribit HTTP JSON-RPC + WebSocket, order-intent /
+deduplication / recovery, multi-venue isolation, and read-only aggregation.
+Then continue with the Deribit FIX dialect and tests.
+Do not treat Deribit label as a venue idempotency key.
+Do not mix USD notional with BTC quantity.
+Do not reuse Bybit FIX authentication and recovery rules.
 
-所有外部連線只用 Testnet；不使用曾貼在對話中的舊 key；
-沒有新憑證時繼續本機實作和測試，將外部驗證標記 BLOCKED。
-沒有明確授權及測試開關不得下單，不可自動跨 transport 或跨交易所重送。
+All external connectivity must use Testnet only.
+Do not use old keys previously pasted in conversation.
+When new credentials are unavailable, continue local implementation
+and testing and mark external validation BLOCKED.
+Do not place orders without explicit authorization and test flags.
+Never automatically retry across transports or venues.
 
-每個階段執行測試並更新 IMPLEMENTATION_STATUS.md。
-最後交付可執行的 build／啟動方式、增量程式、測試、驗證報告、能力矩陣，
-並用繁體中文提供 CODEX_HANDOFF.md，清楚區分 mock 通過與真實 Testnet 通過。
+Run tests and update IMPLEMENTATION_STATUS.md after every phase.
+Finally deliver executable build/start instructions, incremental code,
+tests, validation report, capability matrix, and a Traditional Chinese
+CODEX_HANDOFF.md clearly separating mock success from real Testnet success.
 ```

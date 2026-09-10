@@ -1,38 +1,45 @@
-# V3 Codex 入口
+# V3 Codex Entry Point
 
-正式規格：`TRADING_CONSOLE_V3_CHANGE_SPEC.md`。
+Canonical specification: `TRADING_CONSOLE_V3_CHANGE_SPEC.md`.
 
-這是既有 Bybit + Deribit 程式的增量變更，不是新專案。先閱讀儲存庫的 `AGENTS.md`、README、V2 規格及交接文件，再做 Phase 0。
+This is an incremental change to the existing Bybit + Deribit program, not a new project. Read the repository's `AGENTS.md`, README, V2 specification, and handoff documents before starting Phase 0.
 
 ```text
-請依 TRADING_CONSOLE_V3_CHANGE_SPEC.md 與 VENUEWIRE_V3_1_PUBLIC_DEMO_SUPPLEMENT.md 開始實作。
-先讀 CODEX_START_V3_1.md；衝突處以補充文件 §26 已確認決策為準。
+Implement the changes defined in TRADING_CONSOLE_V3_CHANGE_SPEC.md and
+VENUEWIRE_V3_1_PUBLIC_DEMO_SUPPLEMENT.md.
+Read CODEX_START_V3_1.md first. Where the documents conflict, the confirmed
+decisions in §26 of the supplement take precedence.
 
-保留既有 adapters、CLI、FIX、訂單追蹤、成交去重、資料與測試。
-加入 dotenv、env 固定帳密登入、Vue Web、即時帳戶／估值、
-四個方向的 Spot Quick Trade Modal、Review/Confirm、Limit IOC 0.5% 保護。
+Preserve the existing adapters, CLI, FIX support, order tracking, execution
+deduplication, data, and tests.
+Add dotenv support, fixed-credential login configured through environment
+variables, a Vue Web UI, live account/valuation data, four-direction Spot
+Quick Trade modals, Review/Confirm, and Limit IOC orders with 0.5% protection.
 
-Nginx 已處理 SSL，並與 Go 位於不同機器；Go 綁 private IP，
-不提供自己的 TLS，只信任指定 Nginx，實作 Secure session/CSRF/WSS。
+Nginx already terminates SSL and runs on a different machine from Go. Bind Go
+to a private IP. Do not make Go serve TLS. Trust only the specified Nginx and
+implement secure sessions, CSRF protection, and WSS support.
 
-依 Phase 0–7 執行，逐階段測試並更新 IMPLEMENTATION_STATUS.md。
-沒有憑證或部署環境時完成本機工作，把外部驗證標 BLOCKED/NOT_RUN。
-未經另外明確授權不得執行 Testnet 下單、改 Nginx／防火牆或改帳戶設定。
+Execute Phases 0–7, test each phase, and update IMPLEMENTATION_STATUS.md.
+When credentials or a deployment environment are unavailable, complete the
+local work and mark external verification BLOCKED/NOT_RUN.
+Do not place Testnet orders, modify Nginx/firewall configuration, or change
+account settings without separate explicit authorization.
 
-最後交付實際 build/start 指令、測試／部署文件、
-TEST_REPORT_V3.md 與繁體中文 CODEX_HANDOFF_V3.md。
+The final delivery must include the actual build/start commands, test and
+deployment documentation, TEST_REPORT_V3.md, and CODEX_HANDOFF_V3.md.
 ```
 
-## 套件內容
+## Package Contents
 
-| 檔案 | 用途 |
+| File | Purpose |
 |---|---|
-| `TRADING_CONSOLE_V3_CHANGE_SPEC.md` | 唯一正式 V3 增量規格，包含流程、契約、限制與驗收 |
-| `.env.example` | 新設定範例；秘密為空，不覆蓋原檔 |
-| `deploy/nginx-http-map.conf` | http scope 的 WebSocket Connection map |
-| `deploy/nginx-proxy-common.conf` | 各 location 共用 headers／timeout／no-retry 設定 |
-| `deploy/nginx-https-locations.conf` | 合併到現有 SSL server 的 location 範例 |
-| `deploy/DEPLOYMENT_NOTES.md` | 跨機器位址、ACL、帳密與展示模式說明 |
-| `reference/account-balance-reference.png` | 使用者提供的資產頁參考；不能當真實 API 資料或宣稱已實作 |
+| `TRADING_CONSOLE_V3_CHANGE_SPEC.md` | The single canonical V3 incremental specification, including flows, contracts, constraints, and acceptance criteria |
+| `.env.example` | New configuration example; secrets are empty and it does not overwrite the original file |
+| `deploy/nginx-http-map.conf` | WebSocket `Connection` map for the Nginx `http {}` scope |
+| `deploy/nginx-proxy-common.conf` | Shared headers, timeout, and no-retry settings for each location |
+| `deploy/nginx-https-locations.conf` | Example locations to merge into the existing SSL server |
+| `deploy/DEPLOYMENT_NOTES.md` | Cross-machine addressing, ACL, credential, and demo-mode guidance |
+| `reference/account-balance-reference.png` | User-provided asset-page reference; it is not real API data and must not be presented as implemented behavior |
 
-尚未檢視實際儲存庫，本套件沒有修改／執行使用者程式，也沒有登入或交易。
+The actual repository had not been inspected when this package was prepared. This package did not modify or run user code, log in, or trade.

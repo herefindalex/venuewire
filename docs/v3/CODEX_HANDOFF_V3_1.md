@@ -1,39 +1,40 @@
-# VenueWire V3.1 公開 Testnet Web Console 交接
+# VenueWire V3.1 Public Testnet Web Console Handoff
 
-更新日期：2026-09-10
-交付狀態：**Testnet MVP 已部署並完成外部驗證**
+Updated: 2026-09-10
 
-## 已完成內容
+Delivery status: **Testnet MVP deployed and externally verified**
 
-VenueWire 現在以登入式 Vue 3 Web Console 作為面試展示主介面，Go 後端繼續沿用既有 Bybit／Deribit HTTP、JSON-RPC、WebSocket、FIX、持久化資料與 CLI。沒有重建 connector，也沒有把 V2 的合約／FIX 語意誤套到新的 Spot Quick Trade。
+## Completed Work
 
-- 程式可用 `--env-file` 自行載入 dotenv；已存在的 OS 變數（包含明確空值）優先。
-- 固定帳密登入、絕對 session expiry、server-side logout、Secure/HttpOnly/SameSite cookie、CSRF、Host/Origin 與 trusted proxy 邊界已完成。
-- Browser 可獨立切換 Bybit／Deribit，讀取後端 cache 的 normalized account snapshot；Browser 數量不直接觸發交易所 API。
-- 首頁分開顯示 exchange-reported USD 與 public-price local USD mark。部分定價只顯示 priced subtotal；USDT 不假定等於一美元。
-- Browser WebSocket 提供初始 snapshot、連續 sequence、process instance ID、revision 防倒退、bounded resync，以及 account／valuation／trade／health events。
-- Quick Trade 固定支援 Bybit BTC↔USDT、ETH↔USDT 與 Deribit BTC↔USDC Spot。Review → Confirm 使用五秒 quote、0.5% 保護、Limit IOC、exact decimal、metadata／fee／capacity 驗證及 no-borrow submission。
-- Confirm 先持久化 intent、冪等索引、quota 與 reservation，再只送一次。`Unknown` 不重送且保留唯一 concurrent slot；重啟、private reconnect、週期與 Recheck 共用 serialized reconciliation。
-- Filled、partial-cancel、zero-fill、Rejected、Unknown、實際 fee、net received 與 balance sync 分離語意已完成。
-- System Status 顯示 public/private receive/event age、reconnect、REST order RTT、ACK→order/execution event、rate limit、reconciliation 狀態與 discrepancy。
-- Recent Trades 為共用 demo history；重新登入或 Browser reload 可看到未完成交易。Recheck 只查詢，不會 resubmit／force resolve。
-- V3.1 §23 的 15 個故障情境皆有 deterministic local fixtures。
+VenueWire now uses an authenticated Vue 3 Web Console as its primary interview-demo interface. The Go backend continues to use the existing Bybit/Deribit HTTP, JSON-RPC, WebSocket, FIX, persisted data, and CLI components. The connectors were not rebuilt, and the V2 contract/FIX semantics were not incorrectly applied to the new Spot Quick Trade flow.
 
-## 已驗證結果
+- The program can load dotenv itself through `--env-file`; existing OS variables, including explicitly empty values, take precedence.
+- Fixed-credential login, absolute session expiry, server-side logout, Secure/HttpOnly/SameSite cookies, CSRF protection, Host/Origin validation, and the trusted-proxy boundary are complete.
+- The Browser can switch independently between Bybit and Deribit and reads normalized account snapshots from the backend cache. Browser traffic does not directly trigger venue API calls.
+- The home page displays exchange-reported USD separately from the local public-price USD mark. Partial pricing shows only the priced subtotal; USDT is not assumed to equal one US dollar.
+- The Browser WebSocket provides an initial snapshot, continuous sequence numbers, process instance ID, revision rollback protection, bounded resync, and account/valuation/trade/health events.
+- Quick Trade supports Bybit BTC↔USDT and ETH↔USDT, plus Deribit BTC↔USDC Spot. Review → Confirm uses a five-second quote, 0.5% protection, Limit IOC, exact decimals, metadata/fee/capacity validation, and no-borrow submission.
+- Confirm persists the intent, idempotency index, quota, and active slot before sending exactly once. `Unknown` is not resubmitted and retains the sole concurrent slot. Startup, private reconnect, periodic recovery, and Recheck share serialized reconciliation.
+- The distinct semantics for Filled, partial-cancel, zero-fill, Rejected, Unknown, actual fees, net received amount, and balance sync are implemented.
+- System Status exposes actual public/private receive/event age, reconnects, REST order RTT, ACK-to-order/execution event timing, rate limits, reconciliation status, and discrepancies.
+- Recent Trades is shared demo history. Incomplete trades remain visible after a new login or Browser reload. Recheck only queries the venue; it never resubmits or force-resolves.
+- All 15 V3.1 §23 failure scenarios have deterministic local fixtures.
+
+## Verified Results
 
 ```text
-go test ./...                                        PASS：419 tests / 23 packages
-go test -race ./... -count=1 -timeout=240s           PASS：390 tests / 23 packages
+go test ./...                                        PASS: 419 tests / 23 packages
+go test -race ./... -count=1 -timeout=240s           PASS: 419 tests / 23 packages
 go vet ./...                                          PASS
 npm --prefix web run typecheck                        PASS
-npm --prefix web test -- --run                        PASS：13 tests / 5 files
+npm --prefix web test -- --run                        PASS: 13 tests / 5 files
 npm --prefix web run build                            PASS
-make build                                             PASS：bin/venuewire
+make build                                             PASS: bin/venuewire
 ```
 
-完整逐項證據見 `docs/v3/TEST_REPORT_V3.md`；階段歷史見根目錄 `IMPLEMENTATION_STATUS.md`。
+See `docs/v3/TEST_REPORT_V3.md` for complete evidence by requirement and the root `IMPLEMENTATION_STATUS.md` for phase history.
 
-## 建置與啟動
+## Build and Start
 
 ```bash
 make build
@@ -41,60 +42,60 @@ sha256sum ./bin/venuewire
 ./bin/venuewire --env-file /absolute/path/to/venuewire.env web
 ```
 
-未指定 `--env-file` 時，程式依 executable 位置先讀 `bin/.env`，再讀上一層 `.env`；同名檔案設定以 binary 同目錄優先，OS environment 仍高於兩者。因此也可直接執行 `./bin/venuewire web`，不受目前 working directory 影響。
+Without `--env-file`, the program looks relative to the executable: it reads `bin/.env` first and then the parent `.env`. Settings in the binary's directory take precedence when the same key appears in both files, while the OS environment remains above both. You can therefore run `./bin/venuewire web` directly without depending on the current working directory.
 
-`make build` 會執行 locked frontend install、typecheck/build 與 `webui` embed Go build。單純 CLI 仍可獨立建置：
+`make build` performs a locked frontend install, typecheck/build, and the `webui`-embedded Go build. The CLI can still be built separately:
 
 ```bash
 go build -o ./bin/venuewire ./cmd/venuewire
 ```
 
-不要先 `source .env`。從根目錄 `.env.example` 建立 mode-600 的未追蹤設定檔；`docs/3_web/.env.example` 是相同內容的規格附件。填入：
+Do not `source .env` first. Create an untracked mode-600 configuration file from the root `.env.example`; `docs/3_web/.env.example` is the identical specification attachment. Supply:
 
-- Go 主機自己的 private `WEB_HOST` 與 `WEB_PORT`。
-- 唯一 HTTPS `WEB_PUBLIC_ORIGIN`。
-- Go 實際看到的 Nginx `/32` `WEB_TRUSTED_PROXY_CIDRS`。
-- `WEB_USERNAME`、至少 12 字元的 `WEB_PASSWORD`、至少 32 bytes entropy 的 `WEB_SESSION_SECRET`。
-- enabled venues 的 Testnet credentials；Deribit 沿用 `DERIBIT_API_KEY`／`DERIBIT_API_SECRET`。
+- The Go host's own private `WEB_HOST` and `WEB_PORT`.
+- The single HTTPS `WEB_PUBLIC_ORIGIN`.
+- The Nginx `/32` that Go actually sees in `WEB_TRUSTED_PROXY_CIDRS`.
+- `WEB_USERNAME`, a `WEB_PASSWORD` of at least 12 characters, and a `WEB_SESSION_SECRET` with at least 32 bytes of entropy.
+- Testnet credentials for enabled venues; Deribit continues to use `DERIBIT_API_KEY` and `DERIBIT_API_SECRET`.
 
-先保持 `WEB_TRADING_ENABLED=false`。V3.1 canonical quote 設定為 `QUOTE_TTL=5s`，Demo limits 使用文件中的 session 10、rolling hour 30、global concurrent 1，以及各 venue source-asset caps。
+Keep `WEB_TRADING_ENABLED=false` initially. The V3.1 canonical quote setting is `QUOTE_TTL=5s`. Demo limits are 10 trades per session, 30 in the global rolling hour, one global concurrent trade, and the documented per-venue source-asset caps.
 
-## 部署邊界
+## Deployment Boundary
 
-正式拓撲必須是 Browser HTTPS/WSS → 既有 Nginx → private HTTP → VenueWire Go。Go 不做 TLS，也不能將 port 直接公開至 Internet。
+The production topology must be Browser HTTPS/WSS → existing Nginx → private HTTP → VenueWire Go. Go does not terminate TLS, and its port must not be exposed directly to the Internet.
 
-參考檔案：
+Reference files:
 
 - `docs/3_web/deploy/nginx-http-map.conf`
 - `docs/3_web/deploy/nginx-proxy-common.conf`
 - `docs/3_web/deploy/nginx-https-locations.conf`
 - `docs/v3/DEPLOYMENT.md`
 
-Nginx 必須 overwrite XFF/Real-IP、保留公開 Host、禁止 upstream retry 重送 trade POST，並支援 `/api/ws` upgrade。只有部署人員核對真實 IP、ACL、既有 locations 與憑證後才能執行 `nginx -t`／reload。
+Nginx must overwrite XFF/Real-IP, preserve the public Host, prevent upstream retry of trade POST requests, and support the `/api/ws` upgrade. Only the deployment operator may run `nginx -t` or reload after verifying the actual IPs, ACLs, existing locations, and certificates.
 
-## 已完成的外部驗證
+## Completed External Verification
 
-- Bybit／Deribit Testnet account、public/private stream 與公開 HTTPS/WSS 已實測。
-- Deribit `BTC_USDC` 與 Bybit `BTCUSDT` 小額 Limit IOC 已取得 venue order ID，並保存 terminal fill、average price、fee 與 balance sync；Deribit 在服務重啟後再次 recheck 成功。
-- Bybit `ETHUSDT` 雙向與 Deribit `BTC_USDC` 雙向 route 已產生 executable quote；stale book 維持 fail closed。
-- Headless Chrome 已驗證登入／登出、venue switching、route options、quote expiry、About、桌面／mobile layout、對比、zebra rows 與無登入後 console errors。
-- 操作者回報 `nginx -t` 通過並完成 reload；本程序沒有直接讀取 privileged Nginx／host firewall 設定。
+- Bybit/Deribit Testnet accounts, public/private streams, and public HTTPS/WSS were exercised.
+- Small Limit IOC orders on Deribit `BTC_USDC` and Bybit `BTCUSDT` returned venue order IDs and persisted terminal fills, average prices, fees, and balance sync. Deribit also reconciled successfully after a service restart.
+- Both Bybit `ETHUSDT` directions and both Deribit `BTC_USDC` directions produced executable quotes; stale books continued to fail closed.
+- Headless Chrome verified login/logout, venue switching, route options, quote expiry, About, desktop/mobile layouts, contrast, zebra rows, and no post-login console errors.
+- The operator reported a passing `nginx -t` and completed reload. This process did not directly read privileged Nginx or host-firewall configuration.
 
-## 外部驗證時的操作原則
+## Rules for External Verification
 
-1. 先以 read-only 模式驗證兩家 account snapshot、public/private stream freshness 與 WSS。
-2. 核對帳戶現有 open orders、balances、API permissions 與 Demo caps。
-3. 取得明確 Testnet 下單授權後才切換 `WEB_TRADING_ENABLED=true` 及必要 venue gate。
-4. 每次只做已選定的小額方向，保存 VenueWire/client/venue ID 與獨立 reconcile 證據。
-5. 如果結果為 `Unknown`，保留它並用 Recheck 查詢；絕不可再次 Confirm 或自行解除 slot。
-6. 截圖／錄影前移除帳密、cookie、account ID、hostname、private IP、request auth、API/FIX secret。
-7. 測完將 Web trading 關閉；任何 cleanup 都必須先確認 connector ownership 與獨立終態。
+1. Start in read-only mode and verify both account snapshots, public/private stream freshness, and WSS.
+2. Check existing open orders, balances, API permissions, and Demo caps.
+3. Enable `WEB_TRADING_ENABLED=true` and the necessary venue gate only after receiving explicit authorization for Testnet orders.
+4. Execute only the selected small direction and preserve VenueWire/client/venue IDs plus independent reconciliation evidence.
+5. If the outcome is `Unknown`, retain it and query through Recheck. Never Confirm again or release the slot manually.
+6. Remove credentials, cookies, account IDs, hostnames, private IPs, request authorization, and API/FIX secrets before screenshots or recordings.
+7. Disable Web trading after testing. Before any cleanup, verify connector ownership and an independent terminal state.
 
-## MVP 的明確限制
+## Explicit MVP Limitations
 
-- 面試者只使用 Web；CLI 是工程測試介面，不做高強度 DX 投資。
-- 單一 shared login 與 shared Recent Trades 是已確認的 Demo 設計。
-- 不提供 public fault simulator。
-- 不做 CLI/Web 強一致、多 process/multi-instance quota coordination。
-- 不支援 Mainnet、轉帳、提款、策略、自動交易、套利線、完整 order book、第三交易所、smart routing 或 cross-venue failover。
-- 此驗證只適用目前 Testnet 部署；更換帳戶、host、Nginx 或網路邊界後必須重跑外部驗證。
+- Interviewers use only the Web UI. The CLI remains an engineering test interface and does not receive intensive DX work.
+- One shared login and shared Recent Trades are confirmed Demo design choices.
+- There is no public fault simulator.
+- There is no strong CLI/Web consistency or multi-process/multi-instance quota coordination.
+- Mainnet, transfers, withdrawals, strategies, automated trading, arbitrage lines, a full order book, a third venue, smart routing, and cross-venue failover are unsupported.
+- This verification applies only to the current Testnet deployment. Repeat external verification after changing the account, host, Nginx, or network boundary.

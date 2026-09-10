@@ -1,28 +1,28 @@
-# Bybit + Deribit 多交易所升級交接
+# Bybit + Deribit Multi-Venue Upgrade Handoff
 
-更新日期：2026-09-09
+Updated: 2026-09-09
 
-## 完成內容
+## Completed Work
 
-本專案在既有 Bybit Testnet connector 中增量加入 Deribit，沒有另開不相干的程式，也沒有移除 Bybit。未指定 `--venue` 時，舊 Bybit CLI 行為仍是預設。
+This project incrementally added Deribit to the existing Bybit Testnet connector. It did not create an unrelated program or remove Bybit. When `--venue` is omitted, the legacy Bybit CLI behavior remains the default.
 
-- Phase 0–7：完成 R1 的 venue routing、複合 identity、Deribit HTTP/WS、plan→execute、持久化、恢復、唯讀彙總與外部生命週期。
-- Phase 8–9：完成獨立 Deribit FIX dialect、本機 mock、真實 Testnet Logon 與 D/G/F order flow。
-- Phase 10：補齊 COD、分段 tick、private-event reducer、完整 WS create/edit/cancel、命令級 E2E 與共享文件。
+- Phases 0–7: completed R1 venue routing, composite identity, Deribit HTTP/WS, plan→execute, persistence, recovery, read-only aggregation, and external lifecycle behavior.
+- Phases 8–9: completed an independent Deribit FIX dialect, local mock, real Testnet Logon, and D/G/F order flow.
+- Phase 10: completed COD, tiered ticks, the private-event reducer, full WS create/edit/cancel, command-level E2E, and shared documentation.
 
-主要正確性保證：
+Primary correctness guarantees:
 
-- identity 使用 venue/environment/account/namespace/native ID，兩所同號 order/trade 不會互相覆蓋。
-- Deribit JSON-RPC 驗證 `jsonrpc`、request ID、result/error；token refresh 採 single-flight，只有唯讀呼叫可在 auth/rate-limit 條件下有界重試。
-- Deribit HTTP/WS 數量與價格以 JSON number 傳送，內部驗證使用精確 decimal，不用 `float64` 做交易計算。
-- `BTC-PERPETUAL`/`ETH-PERPETUAL` 的 HTTP/WS amount 是 USD notional，結算與費用仍是原生 BTC/ETH。Deribit 帳戶雖有 USDT，也不能把這兩個反向永續合約假裝成 USDT 結算。
-- metadata 保留 `tick_size_steps`；plan 依價格所在區間選有效 tick，在邊界不默默放大或四捨五入。
-- Deribit 新單必須先 plan，再於 TTL 內 `execute --confirm`。HTTP、WS、FIX transport 都是明確選擇，失敗時不換 transport 重送。
-- HTTP、WS、FIX 的 create/edit/cancel 都以另一條 HTTP JSON-RPC read 驗證；ACK 本身永遠不算完成證據。
-- private WS 解析單一 `user.changes` 中所有 orders/trades/positions；orders 與 canonical `trade_id` 走 reconciliation 使用的同一 reducer，重複費用不會再入帳。
-- cleanup 只處理本次 connector-owned exposure，使用 reduce-only，最後再次讀取 position 為零。
+- Identity includes venue/environment/account/namespace/native ID, so equal order/trade IDs from two venues cannot overwrite one another.
+- Deribit JSON-RPC validates `jsonrpc`, request ID, and result/error. Token refresh uses single-flight, and only read-only calls receive bounded retries under auth/rate-limit conditions.
+- Deribit HTTP/WS quantities and prices are sent as JSON numbers. Internal validation uses exact decimals; trading calculations do not use `float64`.
+- HTTP/WS `amount` for `BTC-PERPETUAL` and `ETH-PERPETUAL` is USD notional, while settlement and fees remain native BTC/ETH. A Deribit account holding USDT does not make these inverse perpetuals USDT-settled.
+- Metadata preserves `tick_size_steps`. The plan selects the valid tick for the current price tier and does not silently widen or round across a boundary.
+- A new Deribit order must be planned first and then run through `execute --confirm` within its TTL. HTTP, WS, and FIX are explicit transport choices; a failed request is never resent through another transport.
+- HTTP, WS, and FIX create/edit/cancel operations are verified through an independent HTTP JSON-RPC read. An ACK alone is never completion evidence.
+- The private WS parser handles every order/trade/position in one `user.changes` message. Orders and canonical `trade_id` values pass through the same reducer used by reconciliation, preventing duplicate fee application.
+- Cleanup touches only exposure owned by this connector run, uses reduce-only, and finishes by reading the position again to verify zero.
 
-## Build 與設定
+## Build and Configuration
 
 ```bash
 go build -o ./bin/venuewire ./cmd/venuewire
@@ -34,21 +34,21 @@ set +a
 ./bin/venuewire help
 ```
 
-Deribit 使用 `DERIBIT_API_KEY` 與 `DERIBIT_API_SECRET`；JSON-RPC 與 FIX 共用這組 Testnet client credentials。不要把值寫進程式、文件、log 或 commit。`.env` 已由 `.gitignore` 排除，本次工作沒有修改或刪除 `.env`。
+Deribit uses `DERIBIT_API_KEY` and `DERIBIT_API_SECRET`; JSON-RPC and FIX share these Testnet client credentials. Never put their values in code, documentation, logs, or commits. `.env` is excluded by `.gitignore`; this work did not modify or delete it.
 
-`.env.example` 包含對稱 gates：
+`.env.example` contains symmetric gates:
 
-- `RUN_BYBIT_READ_TESTS`、`RUN_BYBIT_TRADING_TESTS`、`RUN_BYBIT_FIX_TESTS`
-- `RUN_DERIBIT_READ_TESTS`、`RUN_DERIBIT_TRADING_TESTS`、`RUN_DERIBIT_FIX_TESTS`
-- 所有 E2E 寫入另外要求 `RUN_MULTI_VENUE_E2E=1`
+- `RUN_BYBIT_READ_TESTS`, `RUN_BYBIT_TRADING_TESTS`, `RUN_BYBIT_FIX_TESTS`
+- `RUN_DERIBIT_READ_TESTS`, `RUN_DERIBIT_TRADING_TESTS`, `RUN_DERIBIT_FIX_TESTS`
+- Every E2E write also requires `RUN_MULTI_VENUE_E2E=1`
 
-不保留舊 `RUN_BYBIT_INTEGRATION` / `RUN_BYBIT_WS_INTEGRATION` 相容名稱。
+The old `RUN_BYBIT_INTEGRATION` and `RUN_BYBIT_WS_INTEGRATION` compatibility names are not retained.
 
-## COD 行為
+## COD Behavior
 
-`doctor` 會唯讀顯示 account-scope Cancel-on-Disconnect。`private-stream` 會在同一 WS connection 查詢 connection-scope COD，預設不修改。
+`doctor` displays account-scoped Cancel-on-Disconnect in read-only mode. `private-stream` queries connection-scoped COD on the same WS connection and does not modify it by default.
 
-如要啟用，只能明確執行：
+Enable it only with an explicit command:
 
 ```bash
 RUN_MULTI_VENUE_E2E=1 RUN_DERIBIT_TRADING_TESTS=1 \
@@ -56,11 +56,11 @@ RUN_MULTI_VENUE_E2E=1 RUN_DERIBIT_TRADING_TESTS=1 \
   --duration 10s --enable-connection-cod --confirm
 ```
 
-這不會修改 account scope。COD 也不是同步取消保證；斷線後仍須查詢 order/trade。HTTP 或其他 connection 建立的訂單不會被錯誤標為受這條 connection 保護。
+This does not modify account scope. COD is not a synchronous cancellation guarantee; order/trade state must still be queried after a disconnect. Orders created through HTTP or another connection are not incorrectly marked as protected by this connection.
 
-## 真實 Testnet 驗證
+## Real Testnet Verification
 
-最後完整 runner 在 2026-09-09T19:37Z–19:39Z 通過，build 基於 `d7f0031`，migration assertion 修正為 `d65c1cc`：
+The final full runner passed from 2026-09-09T19:37Z to 19:39Z. The build was based on `d7f0031`, with the migration assertion fixed in `d65c1cc`:
 
 ```json
 {
@@ -72,37 +72,37 @@ RUN_MULTI_VENUE_E2E=1 RUN_DERIBIT_TRADING_TESTS=1 \
 }
 ```
 
-最新 minimum-fill 費用：
+Latest minimum-fill fees:
 
-- Bybit ETHUSDT linear：entry/cleanup 都是 `0.01 ETH`；費用 `0.01367245` / `0.01367234 USDT`。
-- Deribit BTC-PERPETUAL：entry/cleanup 都是 `10 USD` notional；費用 `0.00000006` / `0.00000006 BTC`。
+- Bybit ETHUSDT linear: entry and cleanup were both `0.01 ETH`; fees were `0.01367245` and `0.01367234 USDT`.
+- Deribit BTC-PERPETUAL: entry and cleanup were both `10 USD` notional; fees were `0.00000006` and `0.00000006 BTC`.
 
-額外獨立證據：
+Additional independent evidence:
 
-- Deribit WS amend read：`verified=true`、state `open`；WS cancel read：`verified=true`、state `cancelled`。
-- private stream：connection COD query `enabled=true`、ready generation 1、收到 10 個 notifications。
-- private reducer 在隔離 state 中保存 5 張 Deribit orders、2 筆 canonical executions。
-- runner 後另以 read API 核對：Bybit/Deribit open orders 都是 0，nonzero positions 都是 0。
-- migration dry-run/apply/restore 通過，backup mode `0600`。
+- Deribit WS amend read: `verified=true`, state `open`; WS cancel read: `verified=true`, state `cancelled`.
+- Private stream: connection COD query `enabled=true`, ready generation 1, ten notifications received.
+- The private reducer stored five Deribit orders and two canonical executions in isolated state.
+- A separate read API check after the runner showed zero open orders and zero nonzero positions on both Bybit and Deribit.
+- Migration dry-run/apply/restore passed with backup mode `0600`.
 
-## FIX 驗證層級
+## FIX Verification Levels
 
-| 層級 | Deribit | 證據 |
+| Level | Deribit | Evidence |
 |---|---|---|
-| `IMPLEMENTED` | PASS | 獨立 auth/session/codec/order dialect |
-| `LOCAL_TESTED` | PASS | fixture/mock、heartbeat、resend/reset、SecurityList、D/G/F/8/9 |
-| `TESTNET_LOGON` | PASS | `fix-test.deribit.com:9883` 真實 TLS Logon/Logout |
-| `TESTNET_ORDER_FLOW` | PASS | 10 USD BTC-PERPETUAL D/G/F，JSON-RPC 獨立核對 |
+| `IMPLEMENTED` | PASS | Independent auth/session/codec/order dialect |
+| `LOCAL_TESTED` | PASS | Fixtures/mocks, heartbeat, resend/reset, SecurityList, D/G/F/8/9 |
+| `TESTNET_LOGON` | PASS | Real TLS Logon/Logout at `fix-test.deribit.com:9883` |
+| `TESTNET_ORDER_FLOW` | PASS | 10 USD BTC-PERPETUAL D/G/F, independently checked through JSON-RPC |
 
-Deribit FIX 使用 `TargetCompID=DERIBITSERVER`、32-byte nonce、strictly increasing timestamp，以及 `Base64(SHA256(RawData || client_secret))`，不是 Bybit RSA。SecurityList 先證明 JSON amount 與 FIX contracts/multiplier 的換算才允許 live order。
+Deribit FIX uses `TargetCompID=DERIBITSERVER`, a 32-byte nonce, a strictly increasing timestamp, and `Base64(SHA256(RawData || client_secret))`, not Bybit RSA. A live order is permitted only after SecurityList proves the conversion between JSON amount and FIX contracts/multiplier.
 
-Bybit FIX 本機 mock 為 PASS，但 live Bybit FIX 仍是 `BLOCKED_GATE`：沒有啟用獨立 RSA credentials/whitelist gate。不得把這項寫成 live PASS。
+The local Bybit FIX mock passed, but live Bybit FIX remains `BLOCKED_GATE`: the independent RSA credentials/whitelist gate was not enabled. Do not describe it as a live PASS.
 
-## 已知限制與下一步
+## Known Limitations and Next Steps
 
-- 沒有 dashboard/UI；Phase 0 已確認唯一既有使用者介面是 CLI，因此沒有 UI 可遷移。
-- ShellCheck 未安裝，狀態記為 `BLOCKED_TOOLING`；`bash -n` 已通過，不能把 ShellCheck 寫成 PASS。
-- 支援商品刻意限定 BTC/ETH perpetual；不含 options、dated futures、portfolio margin orchestration、cross-venue smart routing、wallet transfer 或 Mainnet。
-- Bybit live FIX 需使用者另行提供並啟用該 venue 的 RSA/whitelist access；這不影響 Deribit R2 已達 `TESTNET_ORDER_FLOW`。
+- There is no dashboard/UI. Phase 0 confirmed that the only existing user interface was the CLI, so there was no UI to migrate.
+- ShellCheck was not installed and is recorded as `BLOCKED_TOOLING`; `bash -n` passed, but ShellCheck must not be described as PASS.
+- Supported products are intentionally limited to BTC/ETH perpetuals. Options, dated futures, portfolio-margin orchestration, cross-venue smart routing, wallet transfers, and Mainnet are excluded.
+- Live Bybit FIX requires the user to provide and enable that venue's RSA/whitelist access separately. This does not change Deribit R2 having reached `TESTNET_ORDER_FLOW`.
 
-完整命令見 `docs/upgrade/DEMO.md`；逐項測試與外部證據見 `docs/upgrade/VALIDATION_REPORT.md`。
+See `docs/upgrade/DEMO.md` for complete commands and `docs/upgrade/VALIDATION_REPORT.md` for requirement-level tests and external evidence.

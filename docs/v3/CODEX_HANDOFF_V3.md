@@ -1,5 +1,5 @@
-# VenueWire V3 交接
+# VenueWire V3 Handoff
 
-V3 已由 V3.1 公開 Demo 補充規格完成與收斂。繁體中文 canonical 交接請見 [`CODEX_HANDOFF_V3_1.md`](CODEX_HANDOFF_V3_1.md)。
+V3 was completed and consolidated through the V3.1 public-demo supplement. See [`CODEX_HANDOFF_V3_1.md`](CODEX_HANDOFF_V3_1.md) for the canonical handoff.
 
-目前狀態為：**本機實作完成，外部 Testnet／split-host 部署驗證待辦**。
+Current status: **local implementation complete; external Testnet and split-host deployment verification pending**.
