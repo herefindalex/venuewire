@@ -65,7 +65,7 @@ Without `--env-file`, VenueWire searches `.env` beside the executable first (`bi
 
 The Browser must enter through the configured HTTPS Nginx origin. Go serves HTTP on its configured private interface; it does not terminate TLS and its port must not be Internet-accessible. See [V3 deployment](docs/v3/DEPLOYMENT.md).
 
-Server stderr includes one structured `http request` event per request accepted by the trusted proxy boundary. It records the request ID, method, path, status, response bytes, duration, and validated client IP. It deliberately omits query values, bodies, credentials, cookies, authorization headers, CSRF tokens, and session identifiers.
+Server stderr includes one structured `http request` event per request accepted by the trusted proxy boundary. It records the request ID, method, path, status, response bytes, duration, and validated client IP. Rejected trade operations also record a stable error code and redacted provider cause. Logs deliberately omit query values, bodies, credentials, cookies, authorization headers, CSRF tokens, and session identifiers.
 
 ## Interviewer flow
 

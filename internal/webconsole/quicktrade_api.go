@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -121,6 +122,14 @@ func (s *Server) handleConfirmTrade(w http.ResponseWriter, r *http.Request) {
 func (s *Server) writeTradeError(w http.ResponseWriter, r *http.Request, err error) {
 	var quoteErr *quicktrade.Error
 	if errors.As(err, &quoteErr) {
+		attributes := []any{
+			slog.String("requestId", requestID(r)),
+			slog.String("errorCode", quoteErr.Code),
+		}
+		if quoteErr.Err != nil {
+			attributes = append(attributes, slog.String("cause", quoteErr.Err.Error()))
+		}
+		s.logger.Warn("trade request rejected", attributes...)
 		status := http.StatusConflict
 		switch quoteErr.Code {
 		case "INVALID_REQUEST", "INVALID_AMOUNT", "INVALID_CONFIRMATION", "UNSUPPORTED_ROUTE", "INVALID_QUOTE":
