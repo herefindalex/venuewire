@@ -65,12 +65,13 @@ type Instrument struct {
 		TickSize string `json:"tickSize"`
 	} `json:"priceFilter"`
 	LotSizeFilter struct {
-		MinOrderQty string `json:"minOrderQty"`
-		MaxOrderQty string `json:"maxOrderQty"`
-		QtyStep     string `json:"qtyStep"`
-		MinNotional string `json:"minNotionalValue"`
-		MinOrderAmt string `json:"minOrderAmt"`
-		MaxOrderAmt string `json:"maxOrderAmt"`
+		BasePrecision string `json:"basePrecision"`
+		MinOrderQty   string `json:"minOrderQty"`
+		MaxOrderQty   string `json:"maxOrderQty"`
+		QtyStep       string `json:"qtyStep"`
+		MinNotional   string `json:"minNotionalValue"`
+		MinOrderAmt   string `json:"minOrderAmt"`
+		MaxOrderAmt   string `json:"maxOrderAmt"`
 	} `json:"lotSizeFilter"`
 }
 

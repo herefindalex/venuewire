@@ -108,6 +108,13 @@ func (c *Client) Instruments(ctx context.Context, category, symbol string) ([]In
 		List []Instrument `json:"list"`
 	}
 	meta, _, err := c.do(ctx, http.MethodGet, "/v5/market/instruments-info", query, nil, false, &result)
+	if err == nil && strings.EqualFold(category, "spot") {
+		for i := range result.List {
+			if strings.TrimSpace(result.List[i].LotSizeFilter.QtyStep) == "" {
+				result.List[i].LotSizeFilter.QtyStep = result.List[i].LotSizeFilter.BasePrecision
+			}
+		}
+	}
 	return result.List, meta, err
 }
 
