@@ -62,6 +62,12 @@ VenueWire loads dotenv itself; existing OS variables, including explicitly empty
 ./bin/venuewire --env-file /etc/venuewire/venuewire.env web
 ```
 
+When `--env-file` is omitted, it reads `.env` beside the executable and then `.env` in that directory's parent. The binary-local file wins duplicate file keys, while OS environment still wins both. This permits the standard `bin/.env` or project-root `.env` layouts without depending on the service working directory:
+
+```bash
+./bin/venuewire web
+```
+
 ## Nginx integration
 
 Use the reviewed reference fragments rather than creating an unrelated public server:

@@ -44,6 +44,8 @@ Prepare an untracked mode-600 file from the root `.env.example`. Keep Browser tr
 ./bin/venuewire --env-file /absolute/path/to/venuewire.env web
 ```
 
+For the standard repository layout, `./bin/venuewire web` also searches `bin/.env` and then the project-root `.env`; binary-local keys win parent-file keys and OS environment wins both.
+
 Do not demonstrate through direct public access to the Go port. Use the configured Nginx HTTPS URL so the proxy, Host, Origin, Secure cookie and WSS boundaries are real.
 
 ## 3. Read-only interviewer walkthrough

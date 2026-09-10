@@ -16,7 +16,10 @@ func TestLoadEnvironmentPreservesOSValuesIncludingEmpty(t *testing.T) {
 	t.Setenv("VENUEWIRE_DOTENV_EMPTY", "")
 	unsetAfterTest(t, "VENUEWIRE_DOTENV_ONLY")
 
-	args, err := LoadEnvironment([]string{"--env-file", path, "--venue", "bybit", "time"})
+	args, err := loadEnvironment([]string{"--env-file", path, "--venue", "bybit", "time"}, func() (string, error) {
+		t.Fatal("explicit --env-file unexpectedly requested the executable path")
+		return "", nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,13 +38,59 @@ func TestLoadEnvironmentPreservesOSValuesIncludingEmpty(t *testing.T) {
 }
 
 func TestLoadEnvironmentDefaultMissingIsAllowed(t *testing.T) {
-	t.Chdir(t.TempDir())
-	args, err := LoadEnvironment([]string{"help"})
+	executable := filepath.Join(t.TempDir(), "bin", "venuewire")
+	args, err := loadEnvironment([]string{"help"}, func() (string, error) { return executable, nil })
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(args, []string{"help"}) {
 		t.Fatalf("args = %#v", args)
+	}
+}
+
+func TestDefaultEnvironmentSearchUsesBinaryDirectoryThenParent(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(bin, ".env"), "VENUEWIRE_BIN_ONLY=bin\nVENUEWIRE_SHARED=bin\n")
+	writeTestFile(t, filepath.Join(root, ".env"), "VENUEWIRE_PARENT_ONLY=parent\nVENUEWIRE_SHARED=parent\n")
+	for _, key := range []string{"VENUEWIRE_BIN_ONLY", "VENUEWIRE_PARENT_ONLY", "VENUEWIRE_SHARED"} {
+		unsetAfterTest(t, key)
+	}
+	args, err := loadEnvironment([]string{"web"}, func() (string, error) { return filepath.Join(bin, "venuewire"), nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(args, []string{"web"}) {
+		t.Fatalf("args = %#v", args)
+	}
+	if got := os.Getenv("VENUEWIRE_BIN_ONLY"); got != "bin" {
+		t.Fatalf("binary-directory value = %q", got)
+	}
+	if got := os.Getenv("VENUEWIRE_PARENT_ONLY"); got != "parent" {
+		t.Fatalf("parent-directory value = %q", got)
+	}
+	if got := os.Getenv("VENUEWIRE_SHARED"); got != "bin" {
+		t.Fatalf("dotenv precedence = %q, want binary-directory value", got)
+	}
+}
+
+func TestDefaultEnvironmentSearchIsAtomicWhenParentIsMalformed(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(bin, ".env"), "VENUEWIRE_ATOMIC=must-not-load\n")
+	writeTestFile(t, filepath.Join(root, ".env"), "BROKEN='unterminated\n")
+	unsetAfterTest(t, "VENUEWIRE_ATOMIC")
+	if _, err := loadEnvironment(nil, func() (string, error) { return filepath.Join(bin, "venuewire"), nil }); err == nil {
+		t.Fatal("malformed parent dotenv error = nil")
+	}
+	if _, exists := os.LookupEnv("VENUEWIRE_ATOMIC"); exists {
+		t.Fatal("binary dotenv partially loaded before parent parse failure")
 	}
 }
 

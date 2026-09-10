@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,18 +30,23 @@ type Asset struct {
 }
 
 type Snapshot struct {
-	Venue                    domain.Venue `json:"venue"`
-	Environment              string       `json:"environment"`
-	AccountAlias             string       `json:"accountAlias"`
-	Revision                 uint64       `json:"revision"`
-	SnapshotAsOf             time.Time    `json:"snapshotAsOf"`
-	ExchangeReportedTotalUSD string       `json:"exchangeReportedTotalUsd,omitempty"`
-	LocalMarkedTotalUSD      string       `json:"totalUsd,omitempty"`
-	PricedSubtotalUSD        string       `json:"pricedSubtotalUsd,omitempty"`
-	ValuationBasis           string       `json:"valuationBasis"`
-	Completeness             string       `json:"completeness"`
-	UnpricedAssets           []string     `json:"unpricedAssets,omitempty"`
-	Assets                   []Asset      `json:"assets"`
+	Venue                      domain.Venue `json:"venue"`
+	Environment                string       `json:"environment"`
+	AccountAlias               string       `json:"accountAlias"`
+	AccountType                string       `json:"accountType"`
+	Revision                   uint64       `json:"revision"`
+	SnapshotAsOf               time.Time    `json:"snapshotAsOf"`
+	ExchangeReportedTotalUSD   string       `json:"exchangeReportedTotalUsd,omitempty"`
+	ExchangeReportedAsOf       time.Time    `json:"exchangeReportedAsOf,omitzero"`
+	LocalMarkedTotalUSD        string       `json:"totalUsd,omitempty"`
+	PricedSubtotalUSD          string       `json:"pricedSubtotalUsd,omitempty"`
+	ValuationBasis             string       `json:"valuationBasis"`
+	Completeness               string       `json:"completeness"`
+	UnpricedAssets             []string     `json:"unpricedAssets,omitempty"`
+	LiabilityStatus            string       `json:"liabilityStatus"`
+	HasDerivativePositions     *bool        `json:"hasDerivativePositions"`
+	DerivativePositionEvidence string       `json:"derivativePositionEvidence,omitempty"`
+	Assets                     []Asset      `json:"assets"`
 }
 
 type Provider interface {
@@ -212,6 +218,17 @@ func (m *Manager) refresh(ctx context.Context, venue domain.Venue) error {
 	snapshot.Revision = m.revision
 	snapshot.Venue = venue
 	snapshot.Environment = "testnet"
+	if strings.TrimSpace(snapshot.AccountType) == "" {
+		snapshot.AccountType = "unknown"
+	}
+	switch snapshot.LiabilityStatus {
+	case "none", "present", "unknown":
+	default:
+		snapshot.LiabilityStatus = "unknown"
+	}
+	if snapshot.HasDerivativePositions == nil && strings.TrimSpace(snapshot.DerivativePositionEvidence) == "" {
+		snapshot.DerivativePositionEvidence = "account source does not report derivative-position coverage"
+	}
 	if snapshot.SnapshotAsOf.IsZero() {
 		snapshot.SnapshotAsOf = finished
 	}
@@ -344,6 +361,10 @@ func (m *Manager) UpdateWSReceiveTimes(venue domain.Venue, publicAt, privateAt t
 
 func cloneSnapshot(source Snapshot) Snapshot {
 	copy := source
+	if source.HasDerivativePositions != nil {
+		hasDerivativePositions := *source.HasDerivativePositions
+		copy.HasDerivativePositions = &hasDerivativePositions
+	}
 	copy.Assets = append([]Asset(nil), source.Assets...)
 	copy.UnpricedAssets = append([]string(nil), source.UnpricedAssets...)
 	return copy

@@ -21,7 +21,7 @@ All routes below require the session cookie. Every state-changing route also req
 | `POST /api/venues/{venue}/account/refresh` | Coalesced bounded authoritative refresh; safe stale/error state preserves the last snapshot. |
 | `GET /api/system/status` | Per-venue REST/public WS/private WS/account sync state, receive/event ages, reconnects, order/event latency, request/rate-limit and reconciliation metrics plus non-sensitive build data. |
 
-An account snapshot carries venue, Testnet environment, alias, monotonic process revision, snapshot time, exchange-reported total, local complete total or partial priced subtotal, valuation basis/completeness/unpriced assets and asset rows. Asset quantities remain exchange-authoritative; local `usdValue` is separate from `exchangeReportedUsdValue`. Unknown decimal values are omitted rather than converted to zero.
+An account snapshot carries venue, Testnet environment, alias, account type, monotonic process revision, snapshot time, exchange-reported total/as-of time, local complete total or partial priced subtotal, valuation basis/completeness/unpriced assets, liability status, nullable derivative-position presence with evidence, and asset rows. Asset quantities remain exchange-authoritative; local `usdValue` is separate from `exchangeReportedUsdValue`. Unknown decimal values are omitted rather than converted to zero.
 
 ## Quick Trade
 

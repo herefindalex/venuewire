@@ -40,7 +40,12 @@ func (p *BybitProvider) Snapshot(ctx context.Context) (Snapshot, error) {
 		now = p.Now()
 	}
 	account := accounts[0]
-	result := Snapshot{Venue: domain.VenueBybit, Environment: "testnet", AccountAlias: p.AccountAlias, SnapshotAsOf: now, ExchangeReportedTotalUSD: account.TotalEquity, ValuationBasis: "exchange-reported USD value", Completeness: "exchange-reported"}
+	result := Snapshot{
+		Venue: domain.VenueBybit, Environment: "testnet", AccountAlias: p.AccountAlias, AccountType: account.AccountType,
+		SnapshotAsOf: now, ExchangeReportedTotalUSD: account.TotalEquity, ExchangeReportedAsOf: now,
+		ValuationBasis: "exchange-reported USD value", Completeness: "exchange-reported", LiabilityStatus: "none",
+		DerivativePositionEvidence: "wallet snapshot does not prove derivative-position absence",
+	}
 	for _, coin := range account.Coin {
 		asset := strings.ToUpper(strings.TrimSpace(coin.Coin))
 		if asset == "" {
@@ -53,6 +58,12 @@ func (p *BybitProvider) Snapshot(ctx context.Context) (Snapshot, error) {
 			result.UnpricedAssets = append(result.UnpricedAssets, asset)
 		}
 		result.Assets = append(result.Assets, Asset{Asset: asset, Balance: coin.WalletBalance, Equity: coin.Equity, Locked: coin.Locked, Liability: coin.BorrowAmount, AvailableToTrade: available, AvailableToTradeAsOf: now, AvailableStatus: status, ValuationQuantity: coin.WalletBalance, QuantityBasis: "wallet balance", ExchangeReportedUSDValue: coin.USDValue, USDValue: coin.USDValue, PriceSource: "Bybit wallet snapshot", PriceAsOf: now, Quality: quality})
+		liability, liabilityOK := nonNegativeRat(coin.BorrowAmount)
+		if !liabilityOK {
+			result.LiabilityStatus = "unknown"
+		} else if liability.Sign() > 0 && result.LiabilityStatus != "unknown" {
+			result.LiabilityStatus = "present"
+		}
 	}
 	return result, nil
 }
@@ -99,7 +110,11 @@ func (p *DeribitProvider) Snapshot(ctx context.Context) (Snapshot, error) {
 	if p.Now != nil {
 		now = p.Now()
 	}
-	result := Snapshot{Venue: domain.VenueDeribit, Environment: "testnet", AccountAlias: p.AccountAlias, SnapshotAsOf: now, ValuationBasis: "unpriced native balances", Completeness: "unpriced"}
+	result := Snapshot{
+		Venue: domain.VenueDeribit, Environment: "testnet", AccountAlias: p.AccountAlias, AccountType: "account summaries",
+		SnapshotAsOf: now, ValuationBasis: "unpriced native balances", Completeness: "unpriced", LiabilityStatus: "unknown",
+		DerivativePositionEvidence: "account summaries do not prove derivative-position absence",
+	}
 	for _, summary := range summaries {
 		asset := strings.ToUpper(strings.TrimSpace(summary.Currency))
 		if asset == "" {

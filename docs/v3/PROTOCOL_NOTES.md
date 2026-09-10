@@ -5,6 +5,7 @@ These notes describe the Web Console behavior layered on the existing V2 Bybit/D
 ## Scope and identity
 
 - Browser scope is always Testnet, one configured shared identity and one configured account alias per enabled venue.
+- Default dotenv discovery is executable-relative: `.env` beside the binary, then its parent. Binary-local keys win parent-file keys; OS environment, including explicit empty values, wins both. An explicit `--env-file` disables discovery.
 - Every trade stores VenueWire intent ID, deterministic client order ID, venue order ID when known, venue, environment, account alias, instrument and route.
 - The Browser selects a venue explicitly. Symbols never select a venue, and no order automatically fails over to another venue or transport.
 - Browser Web is the only owner of its quote, quota reservation and submission workflow. The lower-usage CLI remains independent; V3.1 deliberately does not add cross-process CLI/Web coordination.

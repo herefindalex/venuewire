@@ -81,6 +81,9 @@ func TestUsageListsEveryImplementedCommand(t *testing.T) {
 		"--venue must appear before the command",
 		"Omitting --venue preserves legacy Bybit routing",
 		"--enable-connection-cod --confirm",
+		"venuewire --env-file /etc/venuewire/venuewire.env web",
+		"reads .env beside the binary, then its parent directory",
+		"binds configured private HTTP for an HTTPS/WSS Nginx proxy",
 	} {
 		if !strings.Contains(usage, command) {
 			t.Errorf("help does not list %q", command)

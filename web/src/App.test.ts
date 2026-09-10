@@ -24,7 +24,7 @@ vi.mock('./api', async (importOriginal) => {
 });
 
 import App from './App.vue';
-import { api, type AccountView, type TradeView, type VenueStatus } from './api';
+import { api, type AccountView, type QuoteView, type TradeView, type VenueStatus } from './api';
 
 const mockedAPI = vi.mocked(api);
 
@@ -49,13 +49,18 @@ const account: AccountView = {
   venue: 'bybit',
   environment: 'testnet',
   accountAlias: 'bybit-demo',
+  accountType: 'UNIFIED',
   revision: 7,
   snapshotAsOf: '2026-09-10T20:00:00Z',
   exchangeReportedTotalUsd: '55900',
+  exchangeReportedAsOf: '2026-09-10T20:00:00Z',
   pricedSubtotalUsd: '56000',
   valuationBasis: 'public USD mark prices',
   completeness: 'partial',
   unpricedAssets: ['USDT'],
+  liabilityStatus: 'none',
+  hasDerivativePositions: null,
+  derivativePositionEvidence: 'wallet snapshot does not prove derivative-position absence',
   assets: [
     {
       asset: 'BTC',
@@ -112,6 +117,7 @@ const unknownTrade: TradeView = {
 describe('VenueWire console', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    document.body.innerHTML = '';
     localStorage.clear();
     FixtureWebSocket.instances = [];
     vi.stubGlobal('WebSocket', FixtureWebSocket);
@@ -177,16 +183,76 @@ describe('VenueWire console', () => {
     const text = wrapper.text();
     expect(text).toContain('VenueWire');
     expect(text).toContain('TESTNET');
+    expect(text).toContain('bybit-demo');
+    expect(text).toContain('Public STALE');
+    expect(text).toContain('Private LIVE');
     expect(text).toContain('Local USD mark');
     expect(text).toContain('$56000');
     expect(text).toContain('priced subtotal');
     expect(text).toContain('Exchange-reported total');
     expect(text).toContain('$55900');
+    expect(text).toContain('liabilities none · derivatives unknown');
+    expect(text).toContain('Account scope caution');
     expect(text).toContain('STALE');
     expect(text).toContain('LIMITED');
     expect(text).toContain('Unknown');
     expect(text).toContain('2.0 s');
+    expect(text).toContain('Equity');
     expect(FixtureWebSocket.instances[0]?.url).toContain('/api/ws');
+    wrapper.unmount();
+  });
+
+  it('shows the shared account store and balance sync in the trade result modal', async () => {
+    mockedAPI.me.mockResolvedValueOnce({
+      username: 'demo', csrfToken: 'csrf-fixture', expiresAt: '2026-09-10T21:00:00Z', readOnly: false,
+    });
+    mockedAPI.venues.mockResolvedValueOnce({
+      venues: [{ id: 'bybit', environment: 'testnet', accountAlias: 'bybit-demo' }], defaultVenue: 'bybit', tradingEnabled: true,
+    });
+    mockedAPI.account.mockResolvedValue({ account });
+    mockedAPI.status.mockResolvedValue({ venues: [staleStatus], build: {} });
+    mockedAPI.trades.mockResolvedValue({ trades: [] });
+    const quote: QuoteView = {
+      quoteId: 'quote-fixture', venue: 'bybit', routeId: 'bybit-usdt-btc', fromAsset: 'USDT', toAsset: 'BTC',
+      spendBudget: '100', instrument: 'BTCUSDT', side: 'Buy', baseQty: '0.001', limitPrice: '100500', timeInForce: 'IOC',
+      referenceBid: '99900', referenceAsk: '100000', bookObservedAt: new Date().toISOString(), priceProtectionBps: 50,
+      grossReceiveEstimate: '0.001', netReceiveEstimate: '0.000999', sourceDebitUpperBound: '100',
+      createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 5000).toISOString(), warnings: [], executable: true,
+    };
+    mockedAPI.quote.mockResolvedValue({ quote });
+    mockedAPI.confirm.mockResolvedValue({
+      trade: { ...unknownTrade, status: 'Filled', resultStatus: 'FILLED', balanceSyncStatus: 'SYNCED' },
+    });
+
+    const wrapper = mount(App, { attachTo: document.body, global: { plugins: [Antd] } });
+    await flushPromises();
+    const quickTrade = wrapper.findAll('button').find((button) => button.text().includes('Quick Trade'));
+    expect(quickTrade).toBeDefined();
+    await quickTrade!.trigger('click');
+    await flushPromises();
+    const amount = document.body.querySelector<HTMLInputElement>('input[placeholder="0.00"]');
+    expect(amount).not.toBeNull();
+    amount!.value = '100';
+    amount!.dispatchEvent(new Event('input', { bubbles: true }));
+    const reviewForm = wrapper.findComponent({ name: 'AForm' });
+    expect(reviewForm.exists()).toBe(true);
+    reviewForm.vm.$emit('finish');
+    await flushPromises();
+    expect(mockedAPI.quote).toHaveBeenCalledTimes(1);
+    let confirm: HTMLButtonElement | undefined;
+    await vi.waitFor(() => {
+      confirm = [...document.body.querySelectorAll('button')].find((button) => button.textContent?.includes('Confirm Testnet trade'));
+      expect(confirm).toBeDefined();
+    });
+    confirm!.click();
+    await flushPromises();
+
+    const text = document.body.textContent || '';
+    expect(text).toContain('Account snapshot');
+    expect(text).toContain('Balance SYNCED');
+    expect(text).toContain('Same bybit-demo store as the page');
+    expect(text).toContain('0.5');
+    expect(mockedAPI.confirm).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 });

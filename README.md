@@ -57,6 +57,12 @@ make build
 ./bin/venuewire --env-file /absolute/path/to/.env.web web
 ```
 
+Without `--env-file`, VenueWire searches `.env` beside the executable first (`bin/.env` for the standard build), then the executable directory's parent (`.env` at the project root). OS environment values have highest priority; for duplicate file keys, the binary-directory file wins. The search is based on the executable location, not the current working directory:
+
+```bash
+./bin/venuewire web
+```
+
 The Browser must enter through the configured HTTPS Nginx origin. Go serves HTTP on its configured private interface; it does not terminate TLS and its port must not be Internet-accessible. See [V3 deployment](docs/v3/DEPLOYMENT.md).
 
 ## Interviewer flow

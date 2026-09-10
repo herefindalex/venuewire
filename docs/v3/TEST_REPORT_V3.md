@@ -8,13 +8,13 @@ External Browser Testnet orders and split-host deployment: `NOT_RUN`
 
 | Layer | Command | Result |
 |---|---|---|
-| Go full regression | `go test ./... -count=1 -timeout=180s` | PASS — 388 tests, 23 packages |
-| Go race regression | `go test -race ./... -count=1 -timeout=240s` | PASS — 388 tests, 23 packages |
+| Go full regression | `go test ./... -count=1 -timeout=180s` | PASS — 390 tests, 23 packages |
+| Go race regression | `go test -race ./... -count=1 -timeout=240s` | PASS — 390 tests, 23 packages |
 | Static analysis | `go vet ./...` | PASS |
 | Frontend typecheck | `npm --prefix web run typecheck` | PASS |
-| Frontend tests | `npm --prefix web test` | PASS — 5 tests, 2 files |
+| Frontend tests | `npm --prefix web test` | PASS — 6 tests, 2 files |
 | Frontend production build | `npm --prefix web run build` | PASS |
-| Embedded Web binary | `go build -tags webui -o /tmp/venuewire-web-c6 ./cmd/venuewire` | PASS |
+| Embedded Web binary | `make build` | PASS — `bin/venuewire` |
 | Whitespace | `git diff --check` | PASS |
 | Current V3.1 Bybit/Deribit Testnet reads/streams/orders | — | `NOT_RUN` |
 | Current HTTPS/WSS split-host Nginx deployment | — | `NOT_RUN` |
@@ -25,7 +25,7 @@ All local commands above are credential-free or use mocks/fixtures and do not pl
 
 | Requirement | Local evidence | Verdict |
 |---|---|---|
-| R01 application-owned dotenv | `internal/config/dotenv_test.go`; `--env-file` command parsing | `LOCAL_VERIFIED` |
+| R01 application-owned dotenv | `internal/config/dotenv_test.go`; executable-relative binary/parent discovery, precedence, atomic parse, explicit `--env-file` parsing | `LOCAL_VERIFIED` |
 | R02 per-Browser Bybit/Deribit selection | Vue local selection/store; venue-scoped account API; old revisions rejected | `LOCAL_VERIFIED` |
 | R03 normalized account/assets/status home | `internal/accountstate/*_test.go`, `internal/webconsole/account_api_test.go`, `web/src/App.test.ts` | `LOCAL_VERIFIED` |
 | R04 market-driven valuation | `internal/accountstate/valuation_test.go`, `cmd/venuewire/web_streams_test.go`, Browser valuation snapshot event tests | `LOCAL_VERIFIED` |
@@ -37,7 +37,7 @@ All local commands above are credential-free or use mocks/fixtures and do not pl
 | R10 fixed Web login | authentication, generic failure, rate-limit, absolute-expiry and logout tests | `LOCAL_VERIFIED` |
 | R11 HTTPS/WSS trusted Nginx boundary | Host/Origin/trusted-peer/XFF/CSRF/WebSocket tests and reference snippets | `LOCAL_VERIFIED`; deployment `NOT_RUN` |
 | R12 Go private HTTP bind, no Go TLS | strict Web config tests and deployment documentation | `LOCAL_VERIFIED`; host ACL `NOT_RUN` |
-| R13 preserve existing connector/CLI/FIX behavior | complete Go and race suites, ordinary CLI and embedded Web builds | `LOCAL_VERIFIED` |
+| R13 preserve existing connector/CLI/FIX behavior | complete 390-test Go normal/race suites, ordinary CLI and embedded Web builds | `LOCAL_VERIFIED` |
 
 ## V3.1 section 23 failure scenarios
 

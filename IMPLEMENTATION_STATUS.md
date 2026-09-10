@@ -205,6 +205,28 @@ Status: `LOCAL_VERIFIED`; local implementation and documentation are complete. E
 | `git diff --check` | PASS |
 | External Testnet/Nginx/firewall/deployment/screenshot operations | `NOT_RUN` |
 
+### V3.1 Phase C8 — server startup and account UI contract completion
+
+Status: `LOCAL_VERIFIED`; executable-relative configuration and the account-risk presentation gaps are closed. External Testnet Web flow, split-host deployment, and real sanitized screenshots/recordings remain `NOT_RUN`.
+
+- Default dotenv discovery now reads `.env` beside the resolved executable and then its parent directory. OS values, including explicit empty values, win; binary-local file values win parent values; explicit `--env-file` disables discovery. Both default files are parsed before any values are applied.
+- CLI help now shows `venuewire web`, an explicit production env-file example, default dotenv discovery, and the private HTTP behind HTTPS/WSS Nginx deployment boundary.
+- Account snapshots now expose account type, exchange-reported timestamp, liability status, and nullable derivative-position evidence without inventing absence from incomplete exchange endpoints.
+- The Web console now shows the selected account alias and public/private state in the top bar, an Equity asset column, an account-scope warning, and post-trade balances from the same venue-scoped account store.
+
+| Check | Result |
+|---|---|
+| `go test ./... -count=1 -timeout=180s` | PASS — 390 tests, 23 packages |
+| `go test -race ./... -count=1 -timeout=240s` | PASS — 390 tests, 23 packages |
+| `go vet ./...` | PASS |
+| `npm --prefix web run typecheck` | PASS |
+| `npm --prefix web test` | PASS — 6 tests, 2 files |
+| `npm --prefix web run build` | PASS |
+| `make build` | PASS — embedded Web binary at `bin/venuewire` |
+| `./bin/venuewire help` | PASS — Web server mode and dotenv discovery documented |
+| `git diff --check` | PASS |
+| External Testnet/Nginx/firewall/deployment/screenshot operations | `NOT_RUN` |
+
 ## Phase status
 
 | Phase | Status | Evidence |

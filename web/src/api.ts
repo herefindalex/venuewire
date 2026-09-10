@@ -37,14 +37,19 @@ export interface AccountView {
   venue: string;
   environment: string;
   accountAlias: string;
+  accountType: string;
   revision: number;
   snapshotAsOf: string;
   exchangeReportedTotalUsd?: string;
+  exchangeReportedAsOf?: string;
   totalUsd?: string;
   pricedSubtotalUsd?: string;
   valuationBasis: string;
   completeness: string;
   unpricedAssets?: string[];
+  liabilityStatus: string;
+  hasDerivativePositions: boolean | null;
+  derivativePositionEvidence?: string;
   assets: AssetView[];
 }
 

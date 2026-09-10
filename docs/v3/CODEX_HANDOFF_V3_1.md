@@ -22,14 +22,13 @@ VenueWire 現在以登入式 Vue 3 Web Console 作為面試展示主介面，Go 
 ## 已驗證結果
 
 ```text
-go test ./... -count=1 -timeout=180s                 PASS：388 tests / 23 packages
-go test -race ./... -count=1 -timeout=240s           PASS：388 tests / 23 packages
+go test ./... -count=1 -timeout=180s                 PASS：390 tests / 23 packages
+go test -race ./... -count=1 -timeout=240s           PASS：390 tests / 23 packages
 go vet ./...                                          PASS
 npm --prefix web run typecheck                        PASS
-npm --prefix web test                                 PASS：5 tests / 2 files
+npm --prefix web test                                 PASS：6 tests / 2 files
 npm --prefix web run build                            PASS
-go build -tags webui -o /tmp/venuewire-web-c6 ./cmd/venuewire
-                                                       PASS
+make build                                             PASS：bin/venuewire
 ```
 
 完整逐項證據見 `docs/v3/TEST_REPORT_V3.md`；階段歷史見根目錄 `IMPLEMENTATION_STATUS.md`。
@@ -41,6 +40,8 @@ make build
 sha256sum ./bin/venuewire
 ./bin/venuewire --env-file /absolute/path/to/venuewire.env web
 ```
+
+未指定 `--env-file` 時，程式依 executable 位置先讀 `bin/.env`，再讀上一層 `.env`；同名檔案設定以 binary 同目錄優先，OS environment 仍高於兩者。因此也可直接執行 `./bin/venuewire web`，不受目前 working directory 影響。
 
 `make build` 會執行 locked frontend install、typecheck/build 與 `webui` embed Go build。單純 CLI 仍可獨立建置：
 

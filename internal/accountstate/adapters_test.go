@@ -1,6 +1,7 @@
 package accountstate
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -53,6 +54,9 @@ func TestBybitProviderNormalizesSnapshotWithoutInventingMissingValues(t *testing
 	}
 	if snapshot.AccountAlias != "demo-bybit" || snapshot.ExchangeReportedTotalUSD != "123.45" || !snapshot.SnapshotAsOf.Equal(now) {
 		t.Fatalf("snapshot metadata = %+v", snapshot)
+	}
+	if snapshot.AccountType != "UNIFIED" || !snapshot.ExchangeReportedAsOf.Equal(now) || snapshot.LiabilityStatus != "present" || snapshot.HasDerivativePositions != nil || snapshot.DerivativePositionEvidence == "" {
+		t.Fatalf("snapshot risk metadata = %+v", snapshot)
 	}
 	if len(snapshot.Assets) != 4 {
 		t.Fatalf("len(Assets) = %d, want 4", len(snapshot.Assets))
@@ -127,6 +131,16 @@ func TestDeribitProviderNormalizesAvailabilityAndPreservesUnknown(t *testing.T) 
 	}
 	if snapshot.AccountAlias != "demo-deribit" || !snapshot.SnapshotAsOf.Equal(now) {
 		t.Fatalf("snapshot metadata = %+v", snapshot)
+	}
+	if snapshot.AccountType != "account summaries" || snapshot.LiabilityStatus != "unknown" || snapshot.HasDerivativePositions != nil || snapshot.DerivativePositionEvidence == "" {
+		t.Fatalf("snapshot risk metadata = %+v", snapshot)
+	}
+	encoded, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatalf("Marshal(snapshot) error = %v", err)
+	}
+	if bytes.Contains(encoded, []byte(`"exchangeReportedAsOf"`)) {
+		t.Fatalf("unsupported exchange-reported timestamp was serialized: %s", encoded)
 	}
 	if len(snapshot.Assets) != 5 || len(snapshot.UnpricedAssets) != 5 {
 		t.Fatalf("asset counts = %d/%d, want 5/5", len(snapshot.Assets), len(snapshot.UnpricedAssets))

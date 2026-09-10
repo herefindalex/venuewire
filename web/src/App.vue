@@ -57,6 +57,11 @@ const routeOptions = computed(() => selectedVenue.value === 'bybit'
 const quoteRemaining = computed(() => quote.value ? Math.max(0, Math.ceil((Date.parse(quote.value.expiresAt) - quoteNow.value) / 1000)) : 0);
 const canConfirm = computed(() => !!quote.value?.executable && quoteRemaining.value > 0 && !session.value?.readOnly);
 const selectedStatus = computed(() => statuses.value.find((item) => item.venue === selectedVenue.value));
+const resultAccountAssets = computed(() => {
+  if (!account.value || !selectedTrade.value || account.value.venue !== selectedTrade.value.venue) return [];
+  const relevant = new Set([selectedTrade.value.fromAsset, selectedTrade.value.toAsset]);
+  return account.value.assets.filter((asset) => relevant.has(asset.asset));
+});
 
 function readableError(error: unknown) {
   if (error instanceof APIError) return error.requestId ? `${error.message} (${error.requestId})` : error.message;
@@ -310,6 +315,10 @@ onBeforeUnmount(() => {
       <div class="topbar-actions">
         <a-select v-model:value="selectedVenue" class="venue-select" :options="venues.map(v => ({ label: v.id === 'bybit' ? 'Bybit' : 'Deribit', value: v.id }))" />
         <a-tag color="gold" class="testnet-badge">TESTNET</a-tag>
+        <span class="topbar-account">{{ account?.accountAlias || 'Account syncing' }}</span>
+        <a-tag :color="selectedStatus?.publicWs === 'LIVE' ? 'green' : selectedStatus?.publicWs === 'STALE' ? 'orange' : 'default'">Public {{ selectedStatus?.publicWs || '—' }}</a-tag>
+        <a-tag :color="selectedStatus?.privateWs === 'LIVE' ? 'green' : selectedStatus?.privateWs === 'STALE' ? 'orange' : 'default'">Private {{ selectedStatus?.privateWs || '—' }}</a-tag>
+        <a-button type="text" :loading="refreshingAccount" :disabled="!account" @click="refreshAccount">Refresh</a-button>
         <a-button type="text" @click="aboutOpen = true">About</a-button>
         <a-button type="text" @click="logout">Logout</a-button>
       </div>
@@ -321,6 +330,7 @@ onBeforeUnmount(() => {
           <p class="eyebrow">{{ selectedVenue.toUpperCase() }} · TESTNET ACCOUNT</p>
           <h2>Account overview</h2>
           <p class="muted">Snapshot {{ account?.snapshotAsOf ? new Date(account.snapshotAsOf).toLocaleTimeString() : 'unavailable' }}</p>
+          <p v-if="account" class="muted">{{ account.accountType }} · liabilities {{ account.liabilityStatus }} · derivatives {{ account.hasDerivativePositions == null ? 'unknown' : account.hasDerivativePositions ? 'present' : 'none' }}</p>
         </div>
         <div class="hero-actions">
         <div class="account-value"><span>Local USD mark</span><strong>{{ account?.totalUsd || account?.pricedSubtotalUsd ? `$${account.totalUsd || account.pricedSubtotalUsd}` : '—' }}</strong><small>{{ account?.completeness ?? 'Unavailable' }}{{ account?.pricedSubtotalUsd && !account?.totalUsd ? ' · priced subtotal' : '' }}</small></div>
@@ -329,6 +339,8 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
+      <a-alert v-if="account && (account.liabilityStatus !== 'none' || account.hasDerivativePositions !== false)" message="Account scope caution" description="Liability or derivative-position coverage is not proven absent. Local marks are holdings estimates, not reconstructed exchange equity." type="warning" show-icon class="section-gap" />
+
       <a-alert v-if="session.readOnly" message="View-only demo" description="Trading is disabled by the server. Quotes remain available for review." type="info" show-icon class="section-gap" />
 
       <section class="panel section-gap">
@@ -336,6 +348,7 @@ onBeforeUnmount(() => {
         <a-table :data-source="account?.assets ?? []" :pagination="false" row-key="asset" size="middle">
           <a-table-column title="Asset" data-index="asset"><template #default="{ text }"><strong>{{ text }}</strong></template></a-table-column>
           <a-table-column title="Balance" data-index="balance" />
+          <a-table-column title="Equity" data-index="equity"><template #default="{ text }">{{ text || '—' }}</template></a-table-column>
           <a-table-column title="Available to trade" data-index="availableToTrade"><template #default="{ text }">{{ text || '—' }}</template></a-table-column>
           <a-table-column title="Local USD mark" data-index="usdValue"><template #default="{ text }">{{ text ? `$${text}` : '—' }}</template></a-table-column>
           <a-table-column title="Exchange-reported USD" data-index="exchangeReportedUsdValue"><template #default="{ text }">{{ text ? `$${text}` : '—' }}</template></a-table-column>
@@ -407,7 +420,19 @@ onBeforeUnmount(() => {
       <div class="modal-actions"><a-button @click="tradeStep = 'edit'">Back</a-button><a-button type="primary" :disabled="!canConfirm" @click="confirmTrade">Confirm Testnet trade</a-button></div>
     </div>
     <div v-else-if="tradeStep === 'submitting'" class="submitting-state"><a-spin size="large" /><h3>Submitting saved intent</h3><p>The result remains tracked if this window closes.</p></div>
-    <div v-else-if="selectedTrade" class="modal-body"><a-result :status="selectedTrade.status === 'Filled' ? 'success' : selectedTrade.status === 'Unknown' ? 'warning' : 'info'" :title="selectedTrade.resultStatus || selectedTrade.status" :sub-title="selectedTrade.message || `VenueWire Trade ID: ${selectedTrade.intentId}`"><template #extra><a-button @click="quickTradeOpen = false">Close</a-button><a-button type="primary" @click="showTrade(selectedTrade); quickTradeOpen = false">View lifecycle</a-button></template></a-result></div>
+    <div v-else-if="selectedTrade" class="modal-body">
+      <a-result :status="selectedTrade.status === 'Filled' ? 'success' : selectedTrade.status === 'Unknown' ? 'warning' : 'info'" :title="selectedTrade.resultStatus || selectedTrade.status" :sub-title="selectedTrade.message || `VenueWire Trade ID: ${selectedTrade.intentId}`"><template #extra><a-button @click="quickTradeOpen = false">Close</a-button><a-button type="primary" @click="showTrade(selectedTrade); quickTradeOpen = false">View lifecycle</a-button></template></a-result>
+      <section class="result-account" aria-label="Post-trade account snapshot">
+        <div class="status-title"><strong>Account snapshot</strong><a-tag :color="selectedTrade.balanceSyncStatus === 'SYNCED' ? 'green' : 'orange'">Balance {{ selectedTrade.balanceSyncStatus }}</a-tag></div>
+        <p class="muted">Same {{ account?.accountAlias || selectedTrade.venue }} store as the page · revision {{ account?.revision ?? 'unavailable' }}</p>
+        <dl v-if="resultAccountAssets.length">
+          <template v-for="asset in resultAccountAssets" :key="asset.asset">
+            <dt>{{ asset.asset }}</dt><dd>{{ asset.balance }} <span class="muted">available {{ asset.availableToTrade || '—' }}</span></dd>
+          </template>
+        </dl>
+        <p v-else class="muted">The matching venue account snapshot is still synchronizing.</p>
+      </section>
+    </div>
   </a-modal>
 
   <a-drawer v-model:open="tradeDrawerOpen" title="Trade lifecycle" width="520px">

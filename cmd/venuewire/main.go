@@ -22,7 +22,14 @@ Usage:
   venuewire --venue all <command> [options]
 
 Global options:
-  --env-file PATH  Load dotenv values without overriding the OS environment
+  --env-file PATH  Load this dotenv file without overriding the OS environment
+
+Web server mode:
+  venuewire web
+  venuewire --env-file /etc/venuewire/venuewire.env web
+  Without --env-file, VenueWire reads .env beside the binary, then its parent directory.
+  OS environment values always win; the binary-directory .env wins over the parent .env.
+  The Go server binds configured private HTTP for an HTTPS/WSS Nginx proxy; it does not terminate TLS.
 
 Public REST:
   venuewire --venue bybit time

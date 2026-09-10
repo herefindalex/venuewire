@@ -68,6 +68,9 @@ func TestManagerRefreshCachesSortedCopyAndCapacity(t *testing.T) {
 	if snapshot.Revision != 1 || snapshot.Environment != "testnet" || !snapshot.SnapshotAsOf.Equal(now) {
 		t.Fatalf("snapshot metadata = %+v", snapshot)
 	}
+	if snapshot.AccountType != "unknown" || snapshot.LiabilityStatus != "unknown" || snapshot.HasDerivativePositions != nil || snapshot.DerivativePositionEvidence == "" {
+		t.Fatalf("snapshot missing-value normalization = %+v", snapshot)
+	}
 	if len(snapshot.Assets) != 2 || snapshot.Assets[0].Asset != "BTC" || snapshot.Assets[1].Asset != "USDT" {
 		t.Fatalf("sorted assets = %+v", snapshot.Assets)
 	}
@@ -83,6 +86,13 @@ func TestManagerRefreshCachesSortedCopyAndCapacity(t *testing.T) {
 	again, _ := manager.Snapshot(domain.VenueBybit)
 	if again.Assets[0].AvailableToTrade != "0.5" || len(again.UnpricedAssets) != unpricedCount {
 		t.Fatalf("cached snapshot was mutated through returned copy: %+v", again)
+	}
+	hasDerivatives := false
+	positionSource := Snapshot{HasDerivativePositions: &hasDerivatives}
+	positionCopy := cloneSnapshot(positionSource)
+	*positionCopy.HasDerivativePositions = true
+	if *positionSource.HasDerivativePositions {
+		t.Fatal("cloned derivative-position pointer mutated its source")
 	}
 
 	health := manager.Health()

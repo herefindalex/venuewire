@@ -46,9 +46,10 @@ func TestAccountEndpointsUseAuthenticatedCachedSnapshot(t *testing.T) {
 	now := time.Date(2026, 9, 9, 17, 0, 0, 0, time.UTC)
 	service := &fakeAccountService{snapshots: map[domain.Venue]accountstate.Snapshot{
 		domain.VenueBybit: {
-			Venue: domain.VenueBybit, Environment: "testnet", AccountAlias: "bybit-test", Revision: 7,
-			SnapshotAsOf: now, Completeness: "exchange-reported",
-			Assets: []accountstate.Asset{{Asset: "BTC", Balance: "0.1", AvailableToTrade: "0.1", AvailableStatus: "verified", Quality: "snapshot"}},
+			Venue: domain.VenueBybit, Environment: "testnet", AccountAlias: "bybit-test", AccountType: "UNIFIED", Revision: 7,
+			SnapshotAsOf: now, ExchangeReportedAsOf: now, Completeness: "exchange-reported", LiabilityStatus: "unknown",
+			DerivativePositionEvidence: "wallet snapshot does not prove derivative-position absence",
+			Assets:                     []accountstate.Asset{{Asset: "BTC", Balance: "0.1", AvailableToTrade: "0.1", AvailableStatus: "verified", Quality: "snapshot"}},
 		},
 	}}
 	server := newTestServer(t)
@@ -66,7 +67,7 @@ func TestAccountEndpointsUseAuthenticatedCachedSnapshot(t *testing.T) {
 		Account accountstate.Snapshot `json:"account"`
 	}
 	decodeBody(t, response, &body)
-	if body.Account.Revision != 7 || body.Account.Assets[0].AvailableToTrade != "0.1" {
+	if body.Account.Revision != 7 || body.Account.AccountType != "UNIFIED" || body.Account.LiabilityStatus != "unknown" || body.Account.HasDerivativePositions != nil || body.Account.DerivativePositionEvidence == "" || body.Account.Assets[0].AvailableToTrade != "0.1" {
 		t.Fatalf("account response = %+v", body.Account)
 	}
 	if response := performRequest(server, http.MethodGet, "/api/venues/deribit/account", "", cookie, ""); response.Code != http.StatusNotFound {
