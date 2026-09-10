@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"strings"
 	"time"
 )
 
@@ -108,6 +109,11 @@ func (c *Client) Currencies(ctx context.Context) ([]Currency, error) {
 func (c *Client) Instruments(ctx context.Context, currency, kind string, expired bool) ([]Instrument, error) {
 	var result []Instrument
 	err := c.Public(ctx, "public/get_instruments", map[string]any{"currency": currency, "kind": kind, "expired": expired}, &result)
+	if err == nil {
+		for i := range result {
+			normalizeSpotAmountStep(&result[i])
+		}
+	}
 	return result, err
 }
 
@@ -123,6 +129,7 @@ func (c *Client) Instrument(ctx context.Context, name string) (Instrument, error
 	var result Instrument
 	err := c.Public(ctx, "public/get_instrument", map[string]string{"instrument_name": name}, &result)
 	if err == nil {
+		normalizeSpotAmountStep(&result)
 		c.metadataMu.Lock()
 		if c.metadata == nil {
 			c.metadata = map[string]cachedInstrument{}
@@ -131,6 +138,12 @@ func (c *Client) Instrument(ctx context.Context, name string) (Instrument, error
 		c.metadataMu.Unlock()
 	}
 	return result, err
+}
+
+func normalizeSpotAmountStep(instrument *Instrument) {
+	if strings.EqualFold(instrument.Kind, "spot") && strings.TrimSpace(instrument.AmountStep.String()) == "" {
+		instrument.AmountStep = instrument.ContractSize
+	}
 }
 
 func (c *Client) AccountSummary(ctx context.Context, currency string) (AccountSummary, error) {
