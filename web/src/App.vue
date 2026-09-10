@@ -18,8 +18,7 @@ const tradeDrawerOpen = ref(false);
 const selectedTrade = ref<TradeView>();
 const quickTradeOpen = ref(false);
 const tradeStep = ref<'edit' | 'review' | 'submitting' | 'result'>('edit');
-const spendAmount = ref('');
-const direction = ref('');
+const tradeInput = reactive({ spendAmount: '', direction: '' });
 const quote = ref<QuoteView>();
 const quoteNow = ref(Date.now());
 const quoteLoading = ref(false);
@@ -214,7 +213,7 @@ function connectSocket() {
 
 watch(selectedVenue, async (venue) => {
   localStorage.setItem('venuewire.venue', venue);
-  direction.value = routeOptions.value[0]?.value ?? '';
+  tradeInput.direction = routeOptions.value[0]?.value ?? '';
   account.value = undefined;
   if (session.value) {
     const response = await api.account(venue).catch(() => undefined);
@@ -223,8 +222,8 @@ watch(selectedVenue, async (venue) => {
 });
 
 function openQuickTrade() {
-  direction.value = routeOptions.value[0]?.value ?? '';
-  spendAmount.value = '';
+  tradeInput.direction = routeOptions.value[0]?.value ?? '';
+  tradeInput.spendAmount = '';
   quote.value = undefined;
   tradeStep.value = 'edit';
   quickTradeOpen.value = true;
@@ -233,7 +232,7 @@ function openQuickTrade() {
 async function reviewTrade() {
   quoteLoading.value = true;
   try {
-    quote.value = (await api.quote(selectedVenue.value, direction.value, spendAmount.value)).quote;
+    quote.value = (await api.quote(selectedVenue.value, tradeInput.direction, tradeInput.spendAmount)).quote;
     tradeStep.value = 'review';
     quoteNow.value = Date.now();
     quoteTimer = window.setInterval(() => { quoteNow.value = Date.now(); }, 250);
@@ -300,9 +299,13 @@ onBeforeUnmount(() => {
       <h1>VenueWire</h1>
       <p class="login-subtitle">Multi-Venue Trading Connectivity Console</p>
       <a-tag color="gold">Bybit · Deribit · TESTNET</a-tag>
-      <a-form layout="vertical" class="login-form" @finish="signIn">
-        <a-form-item label="Username"><a-input v-model:value="credentials.username" autocomplete="username" /></a-form-item>
-        <a-form-item label="Password"><a-input-password v-model:value="credentials.password" autocomplete="current-password" /></a-form-item>
+      <a-form :model="credentials" layout="vertical" class="login-form" @finish="signIn">
+        <a-form-item label="Username" name="username" :rules="[{ required: true, message: 'Username is required.' }]">
+          <a-input v-model:value="credentials.username" autocomplete="username" />
+        </a-form-item>
+        <a-form-item label="Password" name="password" :rules="[{ required: true, message: 'Password is required.' }]">
+          <a-input-password v-model:value="credentials.password" autocomplete="current-password" />
+        </a-form-item>
         <a-button type="primary" html-type="submit" block size="large" :loading="signingIn">Sign in</a-button>
       </a-form>
       <p class="prototype-note">Testnet execution prototype. No real-money trading.</p>
@@ -400,9 +403,13 @@ onBeforeUnmount(() => {
   <a-modal v-model:open="quickTradeOpen" width="620px" :footer="null" :mask-closable="tradeStep === 'edit' || tradeStep === 'review'" title="Quick Trade">
     <a-tag color="gold" class="modal-testnet">TESTNET</a-tag>
     <div v-if="tradeStep === 'edit'" class="modal-body">
-      <a-form layout="vertical" @finish="reviewTrade">
-        <a-form-item label="Direction"><a-select v-model:value="direction" :options="routeOptions" /></a-form-item>
-        <a-form-item label="Source amount"><a-input v-model:value="spendAmount" inputmode="decimal" placeholder="0.00" /></a-form-item>
+        <a-form :model="tradeInput" layout="vertical" @finish="reviewTrade">
+          <a-form-item label="Direction" name="direction" :rules="[{ required: true, message: 'Direction is required.' }]">
+            <a-select v-model:value="tradeInput.direction" :options="routeOptions" />
+          </a-form-item>
+          <a-form-item label="Source amount" name="spendAmount" :rules="[{ required: true, message: 'Source amount is required.' }]">
+            <a-input v-model:value="tradeInput.spendAmount" inputmode="decimal" placeholder="0.00" />
+          </a-form-item>
         <a-button type="primary" html-type="submit" block :loading="quoteLoading">Review protected IOC</a-button>
       </a-form>
     </div>
