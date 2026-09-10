@@ -4,6 +4,18 @@ Last updated: 2026-09-09
 
 The archived Bybit-only phase history remains in `docs/1_bybit/IMPLEMENTATION_STATUS.md`. This file tracks the incremental Bybit + Deribit upgrade defined by `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md`.
 
+## V3 / V3.1 pre-implementation status
+
+The V2 phase history below remains historical evidence. V3/V3.1 runtime implementation has not started.
+
+| Work | Status | Evidence |
+|---|---|---|
+| V3 Phase 0 baseline inspection | Complete; baseline failure recorded | `docs/v3/BASELINE_AUDIT.md`: 238 pass, 1 security-example failure, 2 skipped; same failure under race detector |
+| V3.1 gap analysis and product decisions | Documented | `docs/v3/V3_1_GAP_ANALYSIS.md`; `docs/3_web/VENUEWIRE_V3_1_PUBLIC_DEMO_SUPPLEMENT.md` section 26 |
+| Canonical configuration examples | Updated specification only | V3 names, `QUOTE_TTL=5s`, V3.1 Demo caps, existing Deribit credential names and VenueWire commands |
+| Web / Spot / Demo hardening | Not implemented | Auth, frontend, browser intents/quotas, Spot validation and UI observability remain pending |
+| V3/V3.1 frontend and external validation | Not run | No frontend exists yet; no new Testnet orders or deployment operations performed |
+
 ## Phase status
 
 | Phase | Status | Evidence |
