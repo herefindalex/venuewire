@@ -1,6 +1,7 @@
 package webconsole
 
 import (
+	"bufio"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -83,6 +84,58 @@ type publicError struct {
 	Error     string `json:"error"`
 	Message   string `json:"message"`
 	RequestID string `json:"requestId"`
+}
+
+type accessLogResponseWriter struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (w *accessLogResponseWriter) WriteHeader(status int) {
+	if w.status != 0 {
+		return
+	}
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *accessLogResponseWriter) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	n, err := w.ResponseWriter.Write(body)
+	w.bytes += n
+	return n, err
+}
+
+func (w *accessLogResponseWriter) Flush() {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (w *accessLogResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("response writer does not support hijacking")
+	}
+	w.status = http.StatusSwitchingProtocols
+	return hijacker.Hijack()
+}
+
+func (w *accessLogResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+func (w *accessLogResponseWriter) statusCode() int {
+	if w.status == 0 {
+		return http.StatusOK
+	}
+	return w.status
 }
 
 type contextKey string
@@ -205,7 +258,25 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("POST /api/trades/confirm", s.requireSession(s.requireCSRF(http.HandlerFunc(s.handleConfirmTrade))))
 	mux.Handle("GET /api/ws", s.requireSession(http.HandlerFunc(s.handleWebSocket)))
 	mux.HandleFunc("/", s.handleFrontend)
-	return s.securityHeaders(s.requestIdentity(s.proxyBoundary(mux)))
+	return s.securityHeaders(s.requestIdentity(s.proxyBoundary(s.accessLog(mux))))
+}
+
+func (s *Server) accessLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startedAt := time.Now()
+		response := &accessLogResponseWriter{ResponseWriter: w}
+		next.ServeHTTP(response, r)
+		clientIP, _ := r.Context().Value(clientIPKey).(string)
+		s.logger.Info("http request",
+			slog.String("requestId", requestID(r)),
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.EscapedPath()),
+			slog.Int("status", response.statusCode()),
+			slog.Int("responseBytes", response.bytes),
+			slog.Int64("durationMs", time.Since(startedAt).Milliseconds()),
+			slog.String("clientIp", clientIP),
+		)
+	})
 }
 
 func (s *Server) requestIdentity(next http.Handler) http.Handler {

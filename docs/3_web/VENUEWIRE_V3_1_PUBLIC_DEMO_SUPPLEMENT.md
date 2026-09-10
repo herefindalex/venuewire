@@ -172,6 +172,19 @@ Example:
 }
 ```
 
+## 4.2.1 Safe HTTP Access Logs
+
+Every request accepted through the trusted reverse-proxy boundary must emit one structured `http request` log event after the response completes. The event contains only:
+
+- request ID;
+- HTTP method;
+- URL path without query parameters;
+- response status and byte count;
+- elapsed milliseconds;
+- validated client IP supplied by the trusted proxy boundary.
+
+Access logs must never include query values, request or response bodies, usernames, passwords, cookies, authorization headers, CSRF tokens, session identifiers, or exchange credentials. Login-specific warnings may record the request ID and validated client IP, but not submitted credentials. The existing JSON logger writes these events to server stderr so the operator can correlate a browser error with one request without enabling unsafe debug logging.
+
 ## 4.3 Nginx Additional Gate
 
 The Go application must not implement Nginx Basic Auth itself.
