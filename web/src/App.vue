@@ -24,6 +24,8 @@ const quote = ref<QuoteView>();
 const quoteNow = ref(Date.now());
 const quoteLoading = ref(false);
 const rechecking = ref(false);
+const refreshingAccount = ref(false);
+const buildInfo = ref<Record<string, string>>({});
 let quoteTimer: number | undefined;
 let pollTimer: number | undefined;
 let socket: WebSocket | undefined;
@@ -83,8 +85,25 @@ async function bootstrap() {
 async function refreshAll() {
   const results = await Promise.allSettled([api.account(selectedVenue.value), api.status(), api.trades()]);
   if (results[0].status === 'fulfilled') account.value = results[0].value.account;
-  if (results[1].status === 'fulfilled') statuses.value = results[1].value.venues;
+  if (results[1].status === 'fulfilled') {
+    statuses.value = results[1].value.venues;
+    buildInfo.value = results[1].value.build;
+  }
   if (results[2].status === 'fulfilled') trades.value = results[2].value.trades;
+}
+
+async function refreshAccount() {
+  refreshingAccount.value = true;
+  try {
+    account.value = (await api.refreshAccount(selectedVenue.value)).account;
+    const runtime = await api.status();
+    statuses.value = runtime.venues;
+    buildInfo.value = runtime.build;
+  } catch (error) {
+    message.error(readableError(error));
+  } finally {
+    refreshingAccount.value = false;
+  }
 }
 
 function connectSocket() {
@@ -217,7 +236,7 @@ onBeforeUnmount(() => {
       <a-alert v-if="session.readOnly" message="View-only demo" description="Trading is disabled by the server. Quotes remain available for review." type="info" show-icon class="section-gap" />
 
       <section class="panel section-gap">
-        <div class="section-heading"><div><p class="eyebrow">BALANCES</p><h3>Assets</h3></div><a-button @click="refreshAll">Refresh</a-button></div>
+        <div class="section-heading"><div><p class="eyebrow">BALANCES</p><h3>Assets</h3></div><a-button :loading="refreshingAccount" @click="refreshAccount">Refresh from venue</a-button></div>
         <a-table :data-source="account?.assets ?? []" :pagination="false" row-key="asset" size="middle">
           <a-table-column title="Asset" data-index="asset"><template #default="{ text }"><strong>{{ text }}</strong></template></a-table-column>
           <a-table-column title="Balance" data-index="balance" />
@@ -301,6 +320,6 @@ VenueWire Go Backend
   └─ Valuation & observability
        ├─ Bybit Testnet
        └─ Deribit Testnet</pre>
-    <a-descriptions :column="1" bordered size="small"><a-descriptions-item label="Environment">TESTNET</a-descriptions-item><a-descriptions-item label="Backend">Go</a-descriptions-item><a-descriptions-item label="Frontend">Vue 3</a-descriptions-item><a-descriptions-item label="Capabilities">REST / JSON-RPC · WebSocket · FIX 4.4 where verified</a-descriptions-item></a-descriptions>
+    <a-descriptions :column="1" bordered size="small"><a-descriptions-item label="Environment">{{ buildInfo.environment ?? 'Testnet' }}</a-descriptions-item><a-descriptions-item label="Backend">{{ buildInfo.backend ?? 'Go' }}</a-descriptions-item><a-descriptions-item label="Frontend">{{ buildInfo.frontend ?? 'Vue 3' }}</a-descriptions-item><a-descriptions-item label="Build timestamp">{{ buildInfo.buildTimestamp ?? 'development' }}</a-descriptions-item><a-descriptions-item label="Git commit">{{ buildInfo.gitCommit ?? 'development' }}</a-descriptions-item><a-descriptions-item label="Uptime">{{ buildInfo.uptime ?? '—' }}</a-descriptions-item><a-descriptions-item label="Capabilities">REST / JSON-RPC · WebSocket · FIX 4.4 where verified</a-descriptions-item></a-descriptions>
   </a-drawer>
 </template>

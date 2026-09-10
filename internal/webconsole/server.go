@@ -23,6 +23,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"venuewire/internal/config"
+	"venuewire/internal/domain"
 	"venuewire/internal/intent"
 )
 
@@ -40,6 +41,9 @@ type Server struct {
 	rechecker TradeRechecker
 	rechecks  *recheckCoordinator
 	tradeApp  TradeApplication
+	accounts  AccountService
+	build     BuildMetadata
+	startedAt time.Time
 	assets    fs.FS
 }
 
@@ -94,6 +98,14 @@ func WithTradeApplication(application TradeApplication) Option {
 	return func(server *Server) { server.tradeApp = application }
 }
 
+func WithAccountService(accounts AccountService) Option {
+	return func(server *Server) { server.accounts = accounts }
+}
+
+func WithBuildMetadata(metadata BuildMetadata) Option {
+	return func(server *Server) { server.build = metadata }
+}
+
 func WithAssets(assets fs.FS) Option {
 	return func(server *Server) { server.assets = assets }
 }
@@ -102,11 +114,14 @@ func New(cfg config.WebConfig, base config.Config, logger *slog.Logger, options 
 	if logger == nil {
 		logger = slog.New(slog.NewJSONHandler(io.Discard, nil))
 	}
+	startedAt := time.Now()
 	s := &Server{
-		config: cfg,
-		base:   base,
-		logger: logger,
-		now:    time.Now,
+		config:    cfg,
+		base:      base,
+		logger:    logger,
+		now:       time.Now,
+		build:     runtimeBuildMetadata(),
+		startedAt: startedAt,
 		sessions: &sessionStore{
 			secret:   append([]byte(nil), cfg.SessionSecret...),
 			sessions: make(map[string]*session),
@@ -164,6 +179,9 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("GET /api/auth/me", s.requireSession(http.HandlerFunc(s.handleMe)))
 	mux.Handle("POST /api/auth/logout", s.requireSession(s.requireCSRF(http.HandlerFunc(s.handleLogout))))
 	mux.Handle("GET /api/venues", s.requireSession(http.HandlerFunc(s.handleVenues)))
+	mux.Handle("GET /api/venues/{venue}/account", s.requireSession(http.HandlerFunc(s.handleAccount)))
+	mux.Handle("POST /api/venues/{venue}/account/refresh", s.requireSession(s.requireCSRF(http.HandlerFunc(s.handleAccountRefresh))))
+	mux.Handle("GET /api/system/status", s.requireSession(http.HandlerFunc(s.handleSystemStatus)))
 	mux.Handle("GET /api/trades", s.requireSession(http.HandlerFunc(s.handleRecentTrades)))
 	mux.Handle("GET /api/trades/{intentID}", s.requireSession(http.HandlerFunc(s.handleTradeDetail)))
 	mux.Handle("POST /api/trades/{intentID}/recheck", s.requireSession(s.requireCSRF(http.HandlerFunc(s.handleTradeRecheck))))
@@ -290,18 +308,34 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVenues(w http.ResponseWriter, _ *http.Request) {
+	healthByVenue := make(map[domain.Venue]string)
+	for _, health := range s.configuredHealth() {
+		healthByVenue[health.Venue] = health.AccountSync
+	}
 	venues := make([]map[string]any, 0, 2)
 	if s.config.BybitEnabled {
-		venues = append(venues, map[string]any{"id": "bybit", "environment": "testnet", "accountAlias": s.base.AccountAlias})
+		venues = append(venues, s.venueSummary(domain.VenueBybit, s.base.AccountAlias, healthByVenue[domain.VenueBybit]))
 	}
 	if s.config.DeribitEnabled {
-		venues = append(venues, map[string]any{"id": "deribit", "environment": "testnet", "accountAlias": s.base.Deribit.AccountAlias})
+		venues = append(venues, s.venueSummary(domain.VenueDeribit, s.base.Deribit.AccountAlias, healthByVenue[domain.VenueDeribit]))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"venues":         venues,
 		"defaultVenue":   s.config.DefaultVenue,
 		"tradingEnabled": s.config.TradingEnabled,
 	})
+}
+
+func (s *Server) venueSummary(venue domain.Venue, accountAlias, accountSync string) map[string]any {
+	accountAvailable := false
+	if s.accounts != nil {
+		_, accountAvailable = s.accounts.Snapshot(venue)
+	}
+	return map[string]any{
+		"id": venue, "environment": "testnet", "accountAlias": accountAlias,
+		"accountSync": accountSync, "readAvailable": s.accounts != nil, "accountAvailable": accountAvailable,
+		"tradingAvailable": s.config.TradingEnabled && s.tradeApp != nil && accountAvailable && accountSync == "SYNCED",
+	}
 }
 
 func (s *Server) requireSession(next http.Handler) http.Handler {

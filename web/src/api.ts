@@ -9,6 +9,10 @@ export interface VenueView {
   id: 'bybit' | 'deribit';
   environment: 'testnet';
   accountAlias: string;
+  accountSync?: string;
+  readAvailable?: boolean;
+  accountAvailable?: boolean;
+  tradingAvailable?: boolean;
 }
 
 export interface AssetView {
@@ -18,6 +22,10 @@ export interface AssetView {
   locked?: string;
   liability?: string;
   availableToTrade?: string;
+  availableToTradeAsOf?: string;
+  availableStatus: string;
+  valuationQuantity?: string;
+  quantityBasis: string;
   usdValue?: string;
   priceSource?: string;
   priceAsOf?: string;
@@ -26,10 +34,16 @@ export interface AssetView {
 
 export interface AccountView {
   venue: string;
+  environment: string;
+  accountAlias: string;
+  revision: number;
   snapshotAsOf: string;
+  exchangeReportedTotalUsd?: string;
   totalUsd?: string;
   pricedSubtotalUsd?: string;
+  valuationBasis: string;
   completeness: string;
+  unpricedAssets?: string[];
   assets: AssetView[];
 }
 
@@ -39,10 +53,13 @@ export interface VenueStatus {
   publicWs: string;
   privateWs: string;
   accountSync: string;
+  accountAgeMs?: number;
   marketAgeMs?: number;
   reconnects: number;
   lastReconcileAt?: string;
   requestErrors: number;
+  lastRequestRttMs?: number;
+  reconciliationDiscrepancies: number;
 }
 
 export interface QuoteView {
@@ -132,6 +149,7 @@ export const api = {
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
   venues: () => request<{ venues: VenueView[]; defaultVenue: string; tradingEnabled: boolean }>('/api/venues'),
   account: (venue: string) => request<{ account: AccountView }>(`/api/venues/${venue}/account`),
+  refreshAccount: (venue: string) => request<{ account: AccountView }>(`/api/venues/${venue}/account/refresh`, { method: 'POST' }),
   status: () => request<{ venues: VenueStatus[]; build: Record<string, string> }>('/api/system/status'),
   trades: () => request<{ trades: TradeView[] }>('/api/trades?limit=50'),
   quote: (venue: string, routeId: string, amount: string) => request<{ quote: QuoteView }>(`/api/venues/${venue}/quotes`, { method: 'POST', body: JSON.stringify({ routeId, amount }) }),

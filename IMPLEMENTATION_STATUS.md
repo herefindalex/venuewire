@@ -63,6 +63,23 @@ Verification after this foundation:
 | `go build -tags webui -o /tmp/venuewire-web ./cmd/venuewire` | PASS |
 | External Testnet/deployment operations | NOT_RUN |
 
+### V3.1 Phase C1 — cached account runtime and browser status API
+
+Status: `LOCAL_VERIFIED_FOUNDATION`; authoritative Testnet account reads are wired, while private/public WebSocket fusion, live valuation and real Quick Trade venue submission remain pending.
+
+- Added normalized Bybit UNIFIED wallet and Deribit account-summary snapshots backed by a central refresh manager. Browser GET requests only read cached snapshots; background and user-triggered refreshes are coalesced per venue.
+- Missing, malformed or negative source fields remain `unknown`. Bybit derived capacity uses exact decimal subtraction and never treats an empty field as zero.
+- Added authenticated account/status endpoints and CSRF-protected controlled refresh. Failures keep the last known snapshot, expose stale/error health without private diagnostics, and never return exchange credentials.
+- Added runtime-derived System Status data, snapshot/market ages, request metrics, safe build timestamp/Git commit and uptime. The UI refresh action now calls the controlled endpoint and About displays backend build metadata.
+- Bybit/Deribit account clients are created once by the Web process and refreshed on the configured `ACCOUNT_RECONCILE_INTERVAL`; account data becomes stale after two missed intervals.
+
+| Check | Result |
+|---|---|
+| `go test -race ./internal/accountstate ./internal/webconsole ./cmd/venuewire` | PASS — 66 tests, 3 packages |
+| `npm --prefix web run typecheck` | PASS |
+| `npm --prefix web test -- --run` | PASS — 3 tests |
+| External Testnet account/API operations | `NOT_RUN` |
+
 ## Phase status
 
 | Phase | Status | Evidence |
