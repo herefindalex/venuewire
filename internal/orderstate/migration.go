@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/domain"
 )
 
 type MigrationOptions struct {

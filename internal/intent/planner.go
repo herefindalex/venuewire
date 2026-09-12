@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/deribit"
 )
 
 type Market interface {

@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"venuewire/internal/accountstate"
-	"venuewire/internal/deribit"
-	"venuewire/internal/domain"
-	"venuewire/internal/quicktrade"
-	"venuewire/internal/rest"
+	"github.com/herefindalex/venuewire/internal/accountstate"
+	"github.com/herefindalex/venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/quicktrade"
+	"github.com/herefindalex/venuewire/internal/rest"
 )
 
 func TestSubmissionRateLimitedRecognizesVenueSignals(t *testing.T) {

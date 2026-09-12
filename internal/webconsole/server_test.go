@@ -15,12 +15,12 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"venuewire/internal/accountstate"
-	"venuewire/internal/config"
-	"venuewire/internal/domain"
-	"venuewire/internal/intent"
-	"venuewire/internal/quicktrade"
-	"venuewire/internal/runtimeevent"
+	"github.com/herefindalex/venuewire/internal/accountstate"
+	"github.com/herefindalex/venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/quicktrade"
+	"github.com/herefindalex/venuewire/internal/runtimeevent"
 )
 
 func TestAuthenticationSessionCSRFAndLogout(t *testing.T) {

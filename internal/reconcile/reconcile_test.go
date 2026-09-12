@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"venuewire/internal/domain"
-	"venuewire/internal/orderstate"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/orderstate"
 )
 
 func TestReconciliationRequiredOrderScenarios(t *testing.T) {

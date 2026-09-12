@@ -13,7 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/domain"
 )
 
 type WebConfig struct {

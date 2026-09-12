@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"venuewire/internal/config"
-	"venuewire/internal/deribit"
-	"venuewire/internal/deribitreconcile"
-	"venuewire/internal/intent"
-	"venuewire/internal/orderstate"
+	"github.com/herefindalex/venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/deribitreconcile"
+	"github.com/herefindalex/venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/orderstate"
 )
 
 func executeDeribitCommand(ctx context.Context, cfg config.Config, args []string, output io.Writer) (bool, error) {

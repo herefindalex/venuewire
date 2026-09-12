@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/deribit"
 )
 
 type fakeMarket struct {

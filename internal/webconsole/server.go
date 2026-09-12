@@ -23,10 +23,10 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"venuewire/internal/config"
-	"venuewire/internal/domain"
-	"venuewire/internal/intent"
-	"venuewire/internal/runtimeevent"
+	"github.com/herefindalex/venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/runtimeevent"
 )
 
 const sessionCookieName = "__Host-trading_session"

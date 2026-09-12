@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"venuewire/internal/deribitfix"
-	bybitfix "venuewire/internal/fix"
+	"github.com/herefindalex/venuewire/internal/deribitfix"
+	bybitfix "github.com/herefindalex/venuewire/internal/fix"
 )
 
 func TestServerExercisesDeribitSessionDialect(t *testing.T) {

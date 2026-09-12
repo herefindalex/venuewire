@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/config"
 )
 
 func TestDeribitFIXMockDemoProvidesSessionEvidenceWithoutCredentials(t *testing.T) {

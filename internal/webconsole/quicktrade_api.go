@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"venuewire/internal/domain"
-	"venuewire/internal/intent"
-	"venuewire/internal/quicktrade"
-	"venuewire/internal/runtimeevent"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/quicktrade"
+	"github.com/herefindalex/venuewire/internal/runtimeevent"
 )
 
 type TradeApplication interface {

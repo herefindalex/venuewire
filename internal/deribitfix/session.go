@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	bybitfix "venuewire/internal/fix"
+	bybitfix "github.com/herefindalex/venuewire/internal/fix"
 )
 
 const (

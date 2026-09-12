@@ -13,12 +13,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"venuewire/internal/accountstate"
-	"venuewire/internal/config"
-	"venuewire/internal/deribit"
-	"venuewire/internal/domain"
-	"venuewire/internal/tradereconcile"
-	bybitws "venuewire/internal/ws"
+	"github.com/herefindalex/venuewire/internal/accountstate"
+	"github.com/herefindalex/venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/tradereconcile"
+	bybitws "github.com/herefindalex/venuewire/internal/ws"
 )
 
 func runWebVenueStreams(ctx context.Context, cfg config.Config, webConfig config.WebConfig, accounts *accountstate.Manager, rechecker *tradereconcile.Service, deribitClient *deribit.Client, logger *slog.Logger) {

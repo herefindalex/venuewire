@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"venuewire/internal/deribit"
-	"venuewire/internal/intent"
-	"venuewire/internal/orderstate"
+	"github.com/herefindalex/venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/orderstate"
 )
 
 type fakeQueries struct {

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/domain"
 )
 
 func TestDecodePrivateOrderStatuses(t *testing.T) {

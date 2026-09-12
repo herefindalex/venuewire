@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"venuewire/internal/config"
-	"venuewire/internal/domain"
-	"venuewire/internal/observability"
-	"venuewire/internal/orderstate"
+	"github.com/herefindalex/venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/observability"
+	"github.com/herefindalex/venuewire/internal/orderstate"
 )
 
 func TestAuthenticatedCommandClassification(t *testing.T) {

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"syscall"
 
-	"venuewire/internal/config"
-	"venuewire/internal/observability"
+	"github.com/herefindalex/venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/observability"
 )
 
 const usage = `VenueWire - Bybit + Deribit Testnet connector

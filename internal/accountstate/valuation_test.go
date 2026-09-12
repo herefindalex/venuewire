@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/domain"
 )
 
 func TestLiveValuationChangesMarksWithoutChangingQuantities(t *testing.T) {

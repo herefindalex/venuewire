@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"venuewire/internal/deribit"
-	"venuewire/internal/domain"
-	"venuewire/internal/intent"
-	"venuewire/internal/quicktrade"
+	"github.com/herefindalex/venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/quicktrade"
 )
 
 type DeribitClient interface {

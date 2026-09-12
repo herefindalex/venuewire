@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"venuewire/internal/intent"
-	"venuewire/internal/observability"
-	"venuewire/internal/quicktrade"
+	"github.com/herefindalex/venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/observability"
+	"github.com/herefindalex/venuewire/internal/quicktrade"
 )
 
 func TestTradeErrorLogIncludesRedactedProviderCause(t *testing.T) {

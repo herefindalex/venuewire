@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/domain"
 )
 
 const SnapshotVersion = 2

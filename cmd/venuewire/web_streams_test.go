@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"venuewire/internal/accountstate"
-	"venuewire/internal/deribit"
-	"venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/accountstate"
+	"github.com/herefindalex/venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/domain"
 )
 
 func TestStreamState(t *testing.T) {

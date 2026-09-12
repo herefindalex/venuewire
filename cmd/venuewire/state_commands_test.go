@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/config"
 )
 
 func TestStateMigrationCommandRequiresExplicitMappingAndSupportsDryRun(t *testing.T) {

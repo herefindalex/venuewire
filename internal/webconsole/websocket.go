@@ -13,9 +13,9 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"venuewire/internal/accountstate"
-	"venuewire/internal/domain"
-	"venuewire/internal/runtimeevent"
+	"github.com/herefindalex/venuewire/internal/accountstate"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/runtimeevent"
 )
 
 var errUnsupportedBrowserMessage = errors.New("unsupported browser WebSocket message")

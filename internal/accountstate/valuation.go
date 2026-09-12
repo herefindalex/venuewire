@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/domain"
 )
 
 // USDPrice is a normalized public-market price. ObservedAt is the venue event

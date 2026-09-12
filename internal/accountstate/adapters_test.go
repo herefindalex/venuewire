@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"venuewire/internal/deribit"
-	"venuewire/internal/rest"
+	"github.com/herefindalex/venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/rest"
 )
 
 type fakeBybitReader struct {

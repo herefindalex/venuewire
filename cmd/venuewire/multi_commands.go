@@ -7,9 +7,9 @@ import (
 	"io"
 	"time"
 
-	"venuewire/internal/config"
-	"venuewire/internal/deribit"
-	"venuewire/internal/rest"
+	"github.com/herefindalex/venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/rest"
 )
 
 type venueResult struct {

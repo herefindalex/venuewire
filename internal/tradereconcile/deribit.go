@@ -5,9 +5,9 @@ import (
 	"errors"
 	"strings"
 
-	"venuewire/internal/deribit"
-	"venuewire/internal/domain"
-	"venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/intent"
 )
 
 func (s *Service) recheckDeribit(ctx context.Context, trade intent.QuickTrade) (resolution, error) {

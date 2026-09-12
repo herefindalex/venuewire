@@ -5,9 +5,9 @@ import (
 	"errors"
 	"strings"
 
-	"venuewire/internal/domain"
-	"venuewire/internal/intent"
-	"venuewire/internal/rest"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/rest"
 )
 
 func (s *Service) recheckBybit(ctx context.Context, trade intent.QuickTrade) (resolution, error) {

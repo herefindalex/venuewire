@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"venuewire/internal/domain"
-	"venuewire/internal/orderstate"
-	"venuewire/internal/rest"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/orderstate"
+	"github.com/herefindalex/venuewire/internal/rest"
 )
 
 type ExchangeReader interface {

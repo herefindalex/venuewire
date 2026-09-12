@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"venuewire/internal/domain"
-	"venuewire/internal/fix"
-	"venuewire/internal/orderstate"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/fix"
+	"github.com/herefindalex/venuewire/internal/orderstate"
 )
 
 type cancellationEOFTransport struct {

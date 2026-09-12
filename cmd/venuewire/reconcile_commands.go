@@ -5,10 +5,10 @@ import (
 	"io"
 	"log/slog"
 
-	"venuewire/internal/config"
-	"venuewire/internal/orderstate"
-	"venuewire/internal/reconcile"
-	"venuewire/internal/rest"
+	"github.com/herefindalex/venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/orderstate"
+	"github.com/herefindalex/venuewire/internal/reconcile"
+	"github.com/herefindalex/venuewire/internal/rest"
 )
 
 func executeReconcileCommand(ctx context.Context, cfg config.Config, logger *slog.Logger, args []string, output io.Writer) (bool, error) {

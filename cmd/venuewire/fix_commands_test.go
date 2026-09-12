@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"venuewire/internal/config"
-	"venuewire/internal/orderstate"
+	"github.com/herefindalex/venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/orderstate"
 )
 
 func TestBybitFIXMockDemoTreatsCompletedCancellationAsClean(t *testing.T) {

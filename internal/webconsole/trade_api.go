@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"venuewire/internal/intent"
-	"venuewire/internal/quicktrade"
+	"github.com/herefindalex/venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/quicktrade"
 )
 
 type TradeRechecker interface {

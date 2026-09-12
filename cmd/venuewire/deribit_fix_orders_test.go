@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"venuewire/internal/config"
-	"venuewire/internal/deribit"
-	"venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/intent"
 )
 
 func TestDeribitFIXTradingRequiresAllIndependentGates(t *testing.T) {

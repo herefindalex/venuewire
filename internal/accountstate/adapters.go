@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"venuewire/internal/deribit"
-	"venuewire/internal/domain"
-	"venuewire/internal/rest"
+	"github.com/herefindalex/venuewire/internal/deribit"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/rest"
 )
 
 type BybitReader interface {

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"venuewire/internal/accountstate"
-	"venuewire/internal/domain"
-	"venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/accountstate"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/intent"
 )
 
 func TestApplicationConcurrentConfirmSubmitsExactlyOnce(t *testing.T) {

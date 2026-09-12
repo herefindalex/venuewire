@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"venuewire/internal/deribit"
-	bybitfix "venuewire/internal/fix"
+	"github.com/herefindalex/venuewire/internal/deribit"
+	bybitfix "github.com/herefindalex/venuewire/internal/fix"
 )
 
 const (

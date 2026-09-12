@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"venuewire/internal/fix"
+	"github.com/herefindalex/venuewire/internal/fix"
 )
 
 type Scenario string

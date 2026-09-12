@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/domain"
 )
 
 func writeV1(t *testing.T, path string, snapshot snapshotV1) []byte {

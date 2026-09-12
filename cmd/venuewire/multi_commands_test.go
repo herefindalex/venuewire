@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/config"
 )
 
 func TestNormalizeVenueArgsPreservesLegacyBybitAndAddsSharedRouting(t *testing.T) {

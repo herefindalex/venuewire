@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"venuewire/internal/accountstate"
-	"venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/accountstate"
+	"github.com/herefindalex/venuewire/internal/domain"
 )
 
 type AccountService interface {

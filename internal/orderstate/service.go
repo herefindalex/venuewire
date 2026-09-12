@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/domain"
 )
 
 type TransitionError struct {

@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"venuewire/internal/domain"
-	"venuewire/internal/intent"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/intent"
 )
 
 type Submitter interface {

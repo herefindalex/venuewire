@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"time"
 
-	"venuewire/internal/config"
-	"venuewire/internal/domain"
-	"venuewire/internal/orderstate"
-	"venuewire/internal/rest"
+	"github.com/herefindalex/venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/orderstate"
+	"github.com/herefindalex/venuewire/internal/rest"
 )
 
 func executeRESTCommand(ctx context.Context, cfg config.Config, logger *slog.Logger, args []string, output io.Writer) (bool, error) {

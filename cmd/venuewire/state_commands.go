@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"io"
 
-	"venuewire/internal/config"
-	"venuewire/internal/orderstate"
+	"github.com/herefindalex/venuewire/internal/config"
+	"github.com/herefindalex/venuewire/internal/orderstate"
 )
 
 func executeStateCommand(ctx context.Context, cfg config.Config, args []string, output io.Writer) (bool, error) {

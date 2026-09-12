@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"venuewire/internal/domain"
+	"github.com/herefindalex/venuewire/internal/domain"
 )
 
 type PrivateEventKind string
