@@ -1,5 +1,7 @@
 # Multi-venue implementation status
 
+> This file preserves incremental implementation history. For the authoritative current capability and validation summary, see [`docs/STATUS.md`](docs/STATUS.md).
+
 Last updated: 2026-09-10
 
 The archived Bybit-only phase history remains in `docs/1_bybit/IMPLEMENTATION_STATUS.md`. This file tracks the incremental Bybit + Deribit upgrade defined by `docs/2_deribit/DERIBIT_MULTI_VENUE_UPGRADE_SPEC_V2.md`.
