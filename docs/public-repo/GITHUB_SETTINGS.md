@@ -1,6 +1,6 @@
 # GitHub Repository Settings Checklist
 
-This checklist records the desired public-repository metadata and protections. It does not claim that account-level or repository-level settings are enabled. Verify each item directly in GitHub after the branch containing the workflow files is available remotely.
+This checklist records the desired public-repository metadata and protections. Hosted Actions execution is recorded where directly observed; unchecked account-level and repository-level settings still require verification in GitHub.
 
 ## About metadata
 
@@ -42,17 +42,17 @@ Do not add `hft`, `production-trading`, `mainnet`, or other topics that imply un
 - [ ] Secret scanning enabled where available for the account/repository.
 - [ ] Push protection enabled where available.
 - [ ] Private vulnerability reporting enabled.
-- [ ] `Secret scan` workflow has completed successfully against full available history.
+- [x] `Secret scan` workflow has completed successfully against the full available history.
 - [ ] Any Gitleaks allowlist is narrow, reviewed, and documented.
 
 ## Actions and branch protection
 
-- [ ] GitHub Actions enabled for the repository.
+- [x] GitHub Actions are enabled for the repository.
 - [ ] `CI / Go tests and static analysis` required before merge.
 - [ ] `CI / Frontend verification` required before merge.
 - [ ] `CI / Full embedded build` required before merge.
 - [ ] `Secret scan / Gitleaks repository and history scan` required before merge.
-- [ ] Workflow permissions remain read-only unless a specific job requires more.
+- [x] Workflow permissions remain read-only unless a specific job requires more.
 
 ## Release and demo
 
@@ -65,3 +65,7 @@ Do not add `hft`, `production-trading`, `mainnet`, or other topics that imply un
 ## Manual verification record
 
 Record the date, operator, and observed result beside each completed item. Do not convert this checklist into a claim that a setting changed unless the GitHub UI or API was actually inspected.
+
+- 2026-09-12 — Hosted [CI](https://github.com/herefindalex/venuewire/actions/runs/34677964751) passed all Go, frontend, Playwright, and full embedded-build jobs on `master` at commit `8c03731986b0095c88d152a1362f45ef5f6399b9`.
+- 2026-09-12 — Hosted [Secret scan](https://github.com/herefindalex/venuewire/actions/runs/34677964735) passed its full-history Gitleaks job on the same commit.
+- 2026-09-12 — Both workflow definitions declare read-only `contents` permissions and completed successfully; repository settings not represented by workflow execution remain unchecked.

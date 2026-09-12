@@ -6,7 +6,7 @@ Suggested release title:
 VenueWire v0.1.0 - Bybit and Deribit Multi-Venue Testnet Console
 ```
 
-This draft prepares a release description. It is not a published release and should not be published until the license is selected, hosted CI and secret scanning pass, and the repository settings checklist is reviewed.
+This draft prepares a release description. It is not a published release and should not be published until a license is selected and the repository settings checklist is reviewed. Hosted CI and secret scanning passed on `master` at commit `8c03731986b0095c88d152a1362f45ef5f6399b9`.
 
 ## Highlights
 
@@ -41,7 +41,7 @@ See [Current status](../STATUS.md), [Capability matrix](../CAPABILITIES.md), and
 ## Before publishing
 
 - [ ] Select MIT or Apache-2.0 and add the standard license text.
-- [ ] Verify hosted CI and Gitleaks results in GitHub.
+- [x] Verify hosted [CI](https://github.com/herefindalex/venuewire/actions/runs/34677964751) and [Gitleaks](https://github.com/herefindalex/venuewire/actions/runs/34677964735) results in GitHub.
 - [ ] Complete the manual [GitHub settings checklist](GITHUB_SETTINGS.md).
 - [ ] Review the public screenshot and release text for private identifiers.
 - [ ] Confirm any demo access language and distribution process.

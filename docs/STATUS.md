@@ -30,8 +30,8 @@ This is the authoritative summary of VenueWire's current implementation and vali
 | Bybit FIX codec, session, and order lifecycle | `LOCAL_TESTED` | Local authenticated FIX fixtures cover logon, resend/reset, create, replace, cancel, and recovery. |
 | Bybit FIX real Testnet flow | `BLOCKED` | Live validation remains behind the external Bybit FIX whitelist/RSA gate. Local FIX coverage is not presented as Testnet verification. |
 | Deribit FIX real Testnet flow | `TESTNET_VERIFIED` | Real Testnet FIX logon plus D/G/F order flow was independently verified through canonical JSON-RPC reads. |
-| Repository CI definition | `IMPLEMENTED` | `.github/workflows/ci.yml` runs Go tests/vet/race, frontend typecheck/lint/tests/build, and the full embedded build without credentials. A hosted run is not claimed here. |
-| Repository secret scanning definition | `IMPLEMENTED` | `.github/workflows/secret-scan.yml` performs a full-history checkout and Gitleaks scan. GitHub-side execution and push protection are separate settings. |
+| Repository CI definition | `IMPLEMENTED` | `.github/workflows/ci.yml` runs Go tests/vet/race, frontend typecheck/lint/tests/build, and the full embedded build without credentials. The hosted [CI run](https://github.com/herefindalex/venuewire/actions/runs/34677964751) passed on `master` at commit `8c03731986b0095c88d152a1362f45ef5f6399b9`. |
+| Repository secret scanning definition | `IMPLEMENTED` | `.github/workflows/secret-scan.yml` performs a full-history checkout and Gitleaks scan. The hosted [Gitleaks run](https://github.com/herefindalex/venuewire/actions/runs/34677964735) passed on `master` at commit `8c03731986b0095c88d152a1362f45ef5f6399b9`; push protection is a separate repository setting. |
 
 ## Current local verification
 
@@ -42,5 +42,5 @@ The pre-polish baseline on 2026-09-12 passed 419 Go tests, the full race suite, 
 - Mock coverage is not Testnet verification.
 - A verified public reverse-proxy path is not proof that the host firewall ACL is correct.
 - A FIX logon is not a FIX order lifecycle.
-- Repository workflow files are not proof that GitHub Actions, secret scanning, or push protection are enabled and passing.
+- Passing hosted workflow runs do not prove that branch protection, push protection, Dependabot, or other account-level or repository-level settings are enabled.
 - This Testnet evidence does not establish Mainnet or production readiness.

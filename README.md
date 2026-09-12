@@ -153,7 +153,7 @@ Current verified scope is documented in:
 - [V3 test report](docs/v3/TEST_REPORT_V3.md)
 - [Capability matrix](docs/CAPABILITIES.md)
 
-Mock or fixture coverage is never labeled as Testnet verification. Hosted GitHub Actions and repository settings are not considered enabled until observed in GitHub.
+Mock or fixture coverage is never labeled as Testnet verification. Hosted [CI](https://github.com/herefindalex/venuewire/actions/runs/34677964751) and [Gitleaks](https://github.com/herefindalex/venuewire/actions/runs/34677964735) runs passed on `master` at commit `8c03731986b0095c88d152a1362f45ef5f6399b9`; account-level and repository-level settings still require separate verification in GitHub.
 
 ## Repository map
 

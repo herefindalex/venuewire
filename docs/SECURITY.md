@@ -25,7 +25,7 @@ The application redacts known sensitive fields from structured logs. Browser DTO
 
 The repository ignores local dotenv files, private-key extensions, logs, state, secrets, build output, coverage output, and frontend dependencies. `.env.example` is intentionally committed with empty secret values.
 
-GitHub workflow `secret-scan.yml` performs a full-history checkout and runs Gitleaks on pushes and pull requests. False-positive allowlists, if ever required, must be narrow, value-specific, reviewed, and documented. Broad directory exemptions are not acceptable.
+GitHub workflow `secret-scan.yml` performs a full-history checkout and runs Gitleaks on pushes and pull requests. Its hosted [full-history run](https://github.com/herefindalex/venuewire/actions/runs/34677964735) passed on `master` at commit `8c03731986b0095c88d152a1362f45ef5f6399b9` on 2026-09-12. False-positive allowlists, if ever required, must be narrow, value-specific, reviewed, and documented. Broad directory exemptions are not acceptable.
 
 GitHub push protection, secret scanning, Dependabot alerts, the dependency graph, and private vulnerability reporting are repository settings. Their desired state is documented in [GitHub settings](public-repo/GITHUB_SETTINGS.md); the repository does not claim they are enabled until verified in GitHub.
 

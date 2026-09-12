@@ -2,7 +2,7 @@
 
 Date: 2026-09-12
 
-The public-repository polish scope is implemented locally without changing trading behavior or performing external venue, deployment, release, or GitHub-settings operations.
+The public-repository polish scope is implemented and pushed to `master` without changing trading behavior or performing external venue, deployment, release, or GitHub-settings operations.
 
 ## Changed files
 
@@ -46,7 +46,7 @@ The public-repository polish scope is implemented locally without changing tradi
 - Bybit FIX is recorded as locally tested with live Testnet verification `BLOCKED` by the external whitelist/RSA gate.
 - Public HTTPS/WSS and the split-host Nginx path are Testnet verified.
 - The Go-host firewall ACL remains `NOT_RUN` because privileged firewall state and direct-port denial were not directly inspected.
-- Workflow files are `IMPLEMENTED`; hosted GitHub execution and repository-level security settings are not claimed.
+- Workflow files are `IMPLEMENTED`; hosted CI and Gitleaks passed on `master`, while repository-level security settings remain unverified.
 
 ## CI jobs
 
@@ -92,6 +92,12 @@ On a new local checkout, run `npm --prefix web ci` and `(cd web && npx playwrigh
 | Gitleaks publishable working-tree scan | PASS - tracked and non-ignored files, no leaks |
 | `npm audit --omit=dev` | PASS - zero production dependency vulnerabilities |
 
+### Hosted GitHub Actions
+
+- [CI run 34677964751](https://github.com/herefindalex/venuewire/actions/runs/34677964751) passed Go tests/vet/race, frontend typecheck/lint/Vitest/build, four Playwright scenarios, and the full embedded build on `master`.
+- [Secret scan run 34677964735](https://github.com/herefindalex/venuewire/actions/runs/34677964735) passed the full-history Gitleaks scan on `master`.
+- Both runs completed on commit `8c03731986b0095c88d152a1362f45ef5f6399b9`.
+
 The ignored local `.env` is outside the publishable working tree. Its values were not read or printed. The full npm audit still reports two moderate-severity development-dependency findings and recommends a potentially breaking forced upgrade; that upgrade was not applied.
 
 ## Screenshot
@@ -101,20 +107,19 @@ The ignored local `.env` is outside the publishable working tree. Its values wer
 ## Manual GitHub actions still required
 
 - Select MIT or Apache-2.0 and add the standard license text.
-- Push or open a pull request, then observe the hosted CI and Gitleaks workflows.
 - Configure required status checks and branch protection.
 - Verify the dependency graph, Dependabot alerts, secret scanning, push protection, and private vulnerability reporting in GitHub.
 - Apply the About description and reviewed repository topics.
 - Decide whether to publish a stable demo URL or retain “Demo access available on request.”
-- Review and publish the prepared release only after the license and hosted checks are complete.
+- Review and publish the prepared release only after license selection and the repository-settings review are complete.
 
 ## Remaining blockers and concerns
 
 - License selection is intentionally pending owner choice.
 - Bybit live FIX remains blocked by the external whitelist/RSA gate.
 - The Go-host firewall ACL still requires privileged operator inspection.
-- Hosted Actions, GitHub security settings, and badge results cannot be claimed until the changes are pushed and observed.
+- Branch protection, push protection, Dependabot, private vulnerability reporting, and other repository settings remain unverified.
 - npm reports two moderate development-dependency findings; production dependencies report zero vulnerabilities.
 - Vite reports a non-failing JavaScript chunk-size warning for the existing Ant Design bundle. Code splitting was not introduced because it is outside this repository-polish scope.
 
-The v0.1.0 release is prepared as a draft and was not published. No GitHub repository setting was changed, and no commit or push was performed.
+The v0.1.0 release is prepared as a draft but was not published. Seven public-polish commits were pushed to `master`; no GitHub repository setting was changed.
