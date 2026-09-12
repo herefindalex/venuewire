@@ -1,105 +1,192 @@
 # VenueWire
 
-VenueWire is a public-demo-oriented multi-venue trading connectivity and execution prototype for Bybit and Deribit Testnet. Its primary interface is an authenticated Vue 3 Web Console backed by Go; the existing CLI and the independently implemented HTTP/JSON-RPC, WebSocket and FIX connector surfaces remain available for engineering tests.
+Multi-Venue Trading Connectivity and Execution Prototype
 
-The project demonstrates normalized account state, exact-decimal Spot quoting, durable idempotent trade intents, Limit IOC execution, partial-fill and fee accounting, uncertain-outcome recovery, stream freshness and operational observability. It is not a strategy product, exchange clone, Mainnet client, transfer tool or withdrawal tool.
+[![CI](https://github.com/herefindalex/venuewire/actions/workflows/ci.yml/badge.svg)](https://github.com/herefindalex/venuewire/actions/workflows/ci.yml)
+[![Secret scan](https://github.com/herefindalex/venuewire/actions/workflows/secret-scan.yml/badge.svg)](https://github.com/herefindalex/venuewire/actions/workflows/secret-scan.yml)
+![Testnet only](https://img.shields.io/badge/environment-Testnet%20only-f59e0b)
+
+![VenueWire Testnet Console](docs/assets/venuewire-console.png)
+
+_Actual VenueWire UI rendered with deterministic sanitized Testnet fixture data; no live account identifiers are shown._
+
+**Bybit and Deribit | REST and JSON-RPC | WebSocket | FIX 4.4**
+
+VenueWire demonstrates multi-venue connectivity, normalized order and account state, durable trade intents, uncertain-outcome recovery, reconciliation, and real-time account observability.
+
+> Testnet only. VenueWire does not support Mainnet, withdrawals, transfers, or real funds.
+
+## Overview
+
+VenueWire is a Go and Vue 3 trading-connectivity prototype built around two independent venue adapters. Its primary interface is an authenticated Web Console, while the CLI exposes engineering and validation workflows for REST, JSON-RPC, WebSocket, FIX, persistence, and reconciliation.
+
+The browser Quick Trade flow supports Bybit BTC/ETH to and from USDT and Deribit BTC to and from USDC. It reviews a short-lived quote, persists an idempotent trade intent, submits a no-borrow Limit IOC order, and tracks the result through exchange events and reconciliation.
+
+## Why this project is interesting
+
+Trading connectivity has failure modes that ordinary CRUD applications can often ignore:
+
+- An order-submission timeout does not mean the exchange rejected the order.
+- A connected WebSocket does not mean its data is fresh.
+- A REST acknowledgement does not mean an order filled.
+- A snapshot and a real-time stream do not automatically form consistent state.
+
+VenueWire focuses on these boundaries through durable trade intents, normalized venue state, idempotency, reconciliation, freshness tracking, and failure isolation.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    UI[Vue Web Console] --> API[VenueWire Go Backend]
+
+    API --> Auth[Auth and Sessions]
+    API --> Core[Trading Core]
+    API --> Obs[Observability]
+
+    Core --> State[Normalized Account and Order State]
+    Core --> Intent[Durable Trade Intents]
+    Core --> Recon[Reconciliation]
+
+    Core --> B[Bybit Adapter]
+    Core --> D[Deribit Adapter]
+
+    B --> BR[REST]
+    B --> BW[WebSocket]
+    B --> BF[FIX]
+
+    D --> DR[JSON-RPC]
+    D --> DW[WebSocket]
+    D --> DF[FIX 4.4]
+```
+
+Trade execution follows a durable identity chain:
+
+```text
+Trade Intent
+  -> Client Order ID
+  -> Venue Order ID
+  -> Execution Events
+  -> Reconciliation
+```
+
+See [Architecture](docs/ARCHITECTURE.md) for component and data-flow details.
+
+## Key engineering problems
+
+- **Uncertain outcomes:** transport failures after submission become `Unknown`; VenueWire reconciles them and never resubmits automatically.
+- **State consistency:** snapshots, private streams, public streams, and polling feed revisioned normalized state with stale-data detection.
+- **Idempotent execution:** intent, quota reservation, and client identity persist before the first venue write.
+- **Venue isolation:** Bybit and Deribit retain their own protocols, units, authentication, rate limits, and FIX dialects.
+- **Exact amounts:** order planning and reconciliation use exact decimal arithmetic for quantities, prices, fees, and net proceeds.
+- **Failure containment:** one venue can be degraded without converting its failure into a false zero or corrupting the other venue's result.
+
+## Supported venues and protocols
+
+| Capability | Bybit | Deribit |
+|---|---|---|
+| Environment | Testnet | Testnet |
+| Request protocol | REST V5 | HTTP JSON-RPC |
+| Public WebSocket | Implemented and Testnet verified | Implemented and Testnet verified |
+| Private WebSocket | Implemented and Testnet verified | Implemented and Testnet verified |
+| Browser Spot execution | BTC/ETH to and from USDT | BTC to and from USDC |
+| FIX 4.4 | Locally tested; live Testnet blocked by external gate | Real Testnet order flow verified |
+
+The evidence and limitations behind each entry are in the [Capability matrix](docs/CAPABILITIES.md).
+
+## Quick demo
+
+Demo access is available on request. The intended interviewer flow is:
+
+1. Sign in to the testnet-only Web Console.
+2. Switch between Bybit and Deribit account views.
+3. Inspect account values, stream freshness, and System Status.
+4. Open Quick Trade and review a protected IOC order.
+5. If server-side trading is explicitly enabled, confirm once and follow the durable lifecycle.
+
+`Recheck` queries venue evidence. It does not resubmit or force-resolve an order.
 
 ## Safety boundary
 
-- Venue endpoints are restricted to exact Testnet allowlists. Redirects, altered paths, Mainnet and unsafe bind/proxy settings fail closed.
-- Exchange credentials and Web login secrets come from process environment or a local dotenv file and never enter Browser DTOs. `.env`, key files, state, logs and binaries are ignored.
-- Browser trading is disabled unless `WEB_TRADING_ENABLED=true`; venue read/trading/FIX gates remain independently enforced.
-- Browser orders are limited to liquid Testnet Spot routes: Bybit BTC↔USDT and ETH↔USDT, plus Deribit BTC↔USDC. Review produces a five-second frozen quote; Confirm sends a fee-aware, no-borrow Limit IOC with 0.5% protection.
-- Confirm persists the intent and quota reservation before submission. Duplicate confirmation cannot create a second logical trade. A transport-uncertain result becomes `Unknown` and is reconciled without automatic resubmission.
-- Testnet writes and deployment changes require explicit operator authorization. Local tests and builds do not place orders.
+- Exact endpoint allowlists reject Mainnet and unexpected redirect targets.
+- Browser trading is disabled unless `WEB_TRADING_ENABLED=true`; venue read, trading, and FIX gates remain independent.
+- Credentials and session secrets are loaded from process environment or an ignored local dotenv file. They are never sent in browser DTOs.
+- Browser orders use fixed liquid Testnet Spot routes, a five-second quote, Limit IOC, 0.5% protection, and no borrowing.
+- Accepted intents persist before submission. Duplicate confirmation cannot create a second logical trade.
+- Local builds and automated tests use mocks or fixtures and do not place Testnet orders.
+- Testnet writes and deployment changes require explicit operator authorization.
 
-## Build and verify
+See [Security](docs/SECURITY.md) for credential and repository guidance.
 
-Go 1.26.3 and Node/npm are used by the current verification environment.
+## Build and run
+
+Prerequisites are the Go version declared in `go.mod`, Node.js 24, and npm.
 
 ```bash
-# Complete Web binary: locked frontend install, typecheck/build and Go embed.
+git clone https://github.com/herefindalex/venuewire.git
+cd venuewire
+
+cp .env.example .env
+# Configure Testnet credentials locally. Keep all write gates disabled initially.
+
+npm --prefix web ci
+(cd web && npx playwright install chromium)
+make verify
 make build
+
+./bin/venuewire --env-file .env web
+```
+
+The Go server binds private HTTP behind an HTTPS/WSS Nginx proxy; it does not terminate TLS. See [Deployment](docs/v3/DEPLOYMENT.md) before exposing a demo.
+
+The CLI-only build does not require generated frontend assets:
+
+```bash
+make build-cli
 ./bin/venuewire help
-
-# Local regression checks; no exchange writes.
-go test ./...
-go test -race ./...
-go vet ./...
-npm --prefix web test
 ```
 
-The ordinary CLI build remains independent of generated frontend assets:
+## Validation status
 
-```bash
-go build -o ./bin/venuewire ./cmd/venuewire
-```
+Current verified scope is documented in:
 
-## Configure the Web Console
+- [Current status](docs/STATUS.md)
+- [V3 test report](docs/v3/TEST_REPORT_V3.md)
+- [Capability matrix](docs/CAPABILITIES.md)
 
-Start from the canonical empty-secret example. The application loads it itself; do not `source` it and do not commit the resulting file.
+Mock or fixture coverage is never labeled as Testnet verification. Hosted GitHub Actions and repository settings are not considered enabled until observed in GitHub.
 
-```bash
-cp .env.example .env.web
-chmod 600 .env.web
-```
+## Repository map
 
-At minimum, set the exact public HTTPS origin, private Go bind address, trusted Nginx source IP, Web login/session secrets and credentials for enabled Testnet venues. Keep the documented endpoint values unchanged. For an initial read-only demonstration, retain:
+| Path | Purpose |
+|---|---|
+| `cmd/venuewire/` | CLI and Web process composition |
+| `internal/` | Venue adapters, domain state, intents, reconciliation, Web API, and observability |
+| `web/` | Vue 3 Web Console, unit tests, linting, and browser fixtures |
+| `docs/` | Architecture, capability, security, deployment, protocol, and validation evidence |
+| `.github/workflows/` | Credential-free CI and secret scanning |
+| `Makefile` | Canonical build, formatting, and non-mutating verification entry points |
 
-```dotenv
-WEB_TRADING_ENABLED=false
-```
+## Known limitations
 
-Build and start:
-
-```bash
-make build
-./bin/venuewire --env-file /absolute/path/to/.env.web web
-```
-
-Without `--env-file`, VenueWire searches `.env` beside the executable first (`bin/.env` for the standard build), then the executable directory's parent (`.env` at the project root). OS environment values have highest priority; for duplicate file keys, the binary-directory file wins. The search is based on the executable location, not the current working directory:
-
-```bash
-./bin/venuewire web
-```
-
-The Browser must enter through the configured HTTPS Nginx origin. Go serves HTTP on its configured private interface; it does not terminate TLS and its port must not be Internet-accessible. See [V3 deployment](docs/v3/DEPLOYMENT.md).
-
-Web server logs are appended as JSON Lines to `log/venuewire.log` with mode 0600 and are also written to stderr. The ignored `log/` directory is created automatically. Each request accepted by the trusted proxy boundary records the request ID, method, path, status, response bytes, duration, and validated client IP. Rejected trade operations also record a stable error code and redacted provider cause. Logs deliberately omit query values, bodies, credentials, cookies, authorization headers, CSRF tokens, and session identifiers.
-
-## Interviewer flow
-
-1. Open the HTTPS URL and sign in with the configured shared demo login.
-2. Switch between Bybit and Deribit and inspect account snapshot, local USD marks, exchange-reported values and System Status.
-3. Open Quick Trade, select one of the two directions for that venue, enter a source-asset budget and review the exact IOC parameters and five-second expiry.
-4. If trading is explicitly enabled, Confirm once and follow the durable lifecycle in Recent Trades. `Unknown` remains visible and occupies the concurrency slot until authoritative reconciliation resolves it.
-5. Use Recheck only to query venue evidence; it never resubmits or force-resolves an order.
-
-The authenticated history is shared because all interviewers operate the same configured demo accounts. Session expiry or logout does not discard pending trade recovery state.
-
-## CLI engineering interface
-
-CLI commands use the global venue selector; write commands never infer a destination venue from a symbol.
-
-```bash
-./bin/venuewire --venue bybit account balances --coin BTC,ETH,USDT
-./bin/venuewire --venue deribit account balances --currency all
-./bin/venuewire --venue all status
-./bin/venuewire --venue all portfolio
-
-./bin/venuewire --venue bybit fix mock-demo
-./bin/venuewire --venue deribit fix mock-demo
-```
-
-`--venue all` is read-only. Live connector tests remain behind the symmetric `RUN_BYBIT_*`, `RUN_DERIBIT_*` and `RUN_MULTI_VENUE_E2E` gates documented in the V2 material; they are not part of the public interview workflow.
+- Testnet only.
+- No withdrawals or transfers.
+- No automatic cross-venue routing or failover.
+- No strategy engine or automated trading strategy.
+- No HFT performance claim.
+- FIX capability differs by venue and validation level.
+- Account valuation is not a portfolio-margin or liquidation engine.
+- Demo authentication and recent history are shared-instance prototypes, not multi-tenant production controls.
+- The host firewall ACL remains an operator verification item even when the public Nginx path passes.
 
 ## Documentation
 
-- [V3 API](docs/v3/API.md) — Browser REST/WebSocket contracts and safety boundary
-- [V3 protocol notes](docs/v3/PROTOCOL_NOTES.md) — account, valuation and Spot execution semantics
-- [V3 deployment](docs/v3/DEPLOYMENT.md) — private Go host and split-host Nginx procedure
-- [V3 demo](docs/v3/DEMO.md) — safe local and interviewer demonstrations
-- [V3 test report](docs/v3/TEST_REPORT_V3.md) — requirement and failure-scenario evidence
-- [V3 handoff](docs/v3/CODEX_HANDOFF_V3.md) — Traditional Chinese operator handoff
-- [Implementation status](IMPLEMENTATION_STATUS.md) — incremental phase history
-- [V2 upgrade documentation](docs/upgrade/) — CLI/FIX connector capabilities and prior Testnet evidence
+- [Architecture](docs/ARCHITECTURE.md)
+- [Capabilities](docs/CAPABILITIES.md)
+- [Security](docs/SECURITY.md)
+- [Current status](docs/STATUS.md)
+- [Browser API](docs/v3/API.md)
+- [Protocol notes](docs/v3/PROTOCOL_NOTES.md)
+- [Deployment](docs/v3/DEPLOYMENT.md)
+- [Demo procedure](docs/v3/DEMO.md)
+- [V3 test report](docs/v3/TEST_REPORT_V3.md)
+- [Implementation history](IMPLEMENTATION_STATUS.md)
